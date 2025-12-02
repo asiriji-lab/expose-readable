@@ -15,7 +15,7 @@ COPY . .
 RUN cd /solver
 
 # run the flask server  
-CMD [ "python3", "-m" , "flask", "run", "--host=0.0.0.0" ]
+CMD [ "python3", "/solver/app.py" ]
 
 # export port
 EXPOSE 5000/tcp
