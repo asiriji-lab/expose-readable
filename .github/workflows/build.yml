@@ -1,0 +1,31 @@
+name: Build Solver CI
+on:
+  schedule:
+    - cron:
+        "00 06 * * *" # build at 06:00 UTC every day
+        # (20 minutes after last ublue images start building)
+  push:
+    paths-ignore: # don't rebuild if only documentation has changed
+      - "**.md"
+
+  pull_request:
+  workflow_dispatch: # allow manually triggering builds
+
+concurrency:
+  # only run one build at a time
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_publish:
+    runs-on: ubuntu-latest
+    steps: 
+      - uses: actions/checkout@v3
+      - name: Build Solver CI
+        with: 
+          env:
+            ACTION_TOKEN: ${{ secrets.ACTION_TOKEN}}
+        run : |
+          docker login --username winsdominoes --password ${{ secrets.ACTION_TOKEN }} ghcr.io
+          docker buildx build -t ghcr.io/schedool/solver:latest .
+          docker push ghcr.io/schedool/solver:latest
