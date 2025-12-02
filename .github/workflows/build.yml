@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v3
         env:
           ACTION_TOKEN: ${{ secrets.ACTION_TOKEN}}
-        run : |
+        run: |
           docker login --username winsdominoes --password ${{ secrets.ACTION_TOKEN }} ghcr.io
           docker buildx build -t ghcr.io/schedool/solver:latest .
           docker push ghcr.io/schedool/solver:latest
