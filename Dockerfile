@@ -11,9 +11,8 @@ RUN pip3 install -r requirements.txt
 # copy python project files from local to /solver image working directory
 COPY . .
 
-# list debug
-RUN ls /solver
-RUN ls /
+# switch dir
+RUN cd /solver
 
 # run the flask server  
 CMD [ "python3", "-m" , "flask", "run", "--host=0.0.0.0" ]
