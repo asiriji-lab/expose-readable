@@ -20,10 +20,10 @@ jobs:
   build_and_publish:
     runs-on: ubuntu-latest
     steps: 
+      - uses: actions/checkout@v3
       - name: Build Solver CI
-        uses: actions/checkout@v3
         env:
-          ACTION_TOKEN: ${{ secrets.ACTION_TOKEN}}
+          ACTION_TOKEN: ${{ secrets.ACTION_TOKEN }}
         run: |
           docker login --username winsdominoes --password ${{ secrets.ACTION_TOKEN }} ghcr.io
           docker buildx build -t ghcr.io/schedool/solver:latest .
