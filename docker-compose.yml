@@ -1,0 +1,10 @@
+version: '3'
+services:
+  solver:
+    image: ghcr.io/schedool/solver:latest
+    container_name: solver
+    hostname: solver
+    ports:
+        - '5000:5000'
+    volumes:
+        - './data:/solver'
