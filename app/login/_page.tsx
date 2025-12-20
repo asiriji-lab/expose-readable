@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faCircleUser } from '@fortawesome/free-solid-svg-icons'
+import { faUser } from '@fortawesome/free-solid-svg-icons'
 
 export default function Login() {
   return (
@@ -9,7 +9,7 @@ export default function Login() {
         
        {/* User Icon */}
 <div className="flex justify-center mb-4">
-  <FontAwesomeIcon icon={faCircleUser} size="1x" className="text-gray-400" />
+  <FontAwesomeIcon icon={faUser} className="fa-2xl text-gray-400" />
 </div>
 
         <h1 className="text-2xl font-bold mb-2 text-center text-black">Schedool</h1>
