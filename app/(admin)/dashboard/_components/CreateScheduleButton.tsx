@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus } from '@fortawesome/free-solid-svg-icons';
+import InputPage from '@/app/(admin)/input/layout';
 
 export default function CreateScheduleButton() {
   return (

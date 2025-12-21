@@ -1,6 +1,6 @@
 // app/dashboard/page.tsx
-import ScheduleList from './components/ScheduleList';
-import CreateScheduleButton from './components/CreateScheduleButton';
+import ScheduleList from './_components/ScheduleList';
+import CreateScheduleButton from './_components/CreateScheduleButton';
 
 export default function DashboardPage() {
   return (
