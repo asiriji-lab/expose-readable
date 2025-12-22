@@ -37,7 +37,7 @@ export default function Stepper({ currentStep, completedSteps, onStepClick }: St
             <button
               key={step.id}
               onClick={() => isClickable && onStepClick(step.id)}
-              disabled={isUpcoming}
+              // disabled={isUpcoming}
               className={`
                 w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all
                 ${isCurrent 

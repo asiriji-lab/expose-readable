@@ -4,16 +4,16 @@ import { useState } from 'react';
 import Stepper from './_components/Stepper';
 import ProgressBar from './_components/ProgressBar';
 import NavigationButtons from './_components/NavigationButtons';
-// import Step1_Curriculum from './_components/steps/Step1_Curriculum';
-// import Step2_Teacher from './_components/steps/Step2_Teacher';
-// import Step3_Elective from './_components/steps/Step3_Elective';
-// import Step4_Scout from './_components/steps/Step4_Scout';
-// import Step5_Period from './_components/steps/Step5_Period';
-// import Step6_Student from './_components/steps/Step6_Student';
-// import Step7_Room from './_components/steps/Step7_Room';
-// import Step8_Constraint from './_components/steps/Step8_Constraint';
-// import Step9_RelatedFiles from './_components/steps/Step9_RelatedFiles';
-// import Step10_Generate from './_components/steps/Step10_Generate';
+import {Step1_Curriculum} from './_components/steps/Step1_Curriculum';
+import {Step2_Teacher} from './_components/steps/Step2_Teacher';
+import {Step3_Elective} from './_components/steps/Step3_Elective';
+import {Step4_Scout} from './_components/steps/Step4_Scout';
+import {Step5_Period} from './_components/steps/Step5_Period';
+import {Step6_Student} from './_components/steps/Step6_Student';
+import {Step7_Room} from './_components/steps/Step7_Room';
+import {Step8_Constraint} from './_components/steps/Step8_Constraint';
+import {Step9_RelatedFiles} from './_components/steps/Step9_RelatedFiles';
+import {Step10_Generate} from './_components/steps/Step10_Generate';
 
 export default function InputPage({children }: {children: React.ReactNode}) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -52,47 +52,48 @@ export default function InputPage({children }: {children: React.ReactNode}) {
   };
 
   const validateStep = (step: number): boolean => {
+    console.log('Validating step', step);
     const newErrors: {[key: string]: string} = {};
 
     switch(step) {
       case 1:
-        if (!formData.scheduleName.trim()) {
-          newErrors.scheduleName = 'Schedule name is required';
-        }
-        if (!formData.year.trim()) {
-          newErrors.year = 'Year is required';
-        } else if (!/^\d{4}$/.test(formData.year)) {
-          newErrors.year = 'Year must be 4 digits';
-        }
-        if (!formData.semester.trim()) {
-          newErrors.semester = 'Semester is required';
-        } else if (!['1', '2'].includes(formData.semester)) {
-          newErrors.semester = 'Semester must be 1 or 2';
-        }
-        if (!formData.curriculumFile) {
-          newErrors.curriculumFile = 'Curriculum file is required';
-        }
+        // if (!formData.scheduleName.trim()) {
+        //   newErrors.scheduleName = 'Schedule name is required';
+        // }
+        // if (!formData.year.trim()) {
+        //   newErrors.year = 'Year is required';
+        // } else if (!/^\d{4}$/.test(formData.year)) {
+        //   newErrors.year = 'Year must be 4 digits';
+        // }
+        // if (!formData.semester.trim()) {
+        //   newErrors.semester = 'Semester is required';
+        // } else if (!['1', '2'].includes(formData.semester)) {
+        //   newErrors.semester = 'Semester must be 1 or 2';
+        // }
+        // if (!formData.curriculumFile) {
+        //   newErrors.curriculumFile = 'Curriculum file is required';
+        // }
         break;
       case 2:
-        if (!formData.teacherFile) newErrors.teacherFile = 'Teacher file is required';
+        // if (!formData.teacherFile) newErrors.teacherFile = 'Teacher file is required';
         break;
       case 3:
-        if (!formData.electiveFile) newErrors.electiveFile = 'Elective file is required';
+        // if (!formData.electiveFile) newErrors.electiveFile = 'Elective file is required';
         break;
       case 4:
-        if (!formData.scoutFile) newErrors.scoutFile = 'Scout file is required';
+        // if (!formData.scoutFile) newErrors.scoutFile = 'Scout file is required';
         break;
       case 5:
-        if (!formData.periodFile) newErrors.periodFile = 'Period file is required';
+        // if (!formData.periodFile) newErrors.periodFile = 'Period file is required';
         break;
       case 6:
-        if (!formData.studentFile) newErrors.studentFile = 'Student file is required';
+        // if (!formData.studentFile) newErrors.studentFile = 'Student file is required';
         break;
       case 7:
-        if (!formData.roomFile) newErrors.roomFile = 'Room file is required';
+        // if (!formData.roomFile) newErrors.roomFile = 'Room file is required';
         break;
       case 8:
-        if (!formData.constraintFile) newErrors.constraintFile = 'Constraint file is required';
+        // if (!formData.constraintFile) newErrors.constraintFile = 'Constraint file is required';
         break;
       case 9:
         break;
@@ -100,12 +101,14 @@ export default function InputPage({children }: {children: React.ReactNode}) {
         break;
     }
 
-    setErrors(newErrors);
+    // setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleNext = () => {
+    console.log('Validating step', currentStep);
     if (validateStep(currentStep)) {
+      console.log('Step', currentStep, 'is valid');
       if (!completedSteps.includes(currentStep)) {
         setCompletedSteps(prev => [...prev, currentStep]);
       }
@@ -114,6 +117,7 @@ export default function InputPage({children }: {children: React.ReactNode}) {
         window.scrollTo(0, 0);
       }
     }
+    console.log("step", currentStep, "errors:", errors);
   };
 
   const handleBack = () => {
@@ -124,7 +128,9 @@ export default function InputPage({children }: {children: React.ReactNode}) {
   };
 
   const handleGenerate = async () => {
+    console.log("Generating schedule with data");
     setIsGenerating(true);
+
     setTimeout(() => {
       console.log('Generating schedule:', formData);
       alert('Schedule generated!');
@@ -138,34 +144,40 @@ export default function InputPage({children }: {children: React.ReactNode}) {
     }
   };
 
-  const canProceed = validateStep(currentStep);
+  let canProceed = false;
+  if (currentStep == 10) {
+    canProceed = false
+  } else if (currentStep >= 1 && currentStep <= 9) {
+    canProceed = true;
+  }
 
-  // const renderStep = () => {
-  //   switch(currentStep) {
-  //     case 1:
-  //       return <Step1_Curriculum data={formData} onChange={handleDataChange} errors={errors} />;
-  //     case 2:
-  //       return <Step2_Teacher data={formData} onChange={handleDataChange} errors={errors} />;
-  //     case 3:
-  //       return <Step3_Elective data={formData} onChange={handleDataChange} errors={errors} />;
-  //     case 4:
-  //       return <Step4_Scout data={formData} onChange={handleDataChange} errors={errors} />;
-  //     case 5:
-  //       return <Step5_Period data={formData} onChange={handleDataChange} errors={errors} />;
-  //     case 6:
-  //       return <Step6_Student data={formData} onChange={handleDataChange} errors={errors} />;
-  //     case 7:
-  //       return <Step7_Room data={formData} onChange={handleDataChange} errors={errors} />;
-  //     case 8:
-  //       return <Step8_Constraint data={formData} onChange={handleDataChange} errors={errors} />;
-  //     case 9:
-  //       return <Step9_RelatedFiles data={formData} onChange={handleDataChange} errors={errors} />;
-  //     case 10:
-  //       return <Step10_Generate data={formData} isGenerating={isGenerating} />;
-  //     default:
-  //       return null;
-  //   }
-  // };
+  
+  const renderStep = () => {
+    switch(currentStep) {
+      case 1:
+        return <Step1_Curriculum data={formData} onChange={handleDataChange} errors={errors} />;
+      case 2:
+        return <Step2_Teacher data={formData} onChange={handleDataChange} errors={errors} />;
+      case 3:
+        return <Step3_Elective data={formData} onChange={handleDataChange} errors={errors} />;
+      case 4:
+        return <Step4_Scout data={formData} onChange={handleDataChange} errors={errors} />;
+      case 5:
+        return <Step5_Period data={formData} onChange={handleDataChange} errors={errors} />;
+      case 6:
+        return <Step6_Student data={formData} onChange={handleDataChange} errors={errors} />;
+      case 7:
+        return <Step7_Room data={formData} onChange={handleDataChange} errors={errors} />;
+      case 8:
+        return <Step8_Constraint data={formData} onChange={handleDataChange} errors={errors} />;
+      case 9:
+        return <Step9_RelatedFiles data={formData} onChange={handleDataChange} errors={errors} />;
+      case 10:
+        return <Step10_Generate data={formData} onGenerate={handleGenerate} />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -209,9 +221,9 @@ export default function InputPage({children }: {children: React.ReactNode}) {
           <div className="max-w-5xl mx-auto">
             <ProgressBar currentStep={currentStep} totalSteps={10} />
             
-            {/* <div className="bg-white rounded-2xl shadow-sm p-12 mb-8">
+            <div className="bg-white rounded-2xl shadow-sm p-12 mb-8">
               {renderStep()}
-            </div> */}
+            </div>
 
             <NavigationButtons 
               currentStep={currentStep}
@@ -221,7 +233,6 @@ export default function InputPage({children }: {children: React.ReactNode}) {
               isGenerating={isGenerating}
             />
           </div>
-          {children}
         </main>
       </div>
     </div>
