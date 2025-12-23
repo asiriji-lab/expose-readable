@@ -41,7 +41,7 @@ export default function NavigationButtons({
       {/* Next/Generate Button */}
       <button
         onClick={onNext}
-        disabled={!canProceed || isGenerating}
+        // disabled={!canProceed || isGenerating}
         className={`
           flex items-center space-x-2 px-8 py-2.5 rounded-lg font-medium transition-all text-sm
           ${!canProceed || isGenerating
