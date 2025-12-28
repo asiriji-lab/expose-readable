@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 
-export function Step10_Generate({ 
-  data, 
-  onGenerate 
-}: { 
-  data: any; 
+export function Step10_Generate({
+  data,
+  onGenerate,
+  completedSteps
+}: {
+  data: any;
   onGenerate: () => Promise<void>;
+  completedSteps: number[];
 }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -29,11 +31,11 @@ export function Step10_Generate({
 
       setStatus("Generating schedule...");
       await onGenerate();
-      
+
       clearInterval(progressInterval);
       setProgress(100);
       setStatus("Schedule generated successfully!");
-      
+
       setTimeout(() => {
         setIsGenerating(false);
       }, 1500);
@@ -47,7 +49,7 @@ export function Step10_Generate({
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-semibold text-black">
-        Step 10: Generate Schedule
+        Generate Schedule
       </h2>
 
       <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-4">
@@ -59,7 +61,7 @@ export function Step10_Generate({
           {isGenerating && (
             <div className="space-y-3">
               <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                <div 
+                <div
                   className="bg-blue-600 h-full transition-all duration-500 ease-out"
                   style={{ width: `${progress}%` }}
                 />
@@ -74,8 +76,8 @@ export function Step10_Generate({
             className={`
               px-8 py-3 rounded-lg font-medium text-white
               transition-all duration-200
-              ${isGenerating 
-                ? 'bg-gray-400 cursor-not-allowed' 
+              ${isGenerating
+                ? 'bg-gray-400 cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-700 active:scale-95'
               }
             `}
@@ -91,49 +93,55 @@ export function Step10_Generate({
             <div className="flex justify-between">
               <span className="text-gray-600">Curriculum:</span>
               <span className="font-medium text-black">
-                {data?.curriculum ? '✓ Configured' : '⚠ Missing'}
+                {completedSteps.includes(1) ? '✓ Configured' : '⚠ Missing'}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Teachers:</span>
               <span className="font-medium text-black">
-                {data?.teachers ? '✓ Configured' : '⚠ Missing'}
+                {completedSteps.includes(2) ? '✓ Configured' : '⚠ Missing'}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Electives:</span>
               <span className="font-medium text-black">
-                {data?.electives ? '✓ Configured' : '⚠ Missing'}
+                {completedSteps.includes(3) ? '✓ Configured' : '⚠ Missing'}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Scout Activities:</span>
               <span className="font-medium text-black">
-                {data?.scout ? '✓ Configured' : '⚠ Missing'}
+                {completedSteps.includes(4) ? '✓ Configured' : '⚠ Missing'}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Periods:</span>
               <span className="font-medium text-black">
-                {data?.periods ? '✓ Configured' : '⚠ Missing'}
+                {completedSteps.includes(5) ? '✓ Configured' : '⚠ Missing'}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Students:</span>
               <span className="font-medium text-black">
-                {data?.students ? '✓ Configured' : '⚠ Missing'}
+                {completedSteps.includes(6) ? '✓ Configured' : '⚠ Missing'}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Rooms:</span>
               <span className="font-medium text-black">
-                {data?.rooms ? '✓ Configured' : '⚠ Missing'}
+                {completedSteps.includes(7) ? '✓ Configured' : '⚠ Missing'}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Constraints:</span>
               <span className="font-medium text-black">
-                {data?.constraints ? '✓ Configured' : '⚠ Missing'}
+                {completedSteps.includes(8) ? '✓ Configured' : '⚠ Missing'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Related Files:</span>
+              <span className="font-medium text-black">
+                {completedSteps.includes(9) ? '✓ Configured' : '⚠ Missing'}
               </span>
             </div>
           </div>

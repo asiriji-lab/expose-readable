@@ -1,7 +1,25 @@
-export function Step2_Teacher({ data, onChange, errors }: { data: any; onChange: (field: string, value: any) => void; errors: {[key: string]: string} }) {
-    return(
-        <div>
-            <h2 className="text-2xl font-semibold mb-6">Step 2: Teacher Information</h2>
-        </div>
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faDownload } from '@fortawesome/free-solid-svg-icons';
+import FileDropzone from '../file-upload/FileDropzone';
+
+export function Step2_Teacher({ data, onChange, errors }: { data: any; onChange: (field: string, value: any) => void; errors: { [key: string]: string } }) {
+    return (
+            <div className="flex flex-col gap-4 mt-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-lg font-semibold text-black">Teacher</h3>
+                        <p className="text-sm text-gray-400">Upload the teacher data file</p>
+                    </div>
+                    <a href="#" className="text-sm text-primary hover:underline flex items-center gap-2">
+                        <FontAwesomeIcon icon={faDownload} />
+                        example_teacher.csv
+                    </a>
+                </div>
+
+                <FileDropzone
+                    onFileSelect={(file) => console.log('File selected:', file)}
+                    title="Upload Teacher Data"
+                />
+            </div>
     )
 }

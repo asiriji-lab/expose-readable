@@ -1,85 +1,75 @@
-// app/input/components/Stepper.tsx
+import React from 'react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCheck } from '@fortawesome/free-solid-svg-icons';
 
 interface StepperProps {
-  currentStep: number;
-  completedSteps: number[];
-  onStepClick: (step: number) => void;
+    currentStep: number;
+    completedSteps: number[];
+    onStepClick: (step: number) => void;
 }
 
-const STEPS = [
-  { id: 1, name: 'Curriculum', icon: '📘' },
-  { id: 2, name: 'Teacher', icon: '👥' },
-  { id: 3, name: 'Elective', icon: '📚' },
-  { id: 4, name: 'Scout', icon: '🎯' },
-  { id: 5, name: 'Period', icon: '⏰' },
-  { id: 6, name: 'Student', icon: '👨‍🎓' },
-  { id: 7, name: 'Room', icon: '🏫' },
-  { id: 8, name: 'Constraint', icon: '⚙️' },
-  { id: 9, name: 'Related files', icon: '📎' },
-  { id: 10, name: 'Generate', icon: '✨' },
+const steps = [
+    { id: 1, label: 'Curriculum', emoji: '📘' },
+    { id: 2, label: 'Teacher', emoji: '👥' },
+    { id: 3, label: 'Elective', emoji: '📚' },
+    { id: 4, label: 'Scout', emoji: '🎯' },
+    { id: 5, label: 'Period', emoji: '⏰' },
+    { id: 6, label: 'Student', emoji: '👨‍🎓' },
+    { id: 7, label: 'Room', emoji: '🏫' },
+    { id: 8, label: 'Constraint', emoji: '⚙️' },
+    { id: 9, label: 'Related files', emoji: '📎' },
+    { id: 10, label: 'Generate', emoji: '✨' },
 ];
 
 export default function Stepper({ currentStep, completedSteps, onStepClick }: StepperProps) {
-  return (
-    <aside className="w-[360px] bg-white border-r border-gray-200 min-h-screen p-8">
-      <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-6">
-        SETUP STEP
-      </h3>
-      
-      <div className="space-y-1">
-        {STEPS.map((step) => {
-          const isCompleted = completedSteps.includes(step.id);
-          const isCurrent = currentStep === step.id;
-          const isUpcoming = step.id > currentStep && !isCompleted;
-          const isClickable = isCompleted || step.id === 1;
-          
-          return (
-            <button
-              key={step.id}
-              onClick={() => isClickable && onStepClick(step.id)}
-              // disabled={isUpcoming}
-              className={`
-                w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all
-                ${isCurrent 
-                  ? 'bg-blue-500 text-white' 
-                  : isCompleted 
-                  ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  : 'bg-white text-gray-400 cursor-not-allowed'
-                }
-                ${isClickable && !isCurrent ? 'cursor-pointer' : ''}
-              `}
-            >
-              {/* Icon Circle */}
-              <div className={`
-                w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-lg
-                ${isCurrent 
-                  ? 'bg-white bg-opacity-20' 
-                  : isCompleted 
-                  ? 'bg-blue-100'
-                  : 'bg-gray-100'
-                }
-              `}>
-                {step.icon}
-              </div>
-              
-              {/* Step Name */}
-              <div className="flex-1 text-left">
-                <p className="font-medium text-sm">
-                  {step.name}
-                </p>
-              </div>
+    return (
+        <aside className="w-64 bg-white border-r border-gray-200 min-h-[calc(100vh-73px)] p-6">
+            <div className="mb-8">
+                <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                    Setup Step
+                </h2>
+                <div className="space-y-2">
+                    {steps.map((step) => {
+                        const isCompleted = completedSteps.includes(step.id);
+                        const isActive = currentStep === step.id;
+                        const isClickable = true;
 
-              {/* Step Number */}
-              <span className={`
-                text-xs font-medium
-                ${isCurrent ? 'text-white opacity-80' : 'text-gray-300'}
-              `}>
-                {step.id}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </aside>
-  );
+                        return (
+                            <button
+                                key={step.id}
+                                onClick={() => onStepClick(step.id)}
+                                className={`
+                  w-full flex items-center justify-between p-3 rounded-lg text-sm transition-all
+                  ${isActive
+                                        ? 'bg-blue-50 text-primary font-medium shadow-sm ring-1 ring-blue-100'
+                                        : 'text-gray-600 hover:bg-gray-50'
+                                    }
+                `}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className={`
+                    w-6 h-6 rounded flex items-center justify-center text-[10px] transition-colors
+                    ${isCompleted
+                                            ? 'bg-green-500 text-white'
+                                            : isActive
+                                                ? 'bg-primary text-white'
+                                                : 'bg-gray-100 text-gray-400'
+                                        }
+                  `}>
+                                        {isCompleted ? (
+                                            <FontAwesomeIcon icon={faCheck} />
+                                        ) : (
+                                            <span className="text-[10px]">{step.emoji}</span>
+                                        )}
+                                    </div>
+                                    <span>{step.label}</span>
+                                </div>
+                                <span className="text-xs text-gray-400">{step.id}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        </aside>
+    );
 }

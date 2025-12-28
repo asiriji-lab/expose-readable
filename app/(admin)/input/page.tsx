@@ -4,18 +4,18 @@ import { useState } from 'react';
 import Stepper from './_components/Stepper';
 import ProgressBar from './_components/ProgressBar';
 import NavigationButtons from './_components/NavigationButtons';
-import {Step1_Curriculum} from './_components/steps/Step1_Curriculum';
-import {Step2_Teacher} from './_components/steps/Step2_Teacher';
-import {Step3_Elective} from './_components/steps/Step3_Elective';
-import {Step4_Scout} from './_components/steps/Step4_Scout';
-import {Step5_Period} from './_components/steps/Step5_Period';
-import {Step6_Student} from './_components/steps/Step6_Student';
-import {Step7_Room} from './_components/steps/Step7_Room';
-import {Step8_Constraint} from './_components/steps/Step8_Constraint';
-import {Step9_RelatedFiles} from './_components/steps/Step9_RelatedFiles';
-import {Step10_Generate} from './_components/steps/Step10_Generate';
+import { Step1_Curriculum } from './_components/steps/Step1_Curriculum';
+import { Step2_Teacher } from './_components/steps/Step2_Teacher';
+import { Step3_Elective } from './_components/steps/Step3_Elective';
+import { Step4_Scout } from './_components/steps/Step4_Scout';
+import { Step5_Period } from './_components/steps/Step5_Period';
+import { Step6_Student } from './_components/steps/Step6_Student';
+import { Step7_Room } from './_components/steps/Step7_Room';
+import { Step8_Constraint } from './_components/steps/Step8_Constraint';
+import { Step9_RelatedFiles } from './_components/steps/Step9_RelatedFiles';
+import { Step10_Generate } from './_components/steps/Step10_Generate';
 
-export default function InputPage({children }: {children: React.ReactNode}) {
+export default function InputPage({ children }: { children: React.ReactNode }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [formData, setFormData] = useState({
@@ -33,7 +33,7 @@ export default function InputPage({children }: {children: React.ReactNode}) {
     relatedFile: null as File | null,
   });
 
-  const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleDataChange = (field: string, value: any) => {
@@ -41,10 +41,10 @@ export default function InputPage({children }: {children: React.ReactNode}) {
       ...prev,
       [field]: value
     }));
-    
+
     if (errors[field]) {
       setErrors(prev => {
-        const newErrors = {...prev};
+        const newErrors = { ...prev };
         delete newErrors[field];
         return newErrors;
       });
@@ -53,9 +53,9 @@ export default function InputPage({children }: {children: React.ReactNode}) {
 
   const validateStep = (step: number): boolean => {
     console.log('Validating step', step);
-    const newErrors: {[key: string]: string} = {};
+    const newErrors: { [key: string]: string } = {};
 
-    switch(step) {
+    switch (step) {
       case 1:
         // if (!formData.scheduleName.trim()) {
         //   newErrors.scheduleName = 'Schedule name is required';
@@ -109,9 +109,10 @@ export default function InputPage({children }: {children: React.ReactNode}) {
     console.log('Validating step', currentStep);
     if (validateStep(currentStep)) {
       console.log('Step', currentStep, 'is valid');
-      if (!completedSteps.includes(currentStep)) {
-        setCompletedSteps(prev => [...prev, currentStep]);
-      }
+      // Auto-complete removed to respect "Mark as Done" explicit action
+      // if (!completedSteps.includes(currentStep)) {
+      //   setCompletedSteps(prev => [...prev, currentStep]);
+      // }
       if (currentStep < 10) {
         setCurrentStep(currentStep + 1);
         window.scrollTo(0, 0);
@@ -138,10 +139,18 @@ export default function InputPage({children }: {children: React.ReactNode}) {
     }, 3000);
   };
 
-  const handleStepClick = (step: number) => {
-    if (completedSteps.includes(step) || step === 1) {
-      setCurrentStep(step);
+  const handleMarkAsDone = () => {
+    if (validateStep(currentStep)) {
+      if (completedSteps.includes(currentStep)) {
+        setCompletedSteps(prev => prev.filter(step => step !== currentStep));
+      } else {
+        setCompletedSteps(prev => [...prev, currentStep]);
+      }
     }
+  };
+
+  const handleStepClick = (step: number) => {
+    setCurrentStep(step);
   };
 
   let canProceed = false;
@@ -151,9 +160,9 @@ export default function InputPage({children }: {children: React.ReactNode}) {
     canProceed = true;
   }
 
-  
+
   const renderStep = () => {
-    switch(currentStep) {
+    switch (currentStep) {
       case 1:
         return <Step1_Curriculum data={formData} onChange={handleDataChange} errors={errors} />;
       case 2:
@@ -173,7 +182,7 @@ export default function InputPage({children }: {children: React.ReactNode}) {
       case 9:
         return <Step9_RelatedFiles data={formData} onChange={handleDataChange} errors={errors} />;
       case 10:
-        return <Step10_Generate data={formData} onGenerate={handleGenerate} />;
+        return <Step10_Generate data={formData} onGenerate={handleGenerate} completedSteps={completedSteps} />;
       default:
         return null;
     }
@@ -211,7 +220,7 @@ export default function InputPage({children }: {children: React.ReactNode}) {
 
       {/* Main Layout */}
       <div className="flex">
-        <Stepper 
+        <Stepper
           currentStep={currentStep}
           completedSteps={completedSteps}
           onStepClick={handleStepClick}
@@ -219,18 +228,20 @@ export default function InputPage({children }: {children: React.ReactNode}) {
 
         <main className="flex-1 p-10">
           <div className="max-w-5xl mx-auto">
-            <ProgressBar currentStep={currentStep} totalSteps={10} />
-            
+            <ProgressBar completedStepsCount={completedSteps.length} totalSteps={10} />
+
             <div className="bg-white rounded-2xl shadow-sm p-12 mb-8">
               {renderStep()}
             </div>
 
-            <NavigationButtons 
+            <NavigationButtons
               currentStep={currentStep}
               canProceed={canProceed}
               onNext={currentStep === 10 ? handleGenerate : handleNext}
               onBack={handleBack}
               isGenerating={isGenerating}
+              onMarkAsDone={handleMarkAsDone}
+              isStepDone={completedSteps.includes(currentStep)}
             />
           </div>
         </main>
