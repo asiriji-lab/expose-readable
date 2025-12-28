@@ -1,6 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+const MOCK_MESSAGES = [
+  { threshold: 0, text: "Initializing generation engine..." },
+  { threshold: 20, text: "Analyzing curriculum constraints..." },
+  { threshold: 40, text: "Optimizing teacher schedules..." },
+  { threshold: 60, text: "Assigning rooms and resources..." },
+  { threshold: 80, text: "Verifying student conflicts..." },
+  { threshold: 95, text: "Finalizing schedule..." }
+];
 
 export function Step10_Generate({
   data,
@@ -8,7 +17,7 @@ export function Step10_Generate({
   completedSteps
 }: {
   data: any;
-  onGenerate: () => Promise<void>;
+  onGenerate: () => Promise<boolean>;
   completedSteps: number[];
 }) {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -16,34 +25,47 @@ export function Step10_Generate({
   const [status, setStatus] = useState<string>("");
 
   const handleGenerate = async () => {
+    // First, try to start generation (which includes validation)
+    const success = await onGenerate();
+
+    // If validation failed (returned false), stop here
+    if (!success) {
+      return;
+    }
+
+    // If validation passed, proceed with the progress animation
     setIsGenerating(true);
     setProgress(0);
-    setStatus("Preparing data...");
+    setStatus(MOCK_MESSAGES[0].text);
 
-    try {
-      // Simulate progress updates
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => {
-          if (prev >= 90) return prev;
-          return prev + 10;
-        });
-      }, 500);
+    // Create a promise that resolves when the animation is done
+    const animationPromise = new Promise<void>((resolve) => {
+      let currentProgress = 0;
+      const interval = setInterval(() => {
+        currentProgress += 1; // Increment by 1% every tick
 
-      setStatus("Generating schedule...");
-      await onGenerate();
+        // Update status message based on progress
+        const currentMessage = MOCK_MESSAGES.slice().reverse().find(m => currentProgress >= m.threshold);
+        if (currentMessage) {
+          setStatus(currentMessage.text);
+        }
 
-      clearInterval(progressInterval);
-      setProgress(100);
-      setStatus("Schedule generated successfully!");
+        setProgress(currentProgress);
 
-      setTimeout(() => {
-        setIsGenerating(false);
-      }, 1500);
-    } catch (error) {
-      setStatus("Error generating schedule. Please try again.");
+        if (currentProgress >= 100) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 50); // 50ms * 100 = 5000ms total duration (5 seconds)
+    });
+
+    await animationPromise;
+
+    setStatus("Schedule generated successfully!");
+
+    setTimeout(() => {
       setIsGenerating(false);
-      setProgress(0);
-    }
+    }, 1500);
   };
 
   return (
@@ -59,14 +81,20 @@ export function Step10_Generate({
           </p>
 
           {isGenerating && (
-            <div className="space-y-3">
-              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+            <div className="space-y-3 max-w-md mx-auto">
+              <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden shadow-inner">
                 <div
-                  className="bg-blue-600 h-full transition-all duration-500 ease-out"
+                  className="bg-primary h-full transition-all duration-100 ease-linear relative overflow-hidden"
                   style={{ width: `${progress}%` }}
-                />
+                >
+                  {/* Shimmer effect */}
+                  <div className="absolute top-0 left-0 bottom-0 right-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 animate-shimmer" style={{ backgroundSize: '200% 100%' }}></div>
+                </div>
               </div>
-              <p className="text-sm text-gray-600">{status}</p>
+              <div className="flex justify-between text-xs text-gray-500 font-medium">
+                <span>{status}</span>
+                <span>{progress}%</span>
+              </div>
             </div>
           )}
 
@@ -78,7 +106,7 @@ export function Step10_Generate({
               transition-all duration-200
               ${isGenerating
                 ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 active:scale-95'
+                : 'bg-primary hover:bg-primary/90 active:scale-95 shadow-md hover:shadow-lg'
               }
             `}
           >

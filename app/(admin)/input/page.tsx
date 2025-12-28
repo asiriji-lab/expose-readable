@@ -35,6 +35,8 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   const handleDataChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -57,43 +59,20 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
 
     switch (step) {
       case 1:
-        // if (!formData.scheduleName.trim()) {
-        //   newErrors.scheduleName = 'Schedule name is required';
-        // }
-        // if (!formData.year.trim()) {
-        //   newErrors.year = 'Year is required';
-        // } else if (!/^\d{4}$/.test(formData.year)) {
-        //   newErrors.year = 'Year must be 4 digits';
-        // }
-        // if (!formData.semester.trim()) {
-        //   newErrors.semester = 'Semester is required';
-        // } else if (!['1', '2'].includes(formData.semester)) {
-        //   newErrors.semester = 'Semester must be 1 or 2';
-        // }
-        // if (!formData.curriculumFile) {
-        //   newErrors.curriculumFile = 'Curriculum file is required';
-        // }
         break;
       case 2:
-        // if (!formData.teacherFile) newErrors.teacherFile = 'Teacher file is required';
         break;
       case 3:
-        // if (!formData.electiveFile) newErrors.electiveFile = 'Elective file is required';
         break;
       case 4:
-        // if (!formData.scoutFile) newErrors.scoutFile = 'Scout file is required';
         break;
       case 5:
-        // if (!formData.periodFile) newErrors.periodFile = 'Period file is required';
         break;
       case 6:
-        // if (!formData.studentFile) newErrors.studentFile = 'Student file is required';
         break;
       case 7:
-        // if (!formData.roomFile) newErrors.roomFile = 'Room file is required';
         break;
       case 8:
-        // if (!formData.constraintFile) newErrors.constraintFile = 'Constraint file is required';
         break;
       case 9:
         break;
@@ -101,7 +80,6 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
         break;
     }
 
-    // setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
@@ -109,10 +87,6 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
     console.log('Validating step', currentStep);
     if (validateStep(currentStep)) {
       console.log('Step', currentStep, 'is valid');
-      // Auto-complete removed to respect "Mark as Done" explicit action
-      // if (!completedSteps.includes(currentStep)) {
-      //   setCompletedSteps(prev => [...prev, currentStep]);
-      // }
       if (currentStep < 10) {
         setCurrentStep(currentStep + 1);
         window.scrollTo(0, 0);
@@ -128,15 +102,31 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (): Promise<boolean> => {
+    console.log("handleGenerate called. Completed steps:", completedSteps);
+    // Check if all required steps (1-8) are completed
+    const requiredSteps = [1, 2, 3, 4, 5, 6, 7, 8];
+    const missingSteps = requiredSteps.filter(step => !completedSteps.includes(step));
+
+    if (missingSteps.length > 0) {
+      console.log("Missing steps:", missingSteps);
+      setToastMessage(`Please mark all steps (1-8) as done before generating. Missing steps: ${missingSteps.join(', ')}`);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 5000);
+      return false;
+    }
+
     console.log("Generating schedule with data");
     setIsGenerating(true);
 
-    setTimeout(() => {
-      console.log('Generating schedule:', formData);
-      alert('Schedule generated!');
-      setIsGenerating(false);
-    }, 3000);
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        console.log('Generating schedule:', formData);
+        alert('Schedule generated!');
+        setIsGenerating(false);
+        resolve(true);
+      }, 3000);
+    });
   };
 
   const handleMarkAsDone = () => {
@@ -155,7 +145,7 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
 
   let canProceed = false;
   if (currentStep == 10) {
-    canProceed = false
+    canProceed = true; // Enable the button on step 10 so it can trigger the check
   } else if (currentStep >= 1 && currentStep <= 9) {
     canProceed = true;
   }
@@ -189,7 +179,32 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 relative">
+      {/* Toast Notification */}
+      {showToast && (
+        <div className="fixed top-4 right-4 z-50 animate-slide-in-right">
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded shadow-lg flex items-start gap-3 max-w-md">
+            <div className="text-red-500">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-red-800 font-medium">Cannot Generate Schedule</h3>
+              <p className="text-red-700 text-sm mt-1">{toastMessage}</p>
+            </div>
+            <button
+              onClick={() => setShowToast(false)}
+              className="text-red-400 hover:text-red-600 transition-colors ml-auto"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-4">

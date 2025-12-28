@@ -24,9 +24,49 @@ export const CURRICULUM_VALIDATION_RULES: Record<number, { pattern: RegExp; mess
         message: "Student class must be a list of numbers (e.g., [1, 2])"
     },
     8: {
-        pattern: /^[A-Z]{3}_\d+-[A-Z]{3}_\d+$/,
+        pattern: /^([A-Z]{3}_\d+(-[A-Z]{3}_\d+)?(,\s*)?)*$/,
         message: "Fixed period must match format like MON_1-MON_2"
     }
+};
+
+export const TEACHER_VALIDATION_RULES: Record<number, { pattern: RegExp; message: string }> = {
+    0: { pattern: /^[TE]\d{3}$/, message: "Teacher ID must be T or E followed by 3 digits (e.g., T001)" },
+    1: { pattern: /^.+$/, message: "Teacher name is required" },
+    3: { pattern: /^([A-Z]{3}_\d+(-[A-Z]{3}_\d+)?(,\s*)?)*$/, message: "Unavailable slots must match format like MON_6-MON_8" }
+};
+
+export const STUDENT_VALIDATION_RULES: Record<number, { pattern: RegExp; message: string }> = {
+    0: { pattern: /^\d\/\d$/, message: "Class ID must be in format like 1/1" },
+    1: { pattern: /^ม\.\d$/, message: "Grade must be in format like ม.1" },
+    2: { pattern: /^\d+$/, message: "Section must be a number" },
+    3: { pattern: /^[A-Z0-9-]+$/, message: "Default room must be a valid Room ID" }
+};
+
+export const ROOM_VALIDATION_RULES: Record<number, { pattern: RegExp; message: string }> = {
+    0: { pattern: /^.+$/, message: "Room ID is required" }
+};
+
+export const PERIOD_VALIDATION_RULES: Record<number, { pattern: RegExp; message: string }> = {
+    0: { pattern: /^(\d+|.+)$/, message: "Period label is required" },
+    1: { pattern: /^(\d{2}\.\d{2}-\d{2}\.\d{2}|\d+)$/, message: "Time must be range (08.05-08.55) or duration (10)" }
+};
+
+export const ELECTIVE_VALIDATION_RULES: Record<number, { pattern: RegExp; message: string }> = {
+    0: { pattern: /^[ก-ฮ]\d{5}$/, message: "Subject ID must be a Thai letter followed by 5 digits" },
+    2: { pattern: /^[TE]\d{3}$/, message: "Teacher ID must be T or E followed by 3 digits" }
+    // Columns 4+ are slots, handled dynamically if needed, or we can add a generic check in the loop
+};
+
+export const SCOUT_VALIDATION_RULES: Record<number, { pattern: RegExp; message: string }> = {
+    // All columns are teacher IDs
+    0: { pattern: /^[TE]\d{3}$/, message: "Must be a valid Teacher ID (e.g., T001)" },
+    1: { pattern: /^[TE]\d{3}$/, message: "Must be a valid Teacher ID (e.g., T001)" },
+    2: { pattern: /^[TE]\d{3}$/, message: "Must be a valid Teacher ID (e.g., T001)" }
+};
+
+export const CONSTRAINT_VALIDATION_RULES: Record<number, { pattern: RegExp; message: string }> = {
+    1: { pattern: /^([A-Za-z]+_\d+(-[A-Za-z]+_\d+)?)$/, message: "Period must match format like Everyday_1 or MON_10" },
+    2: { pattern: /^(All|ม\.\d(,\s*ม\.\d)*)$/, message: "Apply to must be 'All' or list of grades (e.g., ม.1, ม.2)" }
 };
 
 export interface ValidationResult {
