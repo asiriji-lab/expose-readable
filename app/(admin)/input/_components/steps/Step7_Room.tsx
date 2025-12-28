@@ -1,45 +1,36 @@
-import { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDownload, faPen, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 import FileDropzone from '../file-upload/FileDropzone';
 import CsvEditor from '../CsvEditor';
-import { ROOM_VALIDATION_RULES, validateFile } from '../validationUtils';
+import { ROOM_VALIDATION_RULES } from '../validationUtils';
+import { useCsvStep } from '../hooks/useCsvStep';
 
+/**
+ * Step 7: Room Data Upload
+ * 
+ * Handles uploading and validation of room data.
+ * Uses useCsvStep hook for shared logic.
+ */
 export function Step7_Room({ data, onChange, errors }: { data: any; onChange: (field: string, value: any) => void; errors: { [key: string]: string } }) {
-    const [isEditing, setIsEditing] = useState(false);
-    const [validationErrors, setValidationErrors] = useState<string[]>([]);
-    const [isValidating, setIsValidating] = useState(false);
-
-    // Validate file whenever it changes (if it exists)
-    useEffect(() => {
-        if (data.roomFile) {
-            handleFileValidation(data.roomFile);
-        } else {
-            setValidationErrors([]);
-        }
-    }, [data.roomFile]);
-
-    const handleFileValidation = async (file: File) => {
-        setIsValidating(true);
-        try {
-            const result = await validateFile(file, ROOM_VALIDATION_RULES);
-            setValidationErrors(result.errors);
-        } catch (error) {
-            console.error("Validation failed:", error);
-            setValidationErrors(["Failed to validate file"]);
-        } finally {
-            setIsValidating(false);
-        }
-    };
+    const {
+        isEditing,
+        setIsEditing,
+        validationErrors,
+        isValidating,
+        handleSave,
+        handleRemove
+    } = useCsvStep({
+        file: data.roomFile,
+        onFileChange: (file) => onChange('roomFile', file),
+        validationRules: ROOM_VALIDATION_RULES
+    });
 
     if (isEditing && data.roomFile) {
         return (
             <CsvEditor
                 file={data.roomFile}
                 onClose={() => setIsEditing(false)}
-                onSave={(newFile) => {
-                    onChange('roomFile', newFile);
-                }}
+                onSave={handleSave}
                 validationRules={ROOM_VALIDATION_RULES}
             />
         );
@@ -49,7 +40,7 @@ export function Step7_Room({ data, onChange, errors }: { data: any; onChange: (f
         <div className="flex flex-col gap-4 mt-4">
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-lg font-semibold text-black">Room</h3>
+                    <h3 className="text-lg font-semibold text-black">Rooms</h3>
                     <p className="text-sm text-gray-400">Upload the room data file</p>
                 </div>
                 <a href="/example_csv/example_room.csv" download className="text-sm text-primary hover:underline flex items-center gap-2">
@@ -79,7 +70,7 @@ export function Step7_Room({ data, onChange, errors }: { data: any; onChange: (f
                                 <FontAwesomeIcon icon={faPen} />
                             </button>
                             <button
-                                onClick={() => onChange('roomFile', null)}
+                                onClick={handleRemove}
                                 className="p-2 text-gray-400 hover:text-red-500 transition-colors"
                                 title="Remove file"
                             >
@@ -90,7 +81,6 @@ export function Step7_Room({ data, onChange, errors }: { data: any; onChange: (f
                         </div>
                     </div>
 
-                    {/* Validation Errors Display */}
                     {isValidating && (
                         <p className="text-sm text-gray-500 animate-pulse">Validating file...</p>
                     )}

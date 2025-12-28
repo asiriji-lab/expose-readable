@@ -46,3 +46,28 @@ We are building **ScheDool**, a premium school scheduling application. This sess
 - **Validation**: Re-enable the commented-out validation logic in `page.tsx` once real data requirements are finalized.
 - **Backend Integration**: Connect the `FileDropzone` to actual upload endpoints.
 - **Step 10 Logic**: Implement the actual schedule generation trigger and results view.
+
+---
+
+# Session Update - Dec 28, 2025: Validation & Guardrails
+
+## 🎯 Objectives Achieved
+We focused on ensuring data integrity and improving the user experience during the schedule generation phase.
+
+## 🛡️ Generation Guardrails
+- **Completion Check**: Implemented logic in `page.tsx` and `Step10_Generate.tsx` to strictly require Steps 1-8 to be marked as "Done" before generation can proceed. Step 9 is optional.
+- **Toast Notification**: Added a **slide-in warning toast** (animated with `slideInRight`) to alert users if they attempt to generate with incomplete steps.
+- **Loading UI**: Enhanced the generation screen with a **dynamic progress bar** featuring mock status messages (e.g., "Analyzing constraints...") and a **shimmer animation** for a premium feel.
+
+## ✅ Comprehensive Validation
+- **Extended Logic**: Applied the CSV validation logic (previously only in Step 1) to **all input steps** (Teacher, Elective, Scout, Period, Student, Room, Constraint).
+- **Regex Rules**: Defined specific regex patterns for each file type in `validationUtils.ts` to ensure data correctness (e.g., validating Teacher IDs, Room Codes).
+- **UI Feedback**: Integrated `CsvEditor` with real-time validation feedback (red cells, tooltips) across all steps.
+
+## 📂 File Management
+- **Renaming**: Standardized all example CSV files in `public/example_csv/` to `example_XXX.csv` format.
+
+## 📦 Deployment
+- **Git Push**: All changes (Validation, Guardrails, UI enhancements) have been successfully committed and pushed to the `frontend` branch.
+
+and yes, i have no idea what i'm doing, or how i do it. but fuck yeah it sorta works.

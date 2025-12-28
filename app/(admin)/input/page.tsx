@@ -33,11 +33,13 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
     relatedFile: null as File | null,
   });
 
+  // State for form data, errors, and UI status
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isGenerating, setIsGenerating] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
+  // Updates form data and clears errors for the modified field
   const handleDataChange = (field: string, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -53,36 +55,23 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Placeholder for step-specific validation logic
+  // Currently returns true for all steps, but can be expanded
   const validateStep = (step: number): boolean => {
     console.log('Validating step', step);
     const newErrors: { [key: string]: string } = {};
 
     switch (step) {
       case 1:
+        // Add Step 1 validation here if needed
         break;
-      case 2:
-        break;
-      case 3:
-        break;
-      case 4:
-        break;
-      case 5:
-        break;
-      case 6:
-        break;
-      case 7:
-        break;
-      case 8:
-        break;
-      case 9:
-        break;
-      case 10:
-        break;
+      // ... other cases
     }
 
     return Object.keys(newErrors).length === 0;
   };
 
+  // Handles navigation to the next step
   const handleNext = () => {
     console.log('Validating step', currentStep);
     if (validateStep(currentStep)) {
@@ -102,23 +91,28 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Handles schedule generation (Step 10)
+  // Includes "Guardrails" to prevent generation if steps 1-8 are incomplete
   const handleGenerate = async (): Promise<boolean> => {
     console.log("handleGenerate called. Completed steps:", completedSteps);
-    // Check if all required steps (1-8) are completed
+
+    // Guardrail: Check if all required steps (1-8) are completed
     const requiredSteps = [1, 2, 3, 4, 5, 6, 7, 8];
     const missingSteps = requiredSteps.filter(step => !completedSteps.includes(step));
 
     if (missingSteps.length > 0) {
       console.log("Missing steps:", missingSteps);
+      // Show toast notification with missing steps
       setToastMessage(`Please mark all steps (1-8) as done before generating. Missing steps: ${missingSteps.join(', ')}`);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 5000);
-      return false;
+      return false; // Prevent generation
     }
 
     console.log("Generating schedule with data");
     setIsGenerating(true);
 
+    // Simulate generation process (replace with actual API call)
     return new Promise((resolve) => {
       setTimeout(() => {
         console.log('Generating schedule:', formData);

@@ -1,45 +1,38 @@
-import { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDownload, faPen, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 import FileDropzone from '../file-upload/FileDropzone';
 import CsvEditor from '../CsvEditor';
-import { TEACHER_VALIDATION_RULES, validateFile } from '../validationUtils';
+import { TEACHER_VALIDATION_RULES } from '../validationUtils';
+import { useCsvStep } from '../hooks/useCsvStep';
 
+/**
+ * Step 2: Teacher Data Upload
+ * 
+ * This component handles the uploading and validation of the teacher CSV file.
+ * It uses the `useCsvStep` hook to manage duplicate logic for file handling and validation.
+ */
 export function Step2_Teacher({ data, onChange, errors }: { data: any; onChange: (field: string, value: any) => void; errors: { [key: string]: string } }) {
-    const [isEditing, setIsEditing] = useState(false);
-    const [validationErrors, setValidationErrors] = useState<string[]>([]);
-    const [isValidating, setIsValidating] = useState(false);
+    // Use the custom hook to manage state and logic
+    const {
+        isEditing,
+        setIsEditing,
+        validationErrors,
+        isValidating,
+        handleSave,
+        handleRemove
+    } = useCsvStep({
+        file: data.teacherFile,
+        onFileChange: (file) => onChange('teacherFile', file),
+        validationRules: TEACHER_VALIDATION_RULES
+    });
 
-    // Validate file whenever it changes (if it exists)
-    useEffect(() => {
-        if (data.teacherFile) {
-            handleFileValidation(data.teacherFile);
-        } else {
-            setValidationErrors([]);
-        }
-    }, [data.teacherFile]);
-
-    const handleFileValidation = async (file: File) => {
-        setIsValidating(true);
-        try {
-            const result = await validateFile(file, TEACHER_VALIDATION_RULES);
-            setValidationErrors(result.errors);
-        } catch (error) {
-            console.error("Validation failed:", error);
-            setValidationErrors(["Failed to validate file"]);
-        } finally {
-            setIsValidating(false);
-        }
-    };
-
+    // If in editing mode, show the full-screen CSV editor
     if (isEditing && data.teacherFile) {
         return (
             <CsvEditor
                 file={data.teacherFile}
                 onClose={() => setIsEditing(false)}
-                onSave={(newFile) => {
-                    onChange('teacherFile', newFile);
-                }}
+                onSave={handleSave}
                 validationRules={TEACHER_VALIDATION_RULES}
             />
         );
@@ -60,6 +53,7 @@ export function Step2_Teacher({ data, onChange, errors }: { data: any; onChange:
 
             {data.teacherFile ? (
                 <div className="flex flex-col gap-2">
+                    {/* File Card */}
                     <div className={`flex items-center justify-between p-4 border rounded-xl ${validationErrors.length > 0 ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-100'}`}>
                         <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${validationErrors.length > 0 ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
@@ -79,7 +73,7 @@ export function Step2_Teacher({ data, onChange, errors }: { data: any; onChange:
                                 <FontAwesomeIcon icon={faPen} />
                             </button>
                             <button
-                                onClick={() => onChange('teacherFile', null)}
+                                onClick={handleRemove}
                                 className="p-2 text-gray-400 hover:text-red-500 transition-colors"
                                 title="Remove file"
                             >
@@ -90,7 +84,7 @@ export function Step2_Teacher({ data, onChange, errors }: { data: any; onChange:
                         </div>
                     </div>
 
-                    {/* Validation Errors Display */}
+                    {/* Validation Status */}
                     {isValidating && (
                         <p className="text-sm text-gray-500 animate-pulse">Validating file...</p>
                     )}

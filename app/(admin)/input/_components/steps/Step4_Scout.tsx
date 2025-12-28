@@ -1,45 +1,36 @@
-import { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDownload, faPen, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 import FileDropzone from '../file-upload/FileDropzone';
 import CsvEditor from '../CsvEditor';
-import { SCOUT_VALIDATION_RULES, validateFile } from '../validationUtils';
+import { SCOUT_VALIDATION_RULES } from '../validationUtils';
+import { useCsvStep } from '../hooks/useCsvStep';
 
+/**
+ * Step 4: Scout Data Upload
+ * 
+ * Handles uploading and validation of scout activity data.
+ * Uses useCsvStep hook for shared logic.
+ */
 export function Step4_Scout({ data, onChange, errors }: { data: any; onChange: (field: string, value: any) => void; errors: { [key: string]: string } }) {
-    const [isEditing, setIsEditing] = useState(false);
-    const [validationErrors, setValidationErrors] = useState<string[]>([]);
-    const [isValidating, setIsValidating] = useState(false);
-
-    // Validate file whenever it changes (if it exists)
-    useEffect(() => {
-        if (data.scoutFile) {
-            handleFileValidation(data.scoutFile);
-        } else {
-            setValidationErrors([]);
-        }
-    }, [data.scoutFile]);
-
-    const handleFileValidation = async (file: File) => {
-        setIsValidating(true);
-        try {
-            const result = await validateFile(file, SCOUT_VALIDATION_RULES);
-            setValidationErrors(result.errors);
-        } catch (error) {
-            console.error("Validation failed:", error);
-            setValidationErrors(["Failed to validate file"]);
-        } finally {
-            setIsValidating(false);
-        }
-    };
+    const {
+        isEditing,
+        setIsEditing,
+        validationErrors,
+        isValidating,
+        handleSave,
+        handleRemove
+    } = useCsvStep({
+        file: data.scoutFile,
+        onFileChange: (file) => onChange('scoutFile', file),
+        validationRules: SCOUT_VALIDATION_RULES
+    });
 
     if (isEditing && data.scoutFile) {
         return (
             <CsvEditor
                 file={data.scoutFile}
                 onClose={() => setIsEditing(false)}
-                onSave={(newFile) => {
-                    onChange('scoutFile', newFile);
-                }}
+                onSave={handleSave}
                 validationRules={SCOUT_VALIDATION_RULES}
             />
         );
@@ -49,8 +40,8 @@ export function Step4_Scout({ data, onChange, errors }: { data: any; onChange: (
         <div className="flex flex-col gap-4 mt-4">
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-lg font-semibold text-black">Scout</h3>
-                    <p className="text-sm text-gray-400">Upload the scout data file</p>
+                    <h3 className="text-lg font-semibold text-black">Scout Activities</h3>
+                    <p className="text-sm text-gray-400">Upload the scout activity data file</p>
                 </div>
                 <a href="/example_csv/example_scout.csv" download className="text-sm text-primary hover:underline flex items-center gap-2">
                     <FontAwesomeIcon icon={faDownload} />
@@ -79,7 +70,7 @@ export function Step4_Scout({ data, onChange, errors }: { data: any; onChange: (
                                 <FontAwesomeIcon icon={faPen} />
                             </button>
                             <button
-                                onClick={() => onChange('scoutFile', null)}
+                                onClick={handleRemove}
                                 className="p-2 text-gray-400 hover:text-red-500 transition-colors"
                                 title="Remove file"
                             >
@@ -90,7 +81,6 @@ export function Step4_Scout({ data, onChange, errors }: { data: any; onChange: (
                         </div>
                     </div>
 
-                    {/* Validation Errors Display */}
                     {isValidating && (
                         <p className="text-sm text-gray-500 animate-pulse">Validating file...</p>
                     )}

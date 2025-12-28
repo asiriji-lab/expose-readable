@@ -1,45 +1,36 @@
-import { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDownload, faPen, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 import FileDropzone from '../file-upload/FileDropzone';
 import CsvEditor from '../CsvEditor';
-import { PERIOD_VALIDATION_RULES, validateFile } from '../validationUtils';
+import { PERIOD_VALIDATION_RULES } from '../validationUtils';
+import { useCsvStep } from '../hooks/useCsvStep';
 
+/**
+ * Step 5: Period Data Upload
+ * 
+ * Handles uploading and validation of period definition data.
+ * Uses useCsvStep hook for shared logic.
+ */
 export function Step5_Period({ data, onChange, errors }: { data: any; onChange: (field: string, value: any) => void; errors: { [key: string]: string } }) {
-    const [isEditing, setIsEditing] = useState(false);
-    const [validationErrors, setValidationErrors] = useState<string[]>([]);
-    const [isValidating, setIsValidating] = useState(false);
-
-    // Validate file whenever it changes (if it exists)
-    useEffect(() => {
-        if (data.periodFile) {
-            handleFileValidation(data.periodFile);
-        } else {
-            setValidationErrors([]);
-        }
-    }, [data.periodFile]);
-
-    const handleFileValidation = async (file: File) => {
-        setIsValidating(true);
-        try {
-            const result = await validateFile(file, PERIOD_VALIDATION_RULES);
-            setValidationErrors(result.errors);
-        } catch (error) {
-            console.error("Validation failed:", error);
-            setValidationErrors(["Failed to validate file"]);
-        } finally {
-            setIsValidating(false);
-        }
-    };
+    const {
+        isEditing,
+        setIsEditing,
+        validationErrors,
+        isValidating,
+        handleSave,
+        handleRemove
+    } = useCsvStep({
+        file: data.periodFile,
+        onFileChange: (file) => onChange('periodFile', file),
+        validationRules: PERIOD_VALIDATION_RULES
+    });
 
     if (isEditing && data.periodFile) {
         return (
             <CsvEditor
                 file={data.periodFile}
                 onClose={() => setIsEditing(false)}
-                onSave={(newFile) => {
-                    onChange('periodFile', newFile);
-                }}
+                onSave={handleSave}
                 validationRules={PERIOD_VALIDATION_RULES}
             />
         );
@@ -49,8 +40,8 @@ export function Step5_Period({ data, onChange, errors }: { data: any; onChange: 
         <div className="flex flex-col gap-4 mt-4">
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="text-lg font-semibold text-black">Period</h3>
-                    <p className="text-sm text-gray-400">Upload the period data file</p>
+                    <h3 className="text-lg font-semibold text-black">Periods</h3>
+                    <p className="text-sm text-gray-400">Upload the period definition data file</p>
                 </div>
                 <a href="/example_csv/example_period.csv" download className="text-sm text-primary hover:underline flex items-center gap-2">
                     <FontAwesomeIcon icon={faDownload} />
@@ -79,7 +70,7 @@ export function Step5_Period({ data, onChange, errors }: { data: any; onChange: 
                                 <FontAwesomeIcon icon={faPen} />
                             </button>
                             <button
-                                onClick={() => onChange('periodFile', null)}
+                                onClick={handleRemove}
                                 className="p-2 text-gray-400 hover:text-red-500 transition-colors"
                                 title="Remove file"
                             >
@@ -90,7 +81,6 @@ export function Step5_Period({ data, onChange, errors }: { data: any; onChange: 
                         </div>
                     </div>
 
-                    {/* Validation Errors Display */}
                     {isValidating && (
                         <p className="text-sm text-gray-500 animate-pulse">Validating file...</p>
                     )}

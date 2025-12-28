@@ -192,10 +192,14 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
     };
 
     // Use onOp to detect changes and validate
+    // This is the core logic for real-time validation in the FortuneSheet editor.
+    // It intercepts operations (ops) and checks if they modify cell values.
     const handleOp = useCallback((op: any) => {
         if (!workbookRef.current) return;
 
         // Ignore internal changes to prevent feedback loops
+        // When we set a cell's style (bg color) programmatically, it triggers another 'op'.
+        // We must ignore these to avoid an infinite loop of validate -> set style -> validate -> ...
         if (isInternalChange.current) {
             console.log("Ignoring internal change");
             return;
@@ -205,33 +209,36 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
         const ops = Array.isArray(op) ? op : [op];
 
         ops.forEach((o: any) => {
+            // We only care about operations that change data: 'replace', 'add', or 'remove'
             if ((o.op === 'replace' || o.op === 'add' || o.op === 'remove') && o.path) {
                 const path = o.path;
                 console.log("Op:", o.op, "Path:", path, "Value:", o.value);
 
-                // path: ["data", r, c, prop?] based on logs
+                // path format is typically: ["data", r, c, prop?]
+                // We verify it targets the 'data' array and has row (r) and column (c) indices
                 if (path[0] === 'data' && typeof path[1] === 'number' && typeof path[2] === 'number') {
                     const r = path[1];
                     const c = path[2];
-                    const prop = path[3]; // 'v', 'm', 'bg', etc.
+                    const prop = path[3]; // 'v' (value), 'm' (display value), 'bg' (background), etc.
 
                     // Ignore style updates to prevent infinite loops
-                    // We only care about value updates ('v') or whole cell updates
+                    // If the op is just changing the background ('bg') or postil/tooltip ('ps'), ignore it.
                     if (prop === 'bg' || prop === 'ps') {
                         console.log("Ignoring style update:", prop);
                         return;
                     }
 
                     // Only validate on 'v' change or whole cell change to avoid redundant checks
+                    // If the prop is something else (like 'ct' for cell type), we can usually ignore it for validation purposes.
                     if (prop && prop !== 'v') {
                         console.log("Ignoring non-value prop:", prop);
                         return;
                     }
 
-                    // Get new value
+                    // Determine the new value based on the operation type
                     let newValue;
                     if (path.length === 3) {
-                        // Replaced whole cell
+                        // Replaced whole cell object
                         // If 'v' is not present in the update object, assume value is unchanged
                         // This filters out style updates (bg, ps) or other prop updates that don't affect value
                         if (o.value && typeof o.value === 'object' && !('v' in o.value)) {
@@ -240,10 +247,10 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
                         }
                         newValue = o.value?.v;
                     } else if (prop === 'v') {
-                        // Replaced value
+                        // Replaced specific value property 'v'
                         newValue = o.value;
                     } else {
-                        // For remove op, newValue remains undefined
+                        // For remove op, newValue remains undefined, which is treated as empty
                     }
 
                     console.log("Processing value change. NewValue:", newValue);
@@ -256,7 +263,7 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
                         return;
                     }
 
-                    // Get first column value for Grade Header check
+                    // Get first column value for Grade Header check (specific to this app's logic)
                     const sheet = workbookRef.current.getSheet(0);
                     const rowData = sheet.data?.[r];
                     let firstColValue;
@@ -267,10 +274,14 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
                         firstColValue = rowData?.[0]?.v;
                     }
 
+                    // Check if this row is a "Grade Header" (e.g., "ม.1")
+                    // If so, we skip validation and clear any styles
                     const isGradeHeader = firstColValue && /^ม\.\d/.test(String(firstColValue));
 
                     if (isGradeHeader) {
                         isInternalChange.current = true;
+                        // Use setTimeout to push the style update to the next tick
+                        // This is crucial for FortuneSheet to process the current op first
                         setTimeout(() => {
                             workbookRef.current.setCellFormat(r, c, "bg", "#ffffff");
                             workbookRef.current.setCellFormat(r, c, "ps", null);
@@ -279,6 +290,7 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
                         return;
                     }
 
+                    // Perform validation
                     const errorMsg = validateValue(c, newValue);
                     const isValid = errorMsg === null;
                     const bg = isValid ? "#ffffff" : "#ffcccc";
@@ -287,11 +299,12 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
 
                     console.log("Validation result:", isValid, "Setting bg:", bg);
 
-                    // Apply validation result
+                    // Apply validation result (visual feedback)
                     isInternalChange.current = true;
                     setTimeout(() => {
                         workbookRef.current.setCellFormat(r, c, "bg", bg);
                         workbookRef.current.setCellFormat(r, c, "ps", ps);
+                        // Reset the internal change flag after a short delay to allow the update to settle
                         setTimeout(() => { isInternalChange.current = false; }, 50);
                     }, 0);
                 }
