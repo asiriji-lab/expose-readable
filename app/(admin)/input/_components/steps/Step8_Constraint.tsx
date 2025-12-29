@@ -11,7 +11,9 @@ import { useCsvStep } from '../hooks/useCsvStep';
  * Handles uploading and validation of constraint data.
  * Uses useCsvStep hook for shared logic.
  */
-export function Step8_Constraint({ data, onChange, errors }: { data: any; onChange: (field: string, value: any) => void; errors: { [key: string]: string } }) {
+import { StepProps } from '../../_types';
+
+export function Step8_Constraint({ data, onChange, errors }: StepProps) {
     const {
         isEditing,
         setIsEditing,
@@ -37,7 +39,7 @@ export function Step8_Constraint({ data, onChange, errors }: { data: any; onChan
     }
 
     return (
-        <div className="flex flex-col gap-4 mt-4">
+        <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
                 <div>
                     <h3 className="text-lg font-semibold text-black">Constraints</h3>

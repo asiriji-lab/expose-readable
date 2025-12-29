@@ -11,7 +11,9 @@ import { useCsvStep } from '../hooks/useCsvStep';
  * This component handles the uploading and validation of the teacher CSV file.
  * It uses the `useCsvStep` hook to manage duplicate logic for file handling and validation.
  */
-export function Step2_Teacher({ data, onChange, errors }: { data: any; onChange: (field: string, value: any) => void; errors: { [key: string]: string } }) {
+import { StepProps } from '../../_types';
+
+export function Step2_Teacher({ data, onChange, errors }: StepProps) {
     // Use the custom hook to manage state and logic
     const {
         isEditing,
@@ -39,7 +41,7 @@ export function Step2_Teacher({ data, onChange, errors }: { data: any; onChange:
     }
 
     return (
-        <div className="flex flex-col gap-4 mt-4">
+        <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
                 <div>
                     <h3 className="text-lg font-semibold text-black">Teacher</h3>

@@ -14,23 +14,24 @@ import { Step7_Room } from './_components/steps/Step7_Room';
 import { Step8_Constraint } from './_components/steps/Step8_Constraint';
 import { Step9_RelatedFiles } from './_components/steps/Step9_RelatedFiles';
 import { Step10_Generate } from './_components/steps/Step10_Generate';
+import { ScheduleFormData } from './_types';
 
 export default function InputPage({ children }: { children: React.ReactNode }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ScheduleFormData>({
     scheduleName: '',
     year: '',
     semester: '',
-    curriculumFile: null as File | null,
-    teacherFile: null as File | null,
-    electiveFile: null as File | null,
-    scoutFile: null as File | null,
-    periodFile: null as File | null,
-    studentFile: null as File | null,
-    roomFile: null as File | null,
-    constraintFile: null as File | null,
-    relatedFile: null as File | null,
+    curriculumFile: null,
+    teacherFile: null,
+    electiveFile: null,
+    scoutFile: null,
+    periodFile: null,
+    studentFile: null,
+    roomFile: null,
+    constraintFile: null,
+    relatedFile: null,
   });
 
   // State for form data, errors, and UI status
@@ -40,7 +41,7 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
   const [toastMessage, setToastMessage] = useState('');
 
   // Updates form data and clears errors for the modified field
-  const handleDataChange = (field: string, value: any) => {
+  const handleDataChange = <K extends keyof ScheduleFormData>(field: K, value: ScheduleFormData[K]) => {
     setFormData(prev => ({
       ...prev,
       [field]: value

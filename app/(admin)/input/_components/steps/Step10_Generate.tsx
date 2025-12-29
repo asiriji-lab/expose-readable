@@ -11,12 +11,14 @@ const MOCK_MESSAGES = [
   { threshold: 95, text: "Finalizing schedule..." }
 ];
 
+import { ScheduleFormData } from '../../_types';
+
 export function Step10_Generate({
   data,
   onGenerate,
   completedSteps
 }: {
-  data: any;
+  data: ScheduleFormData;
   onGenerate: () => Promise<boolean>;
   completedSteps: number[];
 }) {

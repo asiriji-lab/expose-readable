@@ -5,7 +5,9 @@ import FileDropzone from '../file-upload/FileDropzone';
 import CsvEditor from '../CsvEditor';
 import { CURRICULUM_VALIDATION_RULES, validateFile } from '../validationUtils';
 
-export function Step1_Curriculum({ data, onChange, errors }: { data: any; onChange: (field: string, value: any) => void; errors: { [key: string]: string } }) {
+import { StepProps } from '../../_types';
+
+export function Step1_Curriculum({ data, onChange, errors }: StepProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [validationErrors, setValidationErrors] = useState<string[]>([]);
     const [isValidating, setIsValidating] = useState(false);
@@ -93,7 +95,7 @@ export function Step1_Curriculum({ data, onChange, errors }: { data: any; onChan
             </div>
 
             {/* Curriculum Section */}
-            <div className="flex flex-col gap-4 mt-4">
+            <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                     <div>
                         <h3 className="text-lg font-semibold text-black">Curriculum</h3>

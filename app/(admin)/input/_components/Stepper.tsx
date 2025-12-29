@@ -1,6 +1,7 @@
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCheck } from '@fortawesome/free-solid-svg-icons';
+import Image from 'next/image';
 
 interface StepperProps {
     currentStep: number;
@@ -9,16 +10,66 @@ interface StepperProps {
 }
 
 const steps = [
-    { id: 1, label: 'Curriculum', emoji: '📘' },
-    { id: 2, label: 'Teacher', emoji: '👥' },
-    { id: 3, label: 'Elective', emoji: '📚' },
-    { id: 4, label: 'Scout', emoji: '🎯' },
-    { id: 5, label: 'Period', emoji: '⏰' },
-    { id: 6, label: 'Student', emoji: '👨‍🎓' },
-    { id: 7, label: 'Room', emoji: '🏫' },
-    { id: 8, label: 'Constraint', emoji: '⚙️' },
-    { id: 9, label: 'Related files', emoji: '📎' },
-    { id: 10, label: 'Generate', emoji: '✨' },
+    {
+        id: 1,
+        label: 'Curriculum',
+        activeIcon: '/step_icon/1.book-open.svg',
+        inactiveIcon: '/step_icon/1.1.book-open_inactive.svg'
+    },
+    {
+        id: 2,
+        label: 'Teacher',
+        activeIcon: '/step_icon/2.users.svg',
+        inactiveIcon: '/step_icon/2.1.users_inactive.svg'
+    },
+    {
+        id: 3,
+        label: 'Elective',
+        activeIcon: '/step_icon/3.puzzle.svg',
+        inactiveIcon: '/step_icon/3.1.puzzle_inactive.svg'
+    },
+    {
+        id: 4,
+        label: 'Scout',
+        activeIcon: '/step_icon/4.tent.svg',
+        inactiveIcon: '/step_icon/4.1.tent_inactive.svg'
+    },
+    {
+        id: 5,
+        label: 'Period',
+        activeIcon: '/step_icon/5.clock.svg',
+        inactiveIcon: '/step_icon/5.1.clock_inactive.svg'
+    },
+    {
+        id: 6,
+        label: 'Student',
+        activeIcon: '/step_icon/6.graduation-cap.svg',
+        inactiveIcon: '/step_icon/6.1.graduation-cap_inactive.svg'
+    },
+    {
+        id: 7,
+        label: 'Room',
+        activeIcon: '/step_icon/7.door-closed.svg',
+        inactiveIcon: '/step_icon/7.1.door-closed_inactive.svg'
+    },
+    {
+        id: 8,
+        label: 'Constraint',
+        activeIcon: '/step_icon/8.triangle-alert.svg',
+        inactiveIcon: '/step_icon/8.1.triangle-alert_inactive.svg'
+    },
+    {
+        id: 9,
+        label: 'Related files',
+        activeIcon: '/step_icon/9.file-text.svg',
+        inactiveIcon: '/step_icon/9.1.file-text_inactive.svg'
+    },
+    {
+        id: 10,
+        label: 'Generate',
+        activeIcon: '/step_icon/10.sparkles.svg',
+        inactiveIcon: '/step_icon/10.1.sparkles_inactive.svg'
+    },
 ];
 
 export default function Stepper({ currentStep, completedSteps, onStepClick }: StepperProps) {
@@ -32,7 +83,6 @@ export default function Stepper({ currentStep, completedSteps, onStepClick }: St
                     {steps.map((step) => {
                         const isCompleted = completedSteps.includes(step.id);
                         const isActive = currentStep === step.id;
-                        const isClickable = true;
 
                         return (
                             <button
@@ -48,7 +98,7 @@ export default function Stepper({ currentStep, completedSteps, onStepClick }: St
                             >
                                 <div className="flex items-center gap-3">
                                     <div className={`
-                    w-6 h-6 rounded flex items-center justify-center text-[10px] transition-colors
+                    w-9 h-9 rounded flex items-center justify-center text-[10px] transition-colors
                     ${isCompleted
                                             ? 'bg-green-500 text-white'
                                             : isActive
@@ -57,14 +107,28 @@ export default function Stepper({ currentStep, completedSteps, onStepClick }: St
                                         }
                   `}>
                                         {isCompleted ? (
-                                            <FontAwesomeIcon icon={faCheck} />
+                                            <div className="relative w-5 h-5">
+                                                <Image
+                                                    src="/step_icon/Mark_as_done.svg"
+                                                    alt="Completed"
+                                                    fill
+                                                    className="object-contain brightness-0 invert"
+                                                />
+                                            </div>
                                         ) : (
-                                            <span className="text-[10px]">{step.emoji}</span>
+                                            <div className="relative w-5 h-5">
+                                                <Image
+                                                    src={isActive ? step.activeIcon : step.inactiveIcon}
+                                                    alt={step.label}
+                                                    fill
+                                                    className={`object-contain ${isActive ? 'brightness-0 invert' : ''}`}
+                                                />
+                                            </div>
                                         )}
                                     </div>
                                     <span>{step.label}</span>
                                 </div>
-                                <span className="text-xs text-gray-400">{step.id}</span>
+                                <span className={`text-xs ${isActive ? 'text-primary' : 'text-gray-400'}`}>{step.id}</span>
                             </button>
                         );
                     })}
@@ -73,3 +137,4 @@ export default function Stepper({ currentStep, completedSteps, onStepClick }: St
         </aside>
     );
 }
+

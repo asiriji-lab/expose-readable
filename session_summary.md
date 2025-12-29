@@ -71,3 +71,20 @@ We focused on ensuring data integrity and improving the user experience during t
 - **Git Push**: All changes (Validation, Guardrails, UI enhancements) have been successfully committed and pushed to the `frontend` branch.
 
 and yes, i have no idea what i'm doing, or how i do it. but fuck yeah it sorta works.
+##  Code Refactoring & Documentation
+- **useCsvStep Hook**: Created a custom hook to encapsulate repetitive file handling and validation logic, reducing code duplication across 7 components.
+- **Documentation**: Added detailed comments to CsvEditor.tsx (explaining the onOp validation logic) and page.tsx (explaining state management).
+- **Git Push**: Refactored code and documentation pushed to rontend.
+
+# Session Update - Dec 29, 2025: Stepper UI Enhancements
+
+##  Visual Improvements
+- **Custom Stepper Icons**: Replaced the default emojis in the sidebar with custom SVG icons for a more professional look.
+    - **Active State**: Inverted the icon color to white on a blue background.
+    - **Inactive State**: Used gray icons consistent with the design system.
+- **Active Step Styling**: Updated the active step number to turn blue (	ext-primary) to match the theme.
+- **Completed State**: Replaced the default checkmark with a custom Mark_as_done.svg icon (white checkmark on green background).
+
+##  Verification
+- **Browser Testing**: Verified the visual changes and state transitions (Active -> Completed) using browser automation.
+

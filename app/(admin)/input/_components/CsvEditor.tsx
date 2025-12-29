@@ -11,10 +11,50 @@ interface CsvEditorProps {
     validationRules?: Record<number, { pattern: RegExp; message: string }>;
 }
 
+interface SheetData {
+    name: string;
+    celldata: CellData[];
+    order: number;
+    status: number;
+}
+
+interface CellData {
+    r: number;
+    c: number;
+    v: CellValue | null;
+}
+
+interface CellValue {
+    v: string | number | undefined;
+    m?: string | number;
+    bg?: string;
+    ps?: {
+        value: string;
+        isShow: boolean; // Changed from isshow to isShow
+        width: number | null;
+        height: number | null;
+        left: number | null;
+        top: number | null;
+    } | undefined;
+    ct?: { fa: string; t: string };
+}
+
+interface Op {
+    op: 'replace' | 'add' | 'remove';
+    path: (string | number)[];
+    value?: any;
+}
+
+interface WorkbookInstance {
+    getAllSheets: () => any[];
+    getSheet: (index: number) => { data: any[] };
+    setCellFormat: (r: number, c: number, key: string, value: any) => void;
+}
+
 export default function CsvEditor({ file, onClose, onSave, validationRules }: CsvEditorProps) {
-    const [sheetData, setSheetData] = useState<any[]>([]);
+    const [sheetData, setSheetData] = useState<SheetData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const workbookRef = useRef<any>(null);
+    const workbookRef = useRef<any>(null); // Using any for library ref compatibility
     const rulesRef = useRef<Record<number, { pattern: RegExp; message: string }> | undefined>(validationRules);
     const isInternalChange = useRef(false);
 
@@ -25,7 +65,7 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
 
     // Helper to validate a single value against a rule
     // Returns null if valid, or error message string if invalid
-    const validateValue = useCallback((colIndex: number, value: any): string | null => {
+    const validateValue = useCallback((colIndex: number, value: string | number | null | undefined): string | null => {
         // Allow empty values to be valid (reset to white)
         if (value === null || value === undefined || String(value).trim() === '') return null;
 
@@ -44,7 +84,7 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
         const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
 
         const processData = (rows: string[][]) => {
-            const celldata: any[] = [];
+            const celldata: CellData[] = [];
 
             rows.forEach((row, r) => {
                 // Check for Grade Header (e.g., "ม.1") in the first column
@@ -61,7 +101,14 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
                             const errorMsg = validateValue(c, cell);
                             if (errorMsg) {
                                 bg = "#ffcccc";
-                                ps = { value: errorMsg, isshow: false, width: 250, height: 120 };
+                                ps = {
+                                    value: errorMsg,
+                                    isShow: false,
+                                    width: 250,
+                                    height: 120,
+                                    left: null,
+                                    top: null
+                                };
                             }
                         }
 
@@ -125,7 +172,7 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
         let rows: string[][] = [];
 
         if (sheet.data && Array.isArray(sheet.data) && sheet.data.length > 0) {
-            rows = sheet.data.map((row: any[]) => {
+            rows = sheet.data.map((row: CellValue[]) => {
                 if (!Array.isArray(row)) return [];
                 return row.map(cell => {
                     if (cell && cell.v !== undefined) return String(cell.v);
@@ -284,7 +331,7 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
                         // This is crucial for FortuneSheet to process the current op first
                         setTimeout(() => {
                             workbookRef.current.setCellFormat(r, c, "bg", "#ffffff");
-                            workbookRef.current.setCellFormat(r, c, "ps", null);
+                            workbookRef.current.setCellFormat(r, c, "ps", undefined);
                             setTimeout(() => { isInternalChange.current = false; }, 50);
                         }, 0);
                         return;
@@ -295,7 +342,14 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
                     const isValid = errorMsg === null;
                     const bg = isValid ? "#ffffff" : "#ffcccc";
                     // Set a larger size for the tooltip to prevent clipping
-                    const ps = isValid ? null : { value: errorMsg, isshow: false, width: 250, height: 120 };
+                    const ps = isValid ? undefined : {
+                        value: errorMsg,
+                        isShow: false,
+                        width: 250,
+                        height: 120,
+                        left: null,
+                        top: null
+                    };
 
                     console.log("Validation result:", isValid, "Setting bg:", bg);
 
