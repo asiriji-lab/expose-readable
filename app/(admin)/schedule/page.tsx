@@ -5,6 +5,7 @@ import FilterDropdown from './_components/FilterDropdown';
 import ViewModeToggle from './_components/ViewModeToggle';
 import TimetableGrid from './_components/TimetableGrid';
 import TeachingSlotSidebar from './_components/TeachingSlotSidebar';
+import EditOverlay from './_components/EditOverlay';
 import { generateScheduleItem, ScheduleItem } from './_utils/dummyData';
 
 interface ScheduleData {
@@ -46,10 +47,7 @@ export default function SchedulePage() {
     setScheduleData(newScheduleData);
   }, []);
 
-  const handleCellClick = (day: string, slot: number) => {
-    console.log(`Clicked: ${day}, Slot ${slot}`);
-    // TODO: Implement edit functionality
-  };
+
 
   // Handle drop onto the Grid
   const handleGridDrop = (targetDay: string, targetSlot: number, payload: any) => {
@@ -102,6 +100,90 @@ export default function SchedulePage() {
 
     setScheduleData(nextSchedule);
   };
+
+  // --- Modal Logic ---
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingParams, setEditingParams] = useState<{ day: string; slot: number } | null>(null);
+  const [editingItem, setEditingItem] = useState<ScheduleItem | null>(null);
+
+  const handleCellClick = (day: string, slot: number) => {
+    const item = scheduleData[day]?.[slot] || null;
+    setEditingParams({ day, slot });
+    setEditingItem(item);
+    setIsModalOpen(true);
+  };
+
+  const handleModalSave = (data: Partial<ScheduleItem>) => {
+    if (!editingParams) return;
+    const { day, slot } = editingParams;
+
+    const newItem: ScheduleItem = {
+      teacher: data.teacher || '',
+      teacherName: data.teacherName || '',
+      classCode: data.classCode || '',
+      room: data.room || '',
+      roomName: data.roomName || '',
+      subjectCode: data.subjectCode || '',
+      variant: data.variant || 'green', // Default
+    };
+
+    setScheduleData(prev => ({
+      ...prev,
+      [day]: {
+        ...(prev[day] || {}),
+        [slot]: newItem
+      }
+    }));
+
+    setIsModalOpen(false);
+    setEditingParams(null);
+    setEditingItem(null);
+  };
+
+  // --- Filtering Logic (All Views Show All) ---
+  // Requested change: "make teacher view, room view, class view show every grid like view all"
+  // So we just return scheduleData directly, but keeping the function structure in case we want to re-add filtering later or soft-filtering.
+  // --- Filtering Logic ---
+  const getFilteredScheduleData = () => {
+    if (viewMode === 'all') return scheduleData;
+
+    const filtered: ScheduleData = {};
+    const days = Object.keys(scheduleData);
+
+    days.forEach(day => {
+      const slots = scheduleData[day];
+      if (!slots) return;
+
+      const filteredSlots: { [slot: number]: ScheduleItem } = {};
+      let hasData = false;
+
+      Object.entries(slots).forEach(([slotStr, item]) => {
+        const slot = parseInt(slotStr);
+        let match = false;
+
+        if (viewMode === 'teacher') {
+          match = item.teacher === tCode;
+        } else if (viewMode === 'class') {
+          match = item.classCode === classCode;
+        } else if (viewMode === 'room') {
+          match = item.room === room;
+        }
+
+        if (match) {
+          filteredSlots[slot] = item;
+          hasData = true;
+        }
+      });
+
+      if (hasData) {
+        filtered[day] = filteredSlots;
+      }
+    });
+
+    return filtered;
+  };
+
+  const filteredScheduleData = getFilteredScheduleData();
 
   // Handle drop onto the Sidebar
   const handleSidebarDrop = (payload: any) => {
@@ -301,15 +383,17 @@ export default function SchedulePage() {
       <main className="flex-1 overflow-auto p-6">
         <div className="flex gap-4">
           {/* Timetable Grid */}
+          {/* TimetableGrid */}
           <div className="flex-1">
             <TimetableGrid
-              scheduleData={scheduleData}
+              scheduleData={filteredScheduleData}
               viewMode={viewMode}
               onCellClick={handleCellClick}
               onDropPayload={handleGridDrop}
             />
           </div>
 
+          {/* Teaching Slot Sidebar */}
           {/* Teaching Slot Sidebar */}
           <TeachingSlotSidebar
             presets={presets}
@@ -318,6 +402,13 @@ export default function SchedulePage() {
           />
         </div>
       </main>
+
+      <EditOverlay
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleModalSave}
+        initialData={editingItem}
+      />
     </div>
   );
 }

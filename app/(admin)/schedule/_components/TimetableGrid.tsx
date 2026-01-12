@@ -1,4 +1,11 @@
-import { ScheduleItem, DragPayload } from '../_utils/dummyData';
+import { ScheduleItem } from '../_utils/dummyData';
+export interface DragPayload {
+    source: 'GRID' | 'SIDEBAR';
+    item: ScheduleItem;
+    day?: string;
+    slot?: number;
+    index?: number;
+}
 import ScheduleCellDisplay from './ScheduleCellDisplay';
 
 interface ScheduleData {
@@ -19,11 +26,13 @@ export default function TimetableGrid({ scheduleData, viewMode, onCellClick, onD
     const slots = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
     // Determine which labels to show based on viewMode
+    // ALWAYS show all labels as per "like View All" request
     const allLabels = ['Teacher', 'Class', 'Room'];
-    let visibleLabels = allLabels;
-    if (viewMode === 'teacher') visibleLabels = ['Teacher'];
-    if (viewMode === 'class') visibleLabels = ['Class'];
-    if (viewMode === 'room') visibleLabels = ['Room'];
+    const visibleLabels = allLabels;
+    // Previous logic removed to show full info in all views
+    // Previous logic removed to show full info in all views
+    // if (viewMode === 'teacher') visibleLabels = ['Teacher'];
+    // ...
 
     return (
         <div className="flex gap-0 overflow-hidden">
