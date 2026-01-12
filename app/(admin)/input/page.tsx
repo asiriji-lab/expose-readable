@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Stepper from './_components/Stepper';
 import ProgressBar from './_components/ProgressBar';
 import NavigationButtons from './_components/NavigationButtons';
@@ -17,6 +18,7 @@ import { Step10_Generate } from './_components/steps/Step10_Generate';
 import { ScheduleFormData } from './_types';
 
 export default function InputPage({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [formData, setFormData] = useState<ScheduleFormData>({
@@ -94,7 +96,10 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
 
   // Handles schedule generation (Step 10)
   // Includes "Guardrails" to prevent generation if steps 1-8 are incomplete
-  const handleGenerate = async (): Promise<boolean> => {
+  // Handles schedule generation (Step 10)
+  // Includes "Guardrails" to prevent generation if steps 1-8 are incomplete
+  // accepts an argument to distinguish between internal (Step10 component) and global (NavigationButtons) calls
+  const handleGenerate = async (e?: any): Promise<boolean> => {
     console.log("handleGenerate called. Completed steps:", completedSteps);
 
     // Guardrail: Check if all required steps (1-8) are completed
@@ -110,18 +115,28 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
       return false; // Prevent generation
     }
 
-    console.log("Generating schedule with data");
-    setIsGenerating(true);
+    // Determine if called from Global button (has event arg) or Internal Step10 button (undefined arg)
+    // Step10 calls: await onGenerate(); -> arg is undefined
+    const isGlobalButton = e && (e.preventDefault || e.target);
 
-    // Simulate generation process (replace with actual API call)
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        console.log('Generating schedule:', formData);
-        alert('Schedule generated!');
-        setIsGenerating(false);
-        resolve(true);
-      }, 3000);
-    });
+    console.log("Generating schedule with data. Source:", isGlobalButton ? "Global Button" : "Internal Step10");
+
+    // If Global Button, we need to handle loading UI + Redirect here
+    if (isGlobalButton) {
+      setIsGenerating(true);
+
+      // Simulate generation delay for Global Button experience
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      console.log('Generating schedule:', formData);
+      // No alert, just redirect
+      setIsGenerating(false);
+      router.push('/schedule');
+      return true;
+    }
+
+    // If Internal Step10 Button, we return true immediately so Step10 can run its own animation/redirect logic
+    return true;
   };
 
   const handleMarkAsDone = () => {
