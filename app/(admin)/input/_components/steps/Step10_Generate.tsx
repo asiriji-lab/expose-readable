@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from 'next/navigation';
 
 const MOCK_MESSAGES = [
   { threshold: 0, text: "Initializing generation engine..." },
@@ -22,6 +23,7 @@ export function Step10_Generate({
   onGenerate: () => Promise<boolean>;
   completedSteps: number[];
 }) {
+  const router = useRouter();
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<string>("");
@@ -67,6 +69,7 @@ export function Step10_Generate({
 
     setTimeout(() => {
       setIsGenerating(false);
+      router.push('/schedule');
     }, 1500);
   };
 
