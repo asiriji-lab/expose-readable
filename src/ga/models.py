@@ -13,32 +13,33 @@ import copy
 
 # =============================================================================
 # CONSTANTS
+# Should refer from input data stored in Schedule Manager
 # =============================================================================
 
 # Days of the week
-DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+# DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 
 # Teaching periods (excluding breaks, lunch, homeroom)
-TEACHING_PERIODS = ['2', '3', '4', '5', '6', '7', '8', '9', '10']
+# TEACHING_PERIODS = ['2', '3', '4', '5', '6', '7', '8', '9', '10']
 
 # All columns in timetable CSVs
-ALL_COLUMNS = ['1', '2', '3', 'Morning Break', '4', '5', '6', '7', '8', 'Afternoon Break', '9', '10']
+# ALL_COLUMNS = ['1', '2', '3', 'Morning Break', '4', '5', '6', '7', '8', 'Afternoon Break', '9', '10']
 
 # Slots that are always blocked (not available for regular teaching)
-BLOCKED_KEYWORDS = [
-    'Homeroom', 'Morning Break', 'Afternoon Break', 'Lunch',
-    'ลูกเสือ', 'ชุมนุม', 'เสรี', 'Bridging course'
-]
+# BLOCKED_KEYWORDS = [
+#     'Homeroom', 'Morning Break', 'Afternoon Break', 'Lunch',
+#     'ลูกเสือ', 'ชุมนุม', 'เสรี', 'Bridging course'
+# ]
 
 # Grade level mappings
-GRADE_LEVELS = {
-    'ม.1': ['1_1', '1_2', '1_3', '1_4'],
-    'ม.2': ['2_1', '2_2', '2_3', '2_4'],
-    'ม.3': ['3_1', '3_2', '3_3', '3_4'],
-    'ม.4': ['4_1', '4_2', '4_3', '4_4', '4_5'],
-    'ม.5': ['5_1', '5_2', '5_3', '5_4', '5_5'],
-    'ม.6': ['6_1', '6_2', '6_3', '6_4', '6_5'],
-}
+# GRADE_LEVELS = {
+#     'ม.1': ['1_1', '1_2', '1_3', '1_4'],
+#     'ม.2': ['2_1', '2_2', '2_3', '2_4'],
+#     'ม.3': ['3_1', '3_2', '3_3', '3_4'],
+#     'ม.4': ['4_1', '4_2', '4_3', '4_4', '4_5'],
+#     'ม.5': ['5_1', '5_2', '5_3', '5_4', '5_5'],
+#     'ม.6': ['6_1', '6_2', '6_3', '6_4', '6_5'],
+# }
 
 
 # =============================================================================
