@@ -14,9 +14,7 @@
   /* Pure white for cards */
   --border: #e5e7eb;
   /* Light gray for borders */
-}
-
-@theme inline {
+  
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);
@@ -53,6 +51,9 @@ body {
   padding: 12px !important;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
   font-family: inherit !important;
+
+
+
   line-height: 1.5 !important;
   background-color: #ffffff !important;
   color: #1f2937 !important;
@@ -93,4 +94,12 @@ body {
 
 .animate-shimmer {
   animation: shimmer 2s infinite;
+}
+
+.box-container {
+  padding: 16px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+  margin-bottom: 16px;
 }

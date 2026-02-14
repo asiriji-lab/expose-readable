@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import FilterDropdown from './_components/FilterDropdown';
 import ViewModeToggle from './_components/ViewModeToggle';
 import TimetableGrid from './_components/TimetableGrid';
@@ -19,6 +20,7 @@ interface ScheduleData {
 
 
 export default function SchedulePage() {
+  const router = useRouter();
   const [tCode, setTCode] = useState('9301');
   const [classCode, setClassCode] = useState('6/15');
   const [room, setRoom] = useState('7401');
@@ -249,7 +251,7 @@ export default function SchedulePage() {
 
             {/* Row 1: Back & Title (Aligns with T.code row) */}
             <div className="flex items-center gap-3 h-8">
-              <button className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors">
+              <button onClick={() => router.back()} className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>

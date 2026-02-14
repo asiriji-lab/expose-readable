@@ -69,6 +69,12 @@ export interface ScheduleItem {
     variant: 'red' | 'green';
 }
 
+export interface DragPayload {
+    source: 'SIDEBAR' | 'GRID';
+    item: ScheduleItem;
+    index: number;
+}
+
 export const generateScheduleItem = (): ScheduleItem => {
     return {
         teacher: generateTeacherCode(),
