@@ -398,7 +398,6 @@ class PrescheduleProcessor:
                 if col in slot_name or slot_name in col:
                     matching_slot = slot_name
                     break
-            
             if not matching_slot:
                 print(f"⚠️  No matching scout slot found for grade column: {col}")
                 continue
@@ -406,14 +405,12 @@ class PrescheduleProcessor:
             periods_str = scout_slots[matching_slot]
             parsed_slots = self._parse_period_range(periods_str)
             
-            # Get teacher list from the column (first row)
-            if len(df_scout) > 0:
-                teacher_value = df_scout[col].iloc[0]
-                
-                # Handle teacher as list or single value
+            # Process all rows in the column
+            for idx, teacher_value in df_scout[col].items():
                 if pd.isna(teacher_value):
                     continue
                 
+                # Handle teacher as list or single value
                 teachers = teacher_value if isinstance(teacher_value, list) else [teacher_value]
                 
                 # Assign to each teacher

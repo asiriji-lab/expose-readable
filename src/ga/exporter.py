@@ -87,16 +87,24 @@ class ScheduleExporter:
             'output_dir': self.output_dir
         }
 
+        # Create subdirectories
+        os.makedirs(os.path.join(self.output_dir, "teachers"), exist_ok=True)
+        os.makedirs(os.path.join(self.output_dir, "students"), exist_ok=True)
+        os.makedirs(os.path.join(self.output_dir, "rooms"), exist_ok=True)
+
         # Export teacher timetables
         all_teachers = set(assignments_by_teacher.keys())
         all_teachers.update(self.manager.teacher_grids.keys())
             
         for teacher_id in all_teachers:
+            if not teacher_id or pd.isna(teacher_id):
+                continue
+            safe_teacher_id = str(teacher_id).replace('/', '-').replace('\\', '-')
             self._export_grid(
                 entity_type='teacher',
                 entity_id=teacher_id,
                 assignments=assignments_by_teacher.get(teacher_id, []),
-                filename=f"teacher_{teacher_id}.csv"
+                filename=os.path.join("teachers", f"teacher_{safe_teacher_id}.csv")
             )
             stats['teachers_exported'] += 1
             
@@ -105,11 +113,14 @@ class ScheduleExporter:
         all_students.update(self.manager.student_grids.keys())
             
         for class_id in all_students:
+            if not class_id or pd.isna(class_id):
+                continue
+            safe_class_id = str(class_id).replace('/', '-').replace('\\', '-')
             self._export_grid(
                 entity_type='student',
                 entity_id=class_id,
                 assignments=assignments_by_student.get(class_id, []),
-                filename=f"student_{class_id}.csv"
+                filename=os.path.join("students", f"student_{safe_class_id}.csv")
             )
             stats['students_exported'] += 1
             
@@ -118,12 +129,14 @@ class ScheduleExporter:
         all_rooms.update(self.manager.room_grids.keys())
         
         for room_id in all_rooms:
+            if not room_id or pd.isna(room_id):
+                continue
             safe_room_id = str(room_id).replace('/', '-').replace('\\', '-')
             self._export_grid(
                 entity_type='room',
                 entity_id=room_id,
                 assignments=assignments_by_room.get(room_id, []),
-                filename=f"room_{safe_room_id}.csv"
+                filename=os.path.join("rooms", f"room_{safe_room_id}.csv")
             )
             stats['rooms_exported'] += 1
             
