@@ -209,101 +209,101 @@ def main():
     # =========================================================================
     # STEP 4: GA OPTIMIZATION
     # =========================================================================
-    print("\n" + "="*80)
-    print("GENETIC ALGORITHM OPTIMIZATION")
-    print("="*80 + "\n")
+    # print("\n" + "="*80)
+    # print("GENETIC ALGORITHM OPTIMIZATION")
+    # print("="*80 + "\n")
     
-    # Create lessons from curriculum for GA
-    # curriculum_df = cleaned_data.get('curriculum')
-    # if curriculum_df is None:
-    #     print("❌ Curriculum data not found!")
-    #     return
+    # # Create lessons from curriculum for GA
+    # # curriculum_df = cleaned_data.get('curriculum')
+    # # if curriculum_df is None:
+    # #     print("❌ Curriculum data not found!")
+    # #     return
     
-    print("🧬 Initializing Genetic Algorithm with ScheduleManager state...")
+    # print("🧬 Initializing Genetic Algorithm with ScheduleManager state...")
     
-    # GA parameters
-    ga_params = {
-        'population_size': 150,
-        'max_generations': 500,
-        'mutation_rate': 0.20,
-        'crossover_rate': 0.80,
-        'elite_size': 10,
-        'tournament_size': 7
-    }
+    # # GA parameters
+    # ga_params = {
+    #     'population_size': 150,
+    #     'max_generations': 500,
+    #     'mutation_rate': 0.20,
+    #     'crossover_rate': 0.80,
+    #     'elite_size': 10,
+    #     'tournament_size': 7
+    # }
     
-    # Progress callback
-    def ga_progress(generation, max_gen, stats):
-        if generation % 50 == 0:
-            print(f"  Generation {generation}/{max_gen}: "
-                  f"Best Fitness = {stats['best_fitness']:.2f}, "
-                  f"Violations = {stats['violations']}")
+    # # Progress callback
+    # def ga_progress(generation, max_gen, stats):
+    #     if generation % 50 == 0:
+    #         print(f"  Generation {generation}/{max_gen}: "
+    #               f"Best Fitness = {stats['best_fitness']:.2f}, "
+    #               f"Violations = {stats['violations']}")
     
-    # Initialize and run GA with ScheduleManager
-    ga = GeneticAlgorithm(
-        schedule_manager=schedule_manager,
-        population_size=ga_params['population_size'],
-        max_generations=ga_params['max_generations'],
-        mutation_rate=ga_params['mutation_rate'],
-        crossover_rate=ga_params['crossover_rate'],
-        elite_size=ga_params['elite_size'],
-        tournament_size=ga_params['tournament_size'],
-        progress_callback=ga_progress
-    )
+    # # Initialize and run GA with ScheduleManager
+    # ga = GeneticAlgorithm(
+    #     schedule_manager=schedule_manager,
+    #     population_size=ga_params['population_size'],
+    #     max_generations=ga_params['max_generations'],
+    #     mutation_rate=ga_params['mutation_rate'],
+    #     crossover_rate=ga_params['crossover_rate'],
+    #     elite_size=ga_params['elite_size'],
+    #     tournament_size=ga_params['tournament_size'],
+    #     progress_callback=ga_progress
+    # )
     
-    print("🚀 Starting GA evolution...")
-    best_solution = ga.evolve()
-    ga_result = ga.get_result_summary()
+    # print("🚀 Starting GA evolution...")
+    # best_solution = ga.evolve()
+    # ga_result = ga.get_result_summary()
     
-    print("\n✅ GA Optimization Complete!")
-    print(f"\n📊 GA Results:")
-    print(f"  - Final Fitness: {ga_result['final_fitness']:.2f}")
-    print(f"  - Generations Run: {ga_result['generations_run']}")
-    print(f"  - Solution Found: {ga_result['solution_found']}")
-    print(f"  - Final Violations: {ga_result['final_violations']}")
+    # print("\n✅ GA Optimization Complete!")
+    # print(f"\n📊 GA Results:")
+    # print(f"  - Final Fitness: {ga_result['final_fitness']:.2f}")
+    # print(f"  - Generations Run: {ga_result['generations_run']}")
+    # print(f"  - Solution Found: {ga_result['solution_found']}")
+    # print(f"  - Final Violations: {ga_result['final_violations']}")
     
-    # =========================================================================
-    # STEP 5: APPLY GA SOLUTION TO SCHEDULE MANAGER & EXPORT
-    # =========================================================================
-    print("\n" + "="*80)
-    print("APPLYING GA SOLUTION TO SCHEDULES")
-    print("="*80 + "\n")
+    # # =========================================================================
+    # # STEP 5: APPLY GA SOLUTION TO SCHEDULE MANAGER & EXPORT
+    # # =========================================================================
+    # print("\n" + "="*80)
+    # print("APPLYING GA SOLUTION TO SCHEDULES")
+    # print("="*80 + "\n")
     
-    # The GA has already updated the ScheduleManager with the best solution
-    # Now export the final schedules
-    export_final_schedules(schedule_manager, "output")
+    # # The GA has already updated the ScheduleManager with the best solution
+    # # Now export the final schedules
+    # export_final_schedules(schedule_manager, "output")
     
-    # Save GA statistics
-    ga_stats_path = "output/ga_results/ga_statistics.json"
-    with open(ga_stats_path, 'w', encoding='utf-8') as f:
-        json.dump({
-            'result_summary': ga_result,
-            'generation_stats': ga.generation_stats
-        }, f, indent=2, ensure_ascii=False)
-    print(f"✅ GA statistics saved to {ga_stats_path}")
+    # # Save GA statistics
+    # ga_stats_path = "output/ga_results/ga_statistics.json"
+    # with open(ga_stats_path, 'w', encoding='utf-8') as f:
+    #     json.dump({
+    #         'result_summary': ga_result,
+    #         'generation_stats': ga.generation_stats
+    #     }, f, indent=2, ensure_ascii=False)
+    # print(f"✅ GA statistics saved to {ga_stats_path}")
     
-    # =========================================================================
-    # FINAL SUMMARY
-    # =========================================================================
-    print("\n" + "="*80)
-    print("EXECUTION COMPLETE")
-    print("="*80 + "\n")
+    # # =========================================================================
+    # # FINAL SUMMARY
+    # # =========================================================================
+    # print("\n" + "="*80)
+    # print("EXECUTION COMPLETE")
+    # print("="*80 + "\n")
     
-    print("✅ All processing complete!")
-    print(f"\n📁 Output files:")
-    print(f"  Cleaned Input:")
-    print(f"    - cleaned_input/*.csv (8 cleaned data files)")
-    print(f"  Preschedule Results:")
-    print(f"    - output/preschedule/students/*.csv ({len(schedule_manager.student_grids)} files)")
-    print(f"    - output/preschedule/teachers/*.csv ({len(schedule_manager.teacher_grids)} files)")
-    print(f"    - output/preschedule/rooms/*.csv ({len(schedule_manager.room_grids)} files)")
-    if schedule_manager.conflicts:
-        print(f"    - output/preschedule_conflicts.csv")
-    print(f"  Final GA-Optimized Schedules:")
-    print(f"    - output/final/students/*.csv ({len(schedule_manager.student_grids)} files)")
-    print(f"    - output/final/teachers/*.csv ({len(schedule_manager.teacher_grids)} files)")
-    print(f"    - output/final/rooms/*.csv ({len(schedule_manager.room_grids)} files)")
-    print(f"  GA Statistics:")
-    print(f"    - output/ga_results/ga_statistics.json")
+    # print("✅ All processing complete!")
+    # print(f"\n📁 Output files:")
+    # print(f"  Cleaned Input:")
+    # print(f"    - cleaned_input/*.csv (8 cleaned data files)")
+    # print(f"  Preschedule Results:")
+    # print(f"    - output/preschedule/students/*.csv ({len(schedule_manager.student_grids)} files)")
+    # print(f"    - output/preschedule/teachers/*.csv ({len(schedule_manager.teacher_grids)} files)")
+    # print(f"    - output/preschedule/rooms/*.csv ({len(schedule_manager.room_grids)} files)")
+    # if schedule_manager.conflicts:
+    #     print(f"    - output/preschedule_conflicts.csv")
+    # print(f"  Final GA-Optimized Schedules:")
+    # print(f"    - output/final/students/*.csv ({len(schedule_manager.student_grids)} files)")
+    # print(f"    - output/final/teachers/*.csv ({len(schedule_manager.teacher_grids)} files)")
+    # print(f"    - output/final/rooms/*.csv ({len(schedule_manager.room_grids)} files)")
+    # print(f"  GA Statistics:")
+    # print(f"    - output/ga_results/ga_statistics.json")
 
 
 if __name__ == "__main__":

@@ -1,19 +1,19 @@
-slot_name,periods
-Free,FRI_1-FRI_10
-Homeroom,Everyday_1
-ชุมนุม,WED_10
-Lunch ม.ต้น,Everyday_6
-Lunch ม.ปลาย,Everyday_7
-ลูกเสือม.1,MON_10
-ลูกเสือม.2,TUE_10
-ลูกเสือม.3,THU_10
-เสรีม.ต้น1,FRI_2-FRI_3
-เสรีม.ต้น2,FRI_4-FRI_5
-Bridging course,FRI_7-FRI_10
-คลินิกวิชาการ,FRI_8-FRI_10
-เสรีม.ปลาย1,MON_5-MON_6
-เสรีม.ปลาย2,TUE_5-TUE_6
-เสรีม.ปลาย3,TUE_8-TUE_9
-เสรีม.ปลาย4,WED_5-WED_6
-เสรีม.ปลาย5,WED_8-WED_9
-เสรีม.ปลาย6,THU_5-THU_6
+slot_name,periods,apply_to
+Free,FRI_1-FRI_10,ม.6
+Homeroom,Everyday_1,All
+ชุมนุม,WED_10,All
+Lunch ม.ต้น,Everyday_6,"ม.1, ม.2, ม.3"
+Lunch ม.ปลาย,Everyday_7,"ม.4, ม.5, ม.6"
+ลูกเสือม.1,MON_10,ม.1
+ลูกเสือม.2,TUE_10,ม.2
+ลูกเสือม.3,THU_10,ม.3
+เสรีม.ต้น1,FRI_2-FRI_3,"ม.1, ม.2, ม.3"
+เสรีม.ต้น2,FRI_4-FRI_5,"ม.1, ม.2, ม.3"
+Bridging course,FRI_7-FRI_10,"ม.1, ม.2, ม.3"
+คลินิกวิชาการ,FRI_8-FRI_10,"ม.4, ม.5"
+เสรีม.ปลาย1,MON_5-MON_6,ม.6
+เสรีม.ปลาย2,TUE_5-TUE_6,ม.6
+เสรีม.ปลาย3,TUE_8-TUE_9,ม.6
+เสรีม.ปลาย4,WED_5-WED_6,ม.6
+เสรีม.ปลาย5,WED_8-WED_9,ม.6
+เสรีม.ปลาย6,THU_5-THU_6,ม.6

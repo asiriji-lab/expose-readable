@@ -195,6 +195,7 @@ class PrescheduleProcessor:
         Mark UNAVAILABLE slots for teachers based on their constraints.
         - Internal teachers (Txxx): Use unavailable_slots
         - External teachers (Exxx): Mark all slots NOT in available_slots as UNAVAILABLE
+        - If no information provided for a teacher, mark all slots as AVAILABLE (skip)
         All state changes handled by manager.
         """
         print("\n--- TASK 3: Mark Teacher Availability ---")
@@ -209,11 +210,20 @@ class PrescheduleProcessor:
         
         for _, row in df_teacher.iterrows():
             teacher_id = row['teacher_id']
+
+            available_str = row.get('available_slots', '')
+            unavailable_str = row.get('unavailable_slots', '')
+
+            print(f"teacher {teacher_id} with available slots {available_str} and unavailable slots {unavailable_str}")
+            
+            if pd.isna(available_str) and pd.isna(unavailable_str):
+                print(f"⚠️  Teacher {teacher_id} has no available or unavailable slots")
+                continue
+
             is_external = teacher_id.startswith('E')
             
             if is_external:
                 # External teacher: Mark ALL slots as UNAVAILABLE except available_slots
-                available_str = row.get('available_slots', '')
                 if pd.isna(available_str) or str(available_str).strip() == '':
                     # No available slots means unavailable for all slots
                     available_slots = []
@@ -239,7 +249,6 @@ class PrescheduleProcessor:
                         external_attempted += 1
             else:
                 # Internal teacher: Mark specific unavailable_slots
-                unavailable_str = row.get('unavailable_slots', '')
                 if pd.isna(unavailable_str) or str(unavailable_str).strip() == '':
                     continue
                 
@@ -289,18 +298,6 @@ class PrescheduleProcessor:
         if df_elective is None:
             return {"status": "failed", "error": "ELECTIVE sheet not found"}
         
-        df_preplace = self.manager.get_sheet_data('preplace')
-        if df_preplace is None:
-            return {"status": "failed", "error": "PREPLACE sheet needed for elective slot mapping"}
-        
-        # Build slot name to period mapping from PREPLACE
-        slot_to_periods = {}
-        for _, row in df_preplace.iterrows():
-            slot_name = row.get('slot_name', '')
-            periods_str = row.get('periods', '')
-            if not pd.isna(slot_name) and not pd.isna(periods_str):
-                slot_to_periods[str(slot_name)] = str(periods_str)
-        
         conflicts_before = len(self.manager.conflicts)
         slots_attempted = 0
         
@@ -319,45 +316,30 @@ class PrescheduleProcessor:
             for slot_col in elective_slot_cols:
                 if row.get(slot_col, 0) == 1:
                     # This elective is offered in this slot
-                    if slot_col in slot_to_periods:
-                        periods_str = slot_to_periods[slot_col]
-                        parsed_slots = self._parse_period_range(periods_str)
+
+                    parsed_slots = self._parse_period_range(slot_col)
+                    
+                    # Schedule in teacher and room timetables
+                    for day, period_label in parsed_slots:
+                        period_col = self._find_period_column(period_label)
+                        if not period_col:
+                            continue
                         
-                        # Schedule in teacher and room timetables
-                        for day, period_label in parsed_slots:
-                            period_col = self._find_period_column(period_label)
-                            if not period_col:
-                                continue
-                            
-                            # Handle teacher as list or single value
-                            teachers = teacher if isinstance(teacher, list) else ([teacher] if teacher else [])
-                            rooms = room if isinstance(room, list) else ([room] if room else [])
-                            
-                            for t in teachers:
-                                if t:
-                                    self.manager.place_slot(
-                                        day=day,
-                                        period_col=period_col,
-                                        subject_id=subject_id,
-                                        teacher_id=t,
-                                        room_id=None,
-                                        class_id=None,
-                                        reason='elective'
-                                    )
-                                    slots_attempted += 1
-                            
-                            for r in rooms:
-                                if r:
-                                    self.manager.place_slot(
-                                        day=day,
-                                        period_col=period_col,
-                                        subject_id=subject_id,
-                                        teacher_id=None,
-                                        room_id=r,
-                                        class_id=None,
-                                        reason='elective'
-                                    )
-                                    slots_attempted += 1
+                        # Handle teacher as list or single value
+                        teachers = teacher if isinstance(teacher, list) else ([teacher] if teacher else [])
+                        rooms = room if isinstance(room, list) else ([room] if room else [])
+                        
+                        # Assume there is 1 teacher and 1 room for elective subject
+                        self.manager.place_slot(
+                            day=day,
+                            period_col=period_col,
+                            subject_id=subject_id,
+                            teacher_id=teachers[0],
+                            room_id=rooms[0],
+                            class_id=None,
+                            reason='elective'
+                        )
+                        slots_attempted += 1
         
         conflicts_added = len(self.manager.conflicts) - conflicts_before
         slots_scheduled = slots_attempted - conflicts_added
@@ -485,11 +467,8 @@ class PrescheduleProcessor:
         - "TUE_2,THU_2" -> [("TUE", "2"), ("THU", "2")]
         """
         result = []
-        print(period_string)
         ranges = [r.strip() for r in period_string.split(',')]
-        print(ranges)
         for range_expr in ranges:
-            print(range_expr)
             if 'Everyday' in range_expr:
                 # Extract period number
                 parts = range_expr.split('_')
@@ -499,7 +478,6 @@ class PrescheduleProcessor:
                         result.append((day, period))
             
             elif '-' in range_expr:
-                # print("[DEBUG] start-end format")
                 # Range format: DAY_START-DAY_END
                 try:
                     parts = range_expr.split('-')
@@ -508,14 +486,12 @@ class PrescheduleProcessor:
                         continue
                         
                     start_part, end_part = parts
-                    # print(start_part, end_part)
                 except ValueError:
                     print(f"⚠️  Skipping invalid period range: {range_expr}")
                     continue
 
                 start_parts = start_part.split('_')
                 end_parts = end_part.split('_')
-                print(start_parts, end_parts)
                 
                 if len(start_parts) >= 2 and len(end_parts) >= 2:
                     start_day, start_period = start_parts[0], start_parts[1]
@@ -584,7 +560,6 @@ class PrescheduleProcessor:
             # Grade level (e.g., "ม.1" or "ม.1,ม.2")
             grades = [g.strip() for g in apply_to.split(',')]
             df_student = self.manager.get_sheet_data('student')
-            print(df_student)
             if df_student is not None:
                 for grade in grades:
                     # Direct match since grades are now standardized to "ม.X" format

@@ -102,11 +102,12 @@ class ScheduleManager:
             s_grid.at[day, period_col] = subject_id
         
         if teacher_id:
-            t_value = f"{class_id or 'NoClass'} ({subject_id})"
+            # Include room info in teacher grid if available
+            t_value = f"{class_id or 'NoStudentListed'} ({subject_id}) at {room_id or 'NoRoomListed'}"
             t_grid.at[day, period_col] = t_value
         
         if room_id:
-            r_value = f"{class_id or 'NoClass'} with {teacher_id or 'NoTeacher'}"
+            r_value = f"{class_id or 'NoStudentListed'} ({subject_id}) with {teacher_id or 'NoTeacherListed'}"
             r_grid.at[day, period_col] = r_value
 
         return "SUCCESS: Slot scheduled."
