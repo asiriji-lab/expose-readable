@@ -47,4 +47,4 @@ echo "=================================================="
 echo ""
 
 # Run the integrated main script
-python integrated_main.py
+python main.py

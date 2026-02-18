@@ -10,14 +10,14 @@ Contains the main scheduling logic:
 - job_manager: Job tracking
 """
 
-from .models import Lesson, TimeSlot, Chromosome, Assignment, Gene
-from .integrated_genetic_algorithm import GeneticAlgorithm
+from .models import Lesson, TimeSlot, Chromosome
+from .ga_scheduler import GeneticAlgorithm
 from .exporter import ScheduleExporter
 from .scheduler import run_scheduler_job
 from .job_manager import JobManager
 
 __all__ = [
-    'Lesson', 'TimeSlot', 'Chromosome', 'Assignment', 'Gene',
+    'Lesson', 'TimeSlot', 'Chromosome',
     'GeneticAlgorithm', 'ScheduleExporter',
     'run_scheduler_job', 'JobManager'
 ]

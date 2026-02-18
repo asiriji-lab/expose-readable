@@ -88,11 +88,12 @@ def clean_curriculum(
             valid_sections = [s for s in cleaned_sections if s in current_grade_sections]
             cleaned_sections = valid_sections
 
-        # Convert to room_id
-        for section in cleaned_sections:
-            section = f"{current_grade}/{section}"
-            
-        row_dict['student_class'] = cleaned_sections
+        # Convert section numbers to full class_ids using current_grade
+        # e.g. grade="ม.1", section=2 -> "1/2"
+        grade_num = current_grade.replace('ม.', '') if current_grade else ''
+        full_class_ids = [f"{grade_num}/{section}" for section in cleaned_sections]
+
+        row_dict['student_class'] = full_class_ids
         
 
         # D. Clean 'room' column
