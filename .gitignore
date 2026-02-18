@@ -42,3 +42,4 @@ __pycache__
 
 # schedool solver output
 /output
+/cleaned_input
