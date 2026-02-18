@@ -20,7 +20,7 @@ from typing import Dict
 from src.data_cleaning.data_cleaning import clean_input_data
 from src.preschedule.scheduleManager import ScheduleManager
 from src.preschedule.prescheduleProcessor import PrescheduleProcessor
-from src.ga.ga_scheduler import GeneticAlgorithm
+from src.ga.genetic_algorithm import GeneticAlgorithm
 
 
 # =============================================================================

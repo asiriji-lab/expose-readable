@@ -11,7 +11,7 @@ Contains the main scheduling logic:
 """
 
 from .models import Lesson, TimeSlot, Chromosome
-from .ga_scheduler import GeneticAlgorithm
+from .genetic_algorithm import GeneticAlgorithm
 from .exporter import ScheduleExporter
 from .scheduler import run_scheduler_job
 from .job_manager import JobManager

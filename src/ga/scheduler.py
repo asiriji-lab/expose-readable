@@ -13,7 +13,7 @@ from typing import Dict, Optional, Callable
 from src.data_cleaning.data_cleaning import clean_input_data
 from src.preschedule.scheduleManager import ScheduleManager
 from src.preschedule.prescheduleProcessor import PrescheduleProcessor
-from .integrated_genetic_algorithm import GeneticAlgorithm
+from .genetic_algorithm import GeneticAlgorithm
 from .exporter import ScheduleExporter
 from .job_manager import JobManager
 
