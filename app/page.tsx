@@ -16,27 +16,27 @@ import {
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-background text-foreground overflow-x-hidden selection:bg-primary/20 selection:text-primary">
+    <main className="min-h-screen bg-gray-50 text-foreground overflow-x-hidden selection:bg-primary/20 selection:text-primary">
 
       {/* Navbar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-600/20">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
-            <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600">
+            <span className="text-xl font-bold text-gray-900">
               Schedool
             </span>
           </div>
           <div className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">Features</a>
-            <a href="#how-it-works" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">How it Works</a>
-            <a href="#ai-architecture" className="text-sm font-medium text-slate-600 hover:text-primary transition-colors">Technology</a>
+            <a href="#features" className="text-sm font-medium text-gray-600 hover:text-primary transition-colors">Features</a>
+            <a href="#how-it-works" className="text-sm font-medium text-gray-600 hover:text-primary transition-colors">How it Works</a>
+            <a href="#ai-architecture" className="text-sm font-medium text-gray-600 hover:text-primary transition-colors">Technology</a>
             <Link href="/login">
-              <button className="px-6 py-2.5 text-sm font-medium text-white bg-slate-900 rounded-full hover:bg-slate-800 transition-all shadow-lg hover:shadow-xl active:scale-95">
+              <button className="px-5 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary/90 transition-all shadow-sm">
                 Sign In
               </button>
             </Link>
@@ -45,43 +45,40 @@ export default function Home() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-40 pb-20 px-6 overflow-hidden">
-        {/* Background Elements */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-gradient-to-tr from-indigo-100 via-purple-100 to-pink-100 rounded-[100%] blur-3xl opacity-50 -z-10 animate-pulse delay-700"></div>
-
+      <section className="relative pt-32 pb-20 px-6 overflow-hidden">
         <div className="max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 shadow-sm mb-8 animate-slide-in-right hover:border-primary/50 transition-colors cursor-default">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 text-primary border border-blue-100 mb-8">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
             </span>
-            <span className="text-sm font-medium text-slate-600">AI-Powered Scheduling Engine v2.0</span>
+            <span className="text-sm font-medium">AI-Powered Scheduling Engine v2.0</span>
           </div>
 
-          <h1 className="text-6xl md:text-8xl font-bold mb-8 tracking-tight leading-[1.1] text-slate-900">
+          <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight text-gray-900">
             Perfect Schedules. <br />
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary via-purple-600 to-pink-500 animate-gradient-x">
+            <span className="text-primary">
               Zero Headaches.
             </span>
           </h1>
 
-          <p className="text-xl md:text-2xl text-slate-600 mb-12 max-w-3xl mx-auto leading-relaxed">
+          <p className="text-xl md:text-2xl text-gray-600 mb-10 max-w-2xl mx-auto leading-relaxed">
             Stop wasting weeks on spreadsheets. Generate conflict-free, optimized school timetables in seconds using advanced AI.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link href="/dashboard" className="w-full sm:w-auto">
-              <button className="w-full sm:w-auto px-8 py-4 bg-primary text-white text-lg font-semibold rounded-2xl hover:bg-primary/90 transition-all shadow-xl shadow-primary/25 hover:shadow-2xl hover:-translate-y-1">
+              <button className="w-full sm:w-auto px-8 py-3.5 bg-primary text-white text-lg font-semibold rounded-lg hover:bg-primary/90 transition-all shadow-md">
                 Start Generating Free
                 <FontAwesomeIcon icon={faArrowRight} className="ml-2 w-4 h-4" />
               </button>
             </Link>
-            <button className="w-full sm:w-auto px-8 py-4 bg-white text-slate-700 border border-slate-200 text-lg font-semibold rounded-2xl hover:bg-slate-50 transition-all shadow-sm hover:shadow-md">
+            <button className="w-full sm:w-auto px-8 py-3.5 bg-white text-gray-700 border border-gray-300 text-lg font-semibold rounded-lg hover:bg-gray-50 transition-all">
               Watch 2-min Demo
             </button>
           </div>
 
-          <div className="mt-12 flex items-center justify-center gap-8 text-sm text-slate-500">
+          <div className="mt-12 flex items-center justify-center gap-8 text-sm text-gray-500">
             <div className="flex items-center gap-2">
               <FontAwesomeIcon icon={faCheckCircle} className="text-green-500" />
               <span>No credit card required</span>
@@ -109,7 +106,7 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-auto md:h-[600px]">
             {/* Large Left Card */}
-            <div className="md:col-span-2 md:row-span-2 bg-slate-50 border border-slate-100 rounded-[2.5rem] p-10 flex flex-col justify-between relative overflow-hidden group hover:border-primary/20 transition-all duration-500">
+            <div className="md:col-span-2 md:row-span-2 bg-white border border-gray-200 rounded-[2rem] p-10 flex flex-col justify-between relative overflow-hidden group hover:border-primary/20 transition-all duration-500 shadow-sm">
               <div className="relative z-10">
                 <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center mb-6 text-2xl">
                   ⚡
@@ -135,29 +132,29 @@ export default function Home() {
             </div>
 
             {/* Top Right Card */}
-            <div className="bg-slate-900 rounded-[2.5rem] p-10 text-white flex flex-col justify-center relative overflow-hidden hover:scale-[1.02] transition-transform duration-300">
+            <div className="bg-gray-900 rounded-[2rem] p-10 text-white flex flex-col justify-center relative overflow-hidden hover:scale-[1.02] transition-transform duration-300 shadow-lg">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/30 blur-3xl rounded-full"></div>
               <FontAwesomeIcon icon={faUsers} className="w-10 h-10 text-primary mb-6" />
               <h3 className="text-2xl font-bold mb-2">Teacher Preference</h3>
-              <p className="text-slate-400">Respects availability, preferred rooms, and load balancing automatically.</p>
+              <p className="text-gray-400">Respects availability, preferred rooms, and load balancing automatically.</p>
             </div>
 
             {/* Bottom Right Card */}
-            <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 rounded-[2.5rem] p-10 flex flex-col justify-center relative overflow-hidden hover:scale-[1.02] transition-transform duration-300">
-              <FontAwesomeIcon icon={faChartPie} className="w-10 h-10 text-indigo-600 mb-6" />
-              <h3 className="text-2xl font-bold mb-2 text-indigo-900">Analytics Ready</h3>
-              <p className="text-indigo-700/80">Visual insights into room usage, teacher gaps, and class distribution.</p>
+            <div className="bg-blue-50 border border-blue-100 rounded-[2rem] p-10 flex flex-col justify-center relative overflow-hidden hover:scale-[1.02] transition-transform duration-300">
+              <FontAwesomeIcon icon={faChartPie} className="w-10 h-10 text-blue-600 mb-6" />
+              <h3 className="text-2xl font-bold mb-2 text-blue-900">Analytics Ready</h3>
+              <p className="text-blue-700/80">Visual insights into room usage, teacher gaps, and class distribution.</p>
             </div>
           </div>
         </div>
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="py-32 px-6 bg-slate-50">
+      <section id="how-it-works" className="py-32 px-6 bg-white border-t border-gray-100">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-20">
-            <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">From Stress to Success</h2>
-            <p className="text-xl text-slate-600">Three simple steps to your new schedule.</p>
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">From Stress to Success</h2>
+            <p className="text-xl text-gray-600">Three simple steps to your new schedule.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-12">
@@ -179,11 +176,11 @@ export default function Home() {
               }
             ].map((step, i) => (
               <div key={i} className="relative group">
-                <div className="w-16 h-16 rounded-2xl bg-white shadow-lg border border-slate-100 flex items-center justify-center text-primary text-2xl mb-8 group-hover:scale-110 transition-transform duration-300">
+                <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-primary text-2xl mb-8 group-hover:scale-110 transition-transform duration-300">
                   <FontAwesomeIcon icon={step.icon} />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-4">{step.title}</h3>
-                <p className="text-slate-600 leading-relaxed">{step.desc}</p>
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">{step.title}</h3>
+                <p className="text-gray-600 leading-relaxed">{step.desc}</p>
                 {i !== 2 && (
                   <div className="hidden md:block absolute top-8 left-20 w-[calc(100%-3rem)] h-[2px] bg-gradient-to-r from-slate-200 to-transparent"></div>
                 )}
@@ -201,13 +198,13 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row items-center gap-16">
             <div className="flex-1">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100/50 text-blue-700 text-sm font-semibold mb-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 text-primary text-sm font-semibold mb-6">
                 <FontAwesomeIcon icon={faRobot} className="w-4 h-4" />
                 <span>Proprietary Technology</span>
               </div>
-              <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6 leading-tight">
+              <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6 leading-tight">
                 Not just rules. <br />
-                <span className="text-blue-600">True Intelligence.</span>
+                <span className="text-primary">True Intelligence.</span>
               </h2>
               <p className="text-lg text-slate-600 mb-8 leading-relaxed">
                 While other schedulers typically crash when restrictions get tight, Schedool's engine adapts. We use a hybrid genetic algorithm capable of evaluating
@@ -225,8 +222,8 @@ export default function Home() {
                       <FontAwesomeIcon icon={faCheckCircle} className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-slate-900 text-lg mb-1">{item.title}</h4>
-                      <p className="text-slate-500 text-sm leading-relaxed">{item.desc}</p>
+                      <h4 className="font-bold text-gray-900 text-lg mb-1">{item.title}</h4>
+                      <p className="text-gray-500 text-sm leading-relaxed">{item.desc}</p>
                     </div>
                   </div>
                 ))}
@@ -274,7 +271,7 @@ export default function Home() {
               </div>
 
               {/* Decorative elements behind */}
-              <div className="absolute -top-10 -right-10 w-40 h-40 bg-purple-500/20 blur-2xl rounded-full animate-pulse"></div>
+              <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-500/20 blur-2xl rounded-full animate-pulse"></div>
               <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-500/20 blur-2xl rounded-full animate-pulse delay-1000"></div>
             </div>
           </div>
@@ -284,16 +281,16 @@ export default function Home() {
 
 
       {/* Footer */}
-      <footer className="bg-slate-900 text-slate-400 py-20 px-6">
+      <footer className="bg-white border-t border-gray-200 text-gray-400 py-20 px-6">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="text-center md:text-left">
-            <div className="text-2xl font-bold text-white mb-2">Schedool</div>
+            <div className="text-2xl font-bold text-gray-900 mb-2">Schedool</div>
             <p className="text-sm">Making school management human again.</p>
           </div>
           <div className="flex gap-8 text-sm font-medium">
-            <a href="#" className="hover:text-white transition-colors">Privacy</a>
-            <a href="#" className="hover:text-white transition-colors">Terms</a>
-            <a href="#" className="hover:text-white transition-colors">Contact</a>
+            <a href="#" className="hover:text-primary transition-colors">Privacy</a>
+            <a href="#" className="hover:text-primary transition-colors">Terms</a>
+            <a href="#" className="hover:text-primary transition-colors">Contact</a>
           </div>
         </div>
       </footer>
