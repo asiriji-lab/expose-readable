@@ -15,6 +15,7 @@ Execution order:
 import os
 import json
 import pandas as pd
+import optuna
 from typing import Dict
 
 from src.data_cleaning.data_cleaning import clean_input_data
@@ -163,28 +164,59 @@ def main():
                 print(f"    - {k}: {v}")
 
     # =========================================================================
-    # STEP 4 — GA optimisation
+    # STEP 4 — GA hyperparameter tuning (Optuna)
     # =========================================================================
     print("\n" + "=" * 80)
-    print("STEP 4 — GENETIC ALGORITHM OPTIMISATION")
+    print("STEP 4 — GENETIC ALGORITHM HYPERPARAMETER TUNING")
     print("=" * 80)
 
-    # Progress callback (printed every 50 generations via evolve() already,
-    # but the callback lets main() intercept stats if needed)
-    def ga_progress(generation: int, max_gen: int, stats: dict):
-        pass  # evolve() already prints progress; add custom logic here if needed
+    def objective(trial):
+        # 1. Define the range of parameters to "suggest"
+        pop_size = trial.suggest_int("population_size", 50, 500, step=50)
+        mut_rate = trial.suggest_float("mutation_rate", 0.01, 0.3)
+        cross_rate = trial.suggest_float("crossover_rate", 0.6, 0.95)
+        tourn_size = trial.suggest_int("tournament_size", 3, 15)
+        
+        # 2. Setup your GA with the suggested parameters
+        ga_trial = GeneticAlgorithm(
+            schedule_manager=schedule_manager,
+            population_size=pop_size,
+            mutation_rate=mut_rate,
+            crossover_rate=cross_rate,
+            tournament_size=tourn_size,
+            max_generations=250,  # Keep generations lower for faster tuning
+            elite_size=10
+        )
+        
+        # 3. Run the GA
+        best_indiv = ga_trial.evolve()
+        
+        # 4. Return the fitness value Optuna should try to MINIMIZE
+        # NOTE: Using "minimize" because fitness here is a sum of penalties.
+        return best_indiv.fitness
 
+    # Create a study object
+    study = optuna.create_study(direction="minimize")
+
+    # Run the optimization for 100 trials (total GA runs)
+    study.optimize(objective, n_trials=30)
+
+    # Print the best results
+    print("\nBest parameters found:")
+    print(study.best_params)
+    print(f"Best fitness: {study.best_value}")
+
+    # For the final results, we'll run one last GA with the best parameters found
+    print("\n--- Running final GA with best parameters ---")
     ga = GeneticAlgorithm(
         schedule_manager=schedule_manager,
-        population_size=150,
-        max_generations=100,
-        mutation_rate=0.20,
-        crossover_rate=0.80,
-        elite_size=10,
-        tournament_size=7,
-        progress_callback=ga_progress,
+        population_size=study.best_params["population_size"],
+        mutation_rate=study.best_params["mutation_rate"],
+        crossover_rate=study.best_params["crossover_rate"],
+        tournament_size=study.best_params["tournament_size"],
+        max_generations=1000,  # Run longer for the final result
+        elite_size=10
     )
-
     ga.evolve()
     ga_result = ga.get_result_summary()
 
@@ -242,6 +274,11 @@ def main():
     print(f"\n   GA fitness  : {ga_result.get('final_fitness', 'N/A')}")
     print(f"   Violations  : {ga_result.get('final_violations', 'N/A')}")
     print(f"   Solution ✅ : {ga_result.get('solution_found', False)}")
+
+    # Print the best results parameters
+    print("\nBest parameters found:")
+    print(study.best_params)
+    print(f"Best fitness: {study.best_value}")
 
 
 if __name__ == "__main__":
