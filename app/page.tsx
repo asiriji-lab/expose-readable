@@ -68,9 +68,9 @@ export default function Home() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Link href="/dashboard" className="w-full sm:w-auto">
-              <button className="w-full sm:w-auto px-8 py-3.5 bg-primary text-white text-lg font-semibold rounded-lg hover:bg-primary/90 transition-all shadow-md">
+              <button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-primary text-white text-lg font-semibold rounded-lg hover:bg-primary/90 transition-all shadow-md">
                 Start Generating Free
-                <FontAwesomeIcon icon={faArrowRight} className="ml-2 w-4 h-4" />
+                <FontAwesomeIcon icon={faArrowRight} className="w-4 h-4" />
               </button>
             </Link>
             <button className="w-full sm:w-auto px-8 py-3.5 bg-white text-gray-700 border border-gray-300 text-lg font-semibold rounded-lg hover:bg-gray-50 transition-all">
@@ -80,11 +80,11 @@ export default function Home() {
 
           <div className="mt-12 flex items-center justify-center gap-8 text-sm text-gray-500">
             <div className="flex items-center gap-2">
-              <FontAwesomeIcon icon={faCheckCircle} className="text-green-500" />
+              <FontAwesomeIcon icon={faCheckCircle} className="text-green-500 w-5 h-5" />
               <span>No credit card required</span>
             </div>
             <div className="flex items-center gap-2">
-              <FontAwesomeIcon icon={faCheckCircle} className="text-green-500" />
+              <FontAwesomeIcon icon={faCheckCircle} className="text-green-500 w-5 h-5" />
               <span>Export to Excel/PDF</span>
             </div>
           </div>
