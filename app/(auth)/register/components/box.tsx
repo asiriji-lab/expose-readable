@@ -9,20 +9,8 @@ const Box: React.FC = () => {
   const [showAdminKey, setShowAdminKey] = useState(false);
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-[450px]">
-      {/* Owl Logo */}
-      <div className="flex justify-center mb-4">
-        {/* Replace this with your actual owl SVG or image */}
-        <img 
-          src="/path-to-your-owl-logo.svg" 
-          alt="ScheDool Owl" 
-          className="w-20 h-20"
-        />
-        {/* Temporary placeholder: */}
-        {/* <div className="w-20 h-20">
-          <span className="text-3xl">🦉</span>
-        </div> */}
-      </div>
+    <div className="bg-white rounded-2xl shadow-xl p-8 w-[600
+    px] h-[880px]">
       
       {/* Title */}
       <h1 className="text-2xl font-bold text-center mb-2">Welcome to ScheDool</h1>
