@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 
 // Validation Rules by Column Index (0-based)
 export const CURRICULUM_VALIDATION_RULES: Record<number, { pattern: RegExp; message: string }> = {

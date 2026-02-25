@@ -176,8 +176,8 @@ export default function Home() {
               }
             ].map((step, i) => (
               <div key={i} className="relative group">
-                <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-primary text-2xl mb-8 group-hover:scale-110 transition-transform duration-300">
-                  <FontAwesomeIcon icon={step.icon} />
+                <div className="w-16 h-16 text-primary mb-8 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <FontAwesomeIcon icon={step.icon} className="w-full h-full" />
                 </div>
                 <h3 className="text-2xl font-bold text-gray-900 mb-4">{step.title}</h3>
                 <p className="text-gray-600 leading-relaxed">{step.desc}</p>
