@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+:root {
+  /* Brand Colors */
+  --primary: #2563EB;
+  --primary-foreground: #ffffff;
+
+  /* Neutral / Corporate Colors */
+  --background: #f8f9fa;
+  /* Slight off-white for less harshness */
+  --foreground: #1a1a1a;
+  /* Soft black for text */
+  --surface: #ffffff;
+  /* Pure white for cards */
+  --border: #e5e7eb;
+  /* Light gray for borders */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+
+  /* Override default sans to use the font applied to body (Inter) */
+  --font-sans: inherit;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f172a;
+    /* Deep blue-gray for corporate dark mode */
+    --foreground: #f1f5f9;
+    --surface: #1e293b;
+    --border: #334155;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: inherit;
+  /* Inherit from the Next.js font class on body */
+}
+
+/* FortuneSheet Tooltip Overrides */
+.luckysheet-postil-show-main {
+  word-break: break-word !important;
+  white-space: normal !important;
+  border-radius: 8px !important;
+  padding: 12px !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  font-family: inherit !important;
+  line-height: 1.5 !important;
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+}
+
+.luckysheet-postil-show {
+  border-radius: 8px !important;
+  border: 1px solid #e5e7eb !important;
+  overflow: hidden !important;
+}
+
+/* Animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
