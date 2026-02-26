@@ -177,20 +177,24 @@ def build_lessons_from_manager(manager: ScheduleManager) -> List[Lesson]:
         subject_id_raw = str(row.get('subject_id', '')).strip()
         subject_name = str(row.get('subject_name', '')).strip()
 
-        lesson = Lesson(
-            lesson_id=f"L{len(lessons):04d}",
-            subject_id=subject_id_raw if subject_id_raw else f"SUB{len(lessons)}",
-            subject_name=subject_name,
-            teacher_ids=teacher_ids,
-            student_classes=student_classes,
-            periods_per_week=periods_per_week,
-            block_pattern=block_pattern,
-            required_rooms=required_rooms,
-            fixed_period=None,
-        )
-        lessons.append(lesson)
+        # Expand: one Lesson object per class.
+        # Each class needs its own independently-scheduled timeslot.
+        # Teacher/room requirements are the same for all, but slots are separate.
+        for class_id in student_classes:
+            lesson = Lesson(
+                lesson_id=f"L{len(lessons):04d}",
+                subject_id=subject_id_raw if subject_id_raw else f"SUB{len(lessons)}",
+                subject_name=subject_name,
+                teacher_ids=teacher_ids,
+                student_classes=[class_id],
+                periods_per_week=periods_per_week,
+                block_pattern=block_pattern,
+                required_rooms=required_rooms,
+                fixed_period=None,
+            )
+            lessons.append(lesson)
 
-    print(f"  [GA] Built {len(lessons)} lessons from curriculum (non-fixed only).")
+    print(f"  [GA] Built {len(lessons)} lessons from curriculum (non-fixed, expanded per class).")
     print(f"  [GA] Skipped — no periods: {skipped_no_periods}, fixed: {skipped_fixed}, no classes: {skipped_no_classes}")
     return lessons
 

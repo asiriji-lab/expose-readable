@@ -67,8 +67,10 @@ class Chromosome:
     violations: Dict[str, int] = field(default_factory=dict)
 
     def copy(self) -> 'Chromosome':
+        """Fast shallow copy — safe because gene tuples contain only immutable values."""
         c = Chromosome()
-        c.genes = copy.deepcopy(self.genes)
+        # Shallow-copy each gene list; tuples inside are immutable so sharing is safe
+        c.genes = {lid: list(slots) for lid, slots in self.genes.items()}
         c.fitness = self.fitness
-        c.violations = copy.deepcopy(self.violations)
+        c.violations = dict(self.violations)
         return c

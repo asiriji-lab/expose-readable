@@ -72,12 +72,12 @@ def export_cleaned_data(cleaned_data: Dict[str, pd.DataFrame], output_dir: str =
         print(f"  ✅ {key} -> {path}")
 
 
-def export_grids(grids: Dict[str, pd.DataFrame], output_dir: str, label: str):
+def export_grids(grids: Dict[str, pd.DataFrame], output_dir: str, label: str, prefix: str = ""):
     """Write a dict of entity grids (student/teacher/room) to individual CSVs."""
     os.makedirs(output_dir, exist_ok=True)
     for entity_id, df in grids.items():
         safe_id = str(entity_id).replace('/', '-').replace('\\', '-')
-        path = os.path.join(output_dir, f"{safe_id}.csv")
+        path = os.path.join(output_dir, f"{prefix}{safe_id}.csv")
         df.to_csv(path, encoding='utf-8-sig')
     print(f"  ✅ {label}: {len(grids)} files -> {output_dir}/")
 
@@ -85,9 +85,9 @@ def export_grids(grids: Dict[str, pd.DataFrame], output_dir: str, label: str):
 def export_preschedule_results(manager: ScheduleManager, output_dir: str = "output"):
     """Export preschedule-stage grids and conflict log."""
     print(f"\n--- Exporting Preschedule Results ---")
-    export_grids(manager.student_grids, f"{output_dir}/preschedule/students", "Student grids")
-    export_grids(manager.teacher_grids, f"{output_dir}/preschedule/teachers", "Teacher grids")
-    export_grids(manager.room_grids,    f"{output_dir}/preschedule/rooms",    "Room grids")
+    export_grids(manager.student_grids, f"{output_dir}/preschedule/students", "Student grids",  prefix="student_")
+    export_grids(manager.teacher_grids, f"{output_dir}/preschedule/teachers", "Teacher grids",  prefix="teacher_")
+    export_grids(manager.room_grids,    f"{output_dir}/preschedule/rooms",    "Room grids",     prefix="room_")
 
     if manager.conflicts:
         conflicts_path = f"{output_dir}/preschedule_conflicts.csv"
@@ -100,9 +100,9 @@ def export_preschedule_results(manager: ScheduleManager, output_dir: str = "outp
 def export_final_schedules(manager: ScheduleManager, output_dir: str = "output"):
     """Export final (post-GA) grids."""
     print(f"\n--- Exporting Final GA-Optimised Schedules ---")
-    export_grids(manager.student_grids, f"{output_dir}/final/students", "Student grids (final)")
-    export_grids(manager.teacher_grids, f"{output_dir}/final/teachers", "Teacher grids (final)")
-    export_grids(manager.room_grids,    f"{output_dir}/final/rooms",    "Room grids (final)")
+    export_grids(manager.student_grids, f"{output_dir}/final/students", "Student grids (final)", prefix="student_")
+    export_grids(manager.teacher_grids, f"{output_dir}/final/teachers", "Teacher grids (final)", prefix="teacher_")
+    export_grids(manager.room_grids,    f"{output_dir}/final/rooms",    "Room grids (final)",    prefix="room_")
 
 # =============================================================================
 # MAIN
@@ -172,10 +172,10 @@ def main():
 
     def objective(trial):
         # 1. Define the range of parameters to "suggest"
-        pop_size = trial.suggest_int("population_size", 50, 500, step=50)
-        mut_rate = trial.suggest_float("mutation_rate", 0.01, 0.3)
+        pop_size = trial.suggest_int("population_size", 100, 500, step=50)
+        mut_rate = trial.suggest_float("mutation_rate", 0.01, 0.5)
         cross_rate = trial.suggest_float("crossover_rate", 0.6, 0.95)
-        tourn_size = trial.suggest_int("tournament_size", 3, 15)
+        tourn_size = trial.suggest_int("tournament_size", 3, 10)
         
         # 2. Setup your GA with the suggested parameters
         ga_trial = GeneticAlgorithm(
@@ -184,7 +184,7 @@ def main():
             mutation_rate=mut_rate,
             crossover_rate=cross_rate,
             tournament_size=tourn_size,
-            max_generations=250,  # Keep generations lower for faster tuning
+            max_generations=500,  # Keep generations lower for faster tuning
             elite_size=10
         )
         

@@ -53,10 +53,7 @@ class ScheduleManager:
             raise ValueError("Invalid entity type")
 
         if entity_id not in store:
-            print(f"Initialize timetable the entity {entity_type} with ID {entity_id}")
             store[entity_id] = self.template_grid.copy()
-        else:
-            print(f"Returning timetable the entity {entity_type} with ID {entity_id}")
     
         return store[entity_id]
 
