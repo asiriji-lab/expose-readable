@@ -7,12 +7,13 @@ Execution order:
   1. Load raw CSV files
   2. Data cleaning  (src.data_cleaning)
   3. Preschedule processing  (src.preschedule)
-  4. GA optimisation  (src.ga.ga_scheduler)
+  4. GA optimisation  (src.ga.genetic_algorithm)
   5. Export results
 ================================================================================
 """
 
 import os
+import shutil
 import json
 import pandas as pd
 import optuna
@@ -74,6 +75,8 @@ def export_cleaned_data(cleaned_data: Dict[str, pd.DataFrame], output_dir: str =
 
 def export_grids(grids: Dict[str, pd.DataFrame], output_dir: str, label: str, prefix: str = ""):
     """Write a dict of entity grids (student/teacher/room) to individual CSVs."""
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
     os.makedirs(output_dir, exist_ok=True)
     for entity_id, df in grids.items():
         safe_id = str(entity_id).replace('/', '-').replace('\\', '-')
@@ -173,7 +176,7 @@ def main():
     def objective(trial):
         # 1. Define the range of parameters to "suggest"
         pop_size = trial.suggest_int("population_size", 100, 500, step=50)
-        mut_rate = trial.suggest_float("mutation_rate", 0.01, 0.5)
+        mut_rate = trial.suggest_float("mutation_rate", 0.01, 0.2)
         cross_rate = trial.suggest_float("crossover_rate", 0.6, 0.95)
         tourn_size = trial.suggest_int("tournament_size", 3, 10)
         
@@ -196,25 +199,36 @@ def main():
         return best_indiv.fitness
 
     # Create a study object
-    study = optuna.create_study(direction="minimize")
+    # study = optuna.create_study(direction="minimize")
 
-    # Run the optimization for 100 trials (total GA runs)
-    study.optimize(objective, n_trials=30)
+    # # Run the optimization for 100 trials (total GA runs)
+    # study.optimize(objective, n_trials=100)
 
-    # Print the best results
-    print("\nBest parameters found:")
-    print(study.best_params)
-    print(f"Best fitness: {study.best_value}")
+    # # Print the best results
+    # print("\nBest parameters found:")
+    # print(study.best_params)
+    # print(f"Best fitness: {study.best_value}")
 
-    # For the final results, we'll run one last GA with the best parameters found
-    print("\n--- Running final GA with best parameters ---")
+    # # For the final results, we'll run one last GA with the best parameters found
+    # print("\n--- Running final GA with best parameters ---")
+    # ga = GeneticAlgorithm(
+    #     schedule_manager=schedule_manager,
+    #     population_size=study.best_params["population_size"],
+    #     mutation_rate=study.best_params["mutation_rate"],
+    #     crossover_rate=study.best_params["crossover_rate"],
+    #     tournament_size=study.best_params["tournament_size"],
+    #     max_generations=1000,  # Run longer for the final result
+    #     elite_size=10
+    # )
+
+    # Best parameters found
     ga = GeneticAlgorithm(
         schedule_manager=schedule_manager,
-        population_size=study.best_params["population_size"],
-        mutation_rate=study.best_params["mutation_rate"],
-        crossover_rate=study.best_params["crossover_rate"],
-        tournament_size=study.best_params["tournament_size"],
-        max_generations=1000,  # Run longer for the final result
+        population_size=500, # 450-500
+        mutation_rate=0.015, # 0.01-0.02
+        crossover_rate=0.9, # 0.87-0.95
+        tournament_size=9, # 9-10
+        max_generations=500,  # Run longer for the final result
         elite_size=10
     )
     ga.evolve()
@@ -276,9 +290,9 @@ def main():
     print(f"   Solution ✅ : {ga_result.get('solution_found', False)}")
 
     # Print the best results parameters
-    print("\nBest parameters found:")
-    print(study.best_params)
-    print(f"Best fitness: {study.best_value}")
+    # print("\nBest parameters found:")
+    # print(study.best_params)
+    # print(f"Best fitness: {study.best_value}")
 
 
 if __name__ == "__main__":

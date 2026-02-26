@@ -20,8 +20,8 @@ WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI"]
 # the GA should treat these as blocked and never overwrite them.
 BLOCKED_CELL_KEYWORDS = [
     'UNAVAILABLE', 'Homeroom', 'Morning Break', 'Afternoon Break',
-    'Lunch', 'ลูกเสือ', 'ชุมนุม', 'เสรี', 'Bridging', 'preplace', 'scout', 'elective',
-    'constraint'
+    'Lunch', 'ลูกเสือ', 'ชุมนุม', 'เสรี', 'Bridging', 'preplace',
+    'scout', 'elective', 'constraint',
 ]
 
 # =============================================================================
@@ -30,23 +30,21 @@ BLOCKED_CELL_KEYWORDS = [
 
 @dataclass
 class Lesson:
-    """A single schedulable lesson unit parsed from the curriculum sheet."""
     lesson_id: str
     subject_id: str
     subject_name: str
-    teacher_ids: List[str]          # one or more teacher IDs
-    student_classes: List[str]      # one or more class_ids (e.g. "1/1")
+    teacher_ids: List[str]       # one or more teacher IDs
+    student_classes: List[str]   # full class_ids e.g. ["1/1", "1/2"]
     periods_per_week: int
-    block_pattern: str              # "1", "2", "2-1", "1-1-1", etc.
-    required_rooms: List[str]       # resolved room IDs (may be empty)
-    fixed_period: Optional[str]     # raw fixed_period string if pre-fixed
+    block_pattern: str           # "1", "2", "2-1", "2-2", etc.
+    required_rooms: List[str]    # resolved room IDs (may be empty)
+    fixed_period: Optional[str]
 
 
 @dataclass
 class TimeSlot:
-    """A single teaching slot identified by (day, period_col)."""
     day: str         # "MON" .. "FRI"
-    period_col: str  # "2,08:30-09:20" — the full column header used in grids
+    period_col: str  # full column header: "2,08.05-08.55"
 
     def __hash__(self):
         return hash((self.day, self.period_col))
@@ -61,7 +59,7 @@ class TimeSlot:
 
 @dataclass
 class Chromosome:
-    """Complete schedule solution: maps lesson_id -> list of (TimeSlot, room_id)."""
+    """Maps lesson_id -> list of (TimeSlot, room_id) assignments."""
     genes: Dict[str, List[Tuple[TimeSlot, str]]] = field(default_factory=dict)
     fitness: float = float('inf')
     violations: Dict[str, int] = field(default_factory=dict)
