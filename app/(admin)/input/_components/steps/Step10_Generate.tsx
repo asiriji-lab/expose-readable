@@ -89,7 +89,7 @@ export function Step10_Generate({
             <div className="space-y-3 max-w-md mx-auto">
               <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden shadow-inner">
                 <div
-                  className="bg-primary h-full transition-all duration-100 ease-linear relative overflow-hidden"
+                  className="bg-blue-600 h-full transition-all duration-100 ease-linear relative overflow-hidden"
                   style={{ width: `${progress}%` }}
                 >
                   {/* Shimmer effect */}
@@ -111,7 +111,7 @@ export function Step10_Generate({
               transition-all duration-200
               ${isGenerating
                 ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-primary hover:bg-primary/90 active:scale-95 shadow-md hover:shadow-lg'
+                : 'bg-blue-600 hover:bg-blue-700 active:scale-95 shadow-md hover:shadow-lg'
               }
             `}
           >

@@ -4,11 +4,14 @@ import * as XLSX from 'xlsx';
 import { Workbook } from "@fortune-sheet/react";
 import "@fortune-sheet/react/dist/index.css";
 
+import { ColumnRule } from './validationUtils';
+
 interface CsvEditorProps {
     file: File;
     onClose: () => void;
     onSave?: (newFile: File) => void;
-    validationRules?: Record<number, { pattern: RegExp; message: string }>;
+    validationRules?: Record<number, ColumnRule>;
+    catchAllRule?: ColumnRule;
 }
 
 interface SheetData {
@@ -30,11 +33,7 @@ interface CellValue {
     bg?: string;
     ps?: {
         value: string;
-        isShow: boolean; // Changed from isshow to isShow
-        width: number | null;
-        height: number | null;
-        left: number | null;
-        top: number | null;
+        isShow: boolean;
     } | undefined;
     ct?: { fa: string; t: string };
 }
@@ -51,39 +50,69 @@ interface WorkbookInstance {
     setCellFormat: (r: number, c: number, key: string, value: any) => void;
 }
 
-export default function CsvEditor({ file, onClose, onSave, validationRules }: CsvEditorProps) {
+export default function CsvEditor({ file, onClose, onSave, validationRules, catchAllRule }: CsvEditorProps) {
     const [sheetData, setSheetData] = useState<SheetData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const workbookRef = useRef<any>(null); // Using any for library ref compatibility
-    const rulesRef = useRef<Record<number, { pattern: RegExp; message: string }> | undefined>(validationRules);
-    const isInternalChange = useRef(false);
+    const rulesRef = useRef<Record<number, ColumnRule> | undefined>(validationRules);
+    const catchAllRef = useRef<ColumnRule | undefined>(catchAllRule);
+    // Fix #1: track pending cell-format timeouts so we can cancel stale ones on rapid typing
+    const pendingFormatOps = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
     // Update rules ref when prop changes
     useEffect(() => {
         rulesRef.current = validationRules;
-    }, [validationRules]);
+        catchAllRef.current = catchAllRule;
+    }, [validationRules, catchAllRule]);
 
     // Helper to validate a single value against a rule
     // Returns null if valid, or error message string if invalid
-    const validateValue = useCallback((colIndex: number, value: string | number | null | undefined): string | null => {
-        // Allow empty values to be valid (reset to white)
-        if (value === null || value === undefined || String(value).trim() === '') return null;
-
-        const rules = rulesRef.current;
-        if (!rules) return null;
-
-        const rule = rules[colIndex];
+    // `row` is the full row of string values needed for cross-column `validate()` rules
+    const validateValue = useCallback((
+        colIndex: number,
+        value: string | number | null | undefined,
+        row: (string | number | null | undefined)[] = []
+    ): string | null => {
+        const rule = rulesRef.current?.[colIndex] || catchAllRef.current;
         if (!rule) return null;
 
-        const isValid = rule.pattern.test(String(value));
-        return isValid ? null : rule.message;
+        const val = value !== null && value !== undefined ? String(value).trim() : '';
+        const stringRow = row.map(v => (v !== null && v !== undefined ? String(v) : ''));
+
+        if (rule.required && val === '') {
+            return "Required field missing.";
+        }
+
+        if (val === '') {
+            // Even if empty, run custom validate() because it might be required based on other columns
+            if (rule.validate) {
+                const customError = rule.validate(val, stringRow);
+                if (customError) return customError;
+            }
+            return null;
+        }
+
+        if (rule.pattern && !rule.pattern.test(val)) {
+            return rule.message || "Invalid value";
+        }
+
+        // Run cross-column custom validation if present
+        if (rule.validate) {
+            const customError = rule.validate(val, stringRow);
+            if (customError) return customError;
+        }
+
+        return null;
     }, []);
 
     useEffect(() => {
+        // Fix #2: guard against stale async parses when file prop changes mid-flight
+        let cancelled = false;
         setIsLoading(true);
         const isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
 
         const processData = (rows: string[][]) => {
+            if (cancelled) return;
             const celldata: CellData[] = [];
 
             rows.forEach((row, r) => {
@@ -97,18 +126,15 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
 
                         // Validation Logic (Initial Load)
                         // Skip header row (r=0) and Grade Header rows
-                        if (rulesRef.current && r > 0 && !isGradeHeader) {
-                            const errorMsg = validateValue(c, cell);
+                        // Pass the full `row` for cross-column rule support
+                        if ((rulesRef.current || catchAllRef.current) && r > 0 && !isGradeHeader) {
+                            const errorMsg = validateValue(c, cell, row);
                             if (errorMsg) {
                                 bg = "#ffcccc";
                                 ps = {
                                     value: errorMsg,
-                                    isShow: false,
-                                    width: 250,
-                                    height: 120,
-                                    left: null,
-                                    top: null
-                                };
+                                    isShow: false
+                                } as any;
                             }
                         }
 
@@ -156,12 +182,15 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
                     processData(parsedData);
                 },
                 error: (error) => {
+                    if (cancelled) return;
                     console.error('Error parsing CSV:', error);
                     setIsLoading(false);
                 },
                 header: false
             });
         }
+        // Fix #2: cleanup — mark any in-flight parse as cancelled
+        return () => { cancelled = true; };
     }, [file, validateValue]);
 
     const getSheetData = () => {
@@ -238,79 +267,48 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
         document.body.removeChild(link);
     };
 
-    // Use onOp to detect changes and validate
-    // This is the core logic for real-time validation in the FortuneSheet editor.
-    // It intercepts operations (ops) and checks if they modify cell values.
     const handleOp = useCallback((op: any) => {
         if (!workbookRef.current) return;
 
-        // Ignore internal changes to prevent feedback loops
-        // When we set a cell's style (bg color) programmatically, it triggers another 'op'.
-        // We must ignore these to avoid an infinite loop of validate -> set style -> validate -> ...
-        if (isInternalChange.current) {
-            console.log("Ignoring internal change");
-            return;
-        }
-
-        // Handle array of ops or single op
         const ops = Array.isArray(op) ? op : [op];
 
         ops.forEach((o: any) => {
-            // We only care about operations that change data: 'replace', 'add', or 'remove'
             if ((o.op === 'replace' || o.op === 'add' || o.op === 'remove') && o.path) {
                 const path = o.path;
-                console.log("Op:", o.op, "Path:", path, "Value:", o.value);
 
-                // path format is typically: ["data", r, c, prop?]
-                // We verify it targets the 'data' array and has row (r) and column (c) indices
                 if (path[0] === 'data' && typeof path[1] === 'number' && typeof path[2] === 'number') {
                     const r = path[1];
                     const c = path[2];
-                    const prop = path[3]; // 'v' (value), 'm' (display value), 'bg' (background), etc.
+                    const prop = path[3];
 
-                    // Ignore style updates to prevent infinite loops
-                    // If the op is just changing the background ('bg') or postil/tooltip ('ps'), ignore it.
-                    if (prop === 'bg' || prop === 'ps') {
-                        console.log("Ignoring style update:", prop);
-                        return;
-                    }
+                    // Ignore formatting operations completely to prevent infinite loops (race condition fix)
+                    if (prop === 'bg' || prop === 'ps') return;
+                    if (prop && prop !== 'v' && prop !== 'm') return;
 
-                    // Only validate on 'v' change or whole cell change to avoid redundant checks
-                    // If the prop is something else (like 'ct' for cell type), we can usually ignore it for validation purposes.
-                    if (prop && prop !== 'v') {
-                        console.log("Ignoring non-value prop:", prop);
-                        return;
-                    }
-
-                    // Determine the new value based on the operation type
-                    let newValue;
+                    let newValue: string | number | undefined;
                     if (path.length === 3) {
-                        // Replaced whole cell object
-                        // If 'v' is not present in the update object, assume value is unchanged
-                        // This filters out style updates (bg, ps) or other prop updates that don't affect value
-                        if (o.value && typeof o.value === 'object' && !('v' in o.value)) {
-                            console.log("Ignoring whole cell update without 'v'");
-                            return;
+                        // Replaced the whole cell object
+                        // If it's just entering edit mode, FortuneSheet might omit 'v' or send it as null.
+                        // We fallback to 'm' (formatted text) to prevent triggering "Required field missing" while editing.
+                        if (o.value && typeof o.value === 'object') {
+                            if (!('v' in o.value) && !('m' in o.value)) return;
+                            newValue = o.value.v !== undefined && o.value.v !== null ? o.value.v : o.value.m;
+                        } else {
+                            newValue = o.value?.v;
                         }
-                        newValue = o.value?.v;
-                    } else if (prop === 'v') {
-                        // Replaced specific value property 'v'
+                    } else if (prop === 'v' || prop === 'm') {
+                        // Replaced specific string value 'v'
                         newValue = o.value;
-                    } else {
-                        // For remove op, newValue remains undefined, which is treated as empty
                     }
 
-                    console.log("Processing value change. NewValue:", newValue);
+                    // If newValue is still undefined after extraction, this op is a no-value event
+                    // (e.g. FortuneSheet activating/entering edit mode for the cell without changing it).
+                    // The cell already has the correct validation colour from initial load — skip re-validation
+                    // to avoid falsely marking required-but-populated cells as errors.
+                    if (newValue === undefined) return;
 
-                    // Ignore replace operations where newValue is null/undefined
-                    // This prevents style updates from resetting validation
-                    // Clearing a cell usually sends 'remove' op on 'v', which we handle below
-                    if (o.op === 'replace' && (newValue === null || newValue === undefined)) {
-                        console.log("Ignoring replace with null/undefined value");
-                        return;
-                    }
-
-                    // Get first column value for Grade Header check (specific to this app's logic)
+                    // Get first column value for Grade Header check
+                    // Also extract the full row for cross-column rule validation
                     const sheet = workbookRef.current.getSheet(0);
                     const rowData = sheet.data?.[r];
                     let firstColValue;
@@ -321,46 +319,49 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
                         firstColValue = rowData?.[0]?.v;
                     }
 
-                    // Check if this row is a "Grade Header" (e.g., "ม.1")
-                    // If so, we skip validation and clear any styles
-                    const isGradeHeader = firstColValue && /^ม\.\d/.test(String(firstColValue));
-
-                    if (isGradeHeader) {
-                        isInternalChange.current = true;
-                        // Use setTimeout to push the style update to the next tick
-                        // This is crucial for FortuneSheet to process the current op first
-                        setTimeout(() => {
-                            workbookRef.current.setCellFormat(r, c, "bg", "#ffffff");
-                            workbookRef.current.setCellFormat(r, c, "ps", undefined);
-                            setTimeout(() => { isInternalChange.current = false; }, 50);
-                        }, 0);
-                        return;
+                    // Build the full row array, injecting the in-flight new value at its column
+                    const fullRow: (string | number | null | undefined)[] = [];
+                    if (Array.isArray(rowData)) {
+                        rowData.forEach((cell: any, idx: number) => {
+                            fullRow[idx] = idx === c ? newValue : (cell?.v ?? null);
+                        });
+                    } else {
+                        fullRow[c] = newValue;
                     }
 
-                    // Perform validation
-                    const errorMsg = validateValue(c, newValue);
-                    const isValid = errorMsg === null;
-                    const bg = isValid ? "#ffffff" : "#ffcccc";
-                    // Set a larger size for the tooltip to prevent clipping
-                    const ps = isValid ? undefined : {
-                        value: errorMsg,
-                        isShow: false,
-                        width: 250,
-                        height: 120,
-                        left: null,
-                        top: null
-                    };
+                    const isGradeHeader = firstColValue && /^ม\.\d/.test(String(firstColValue));
 
-                    console.log("Validation result:", isValid, "Setting bg:", bg);
+                    // Validation processing
+                    // Skip if index 0 (headers) or if it's a Grade Header row
+                    if (r === 0 || isGradeHeader) {
+                        workbookRef.current.setCellFormat(r, c, "bg", "#ffffff");
+                        workbookRef.current.setCellFormat(r, c, "ps", undefined);
+                    } else {
+                        // Pass full row for cross-column custom validate() functions
+                        const errorMsg = validateValue(c, newValue, fullRow);
+                        const isValid = errorMsg === null;
+                        const bg = isValid ? "#ffffff" : "#ffcccc";
+                        const ps = isValid ? undefined : {
+                            value: errorMsg,
+                            isShow: false
+                        } as any;
 
-                    // Apply validation result (visual feedback)
-                    isInternalChange.current = true;
-                    setTimeout(() => {
-                        workbookRef.current.setCellFormat(r, c, "bg", bg);
-                        workbookRef.current.setCellFormat(r, c, "ps", ps);
-                        // Reset the internal change flag after a short delay to allow the update to settle
-                        setTimeout(() => { isInternalChange.current = false; }, 50);
-                    }, 0);
+                        // Fix #1: cancel any previous pending format update for this cell
+                        // before scheduling a new one, to prevent stale ops from racing ahead
+                        const cellKey = `${r},${c}`;
+                        if (pendingFormatOps.current.has(cellKey)) {
+                            clearTimeout(pendingFormatOps.current.get(cellKey));
+                        }
+                        // Update formats asynchronously so FortuneSheet commits the text change before we paint the background
+                        const timerId = setTimeout(() => {
+                            pendingFormatOps.current.delete(cellKey);
+                            if (workbookRef.current) {
+                                workbookRef.current.setCellFormat(r, c, "bg", bg);
+                                workbookRef.current.setCellFormat(r, c, "ps", ps);
+                            }
+                        }, 0);
+                        pendingFormatOps.current.set(cellKey, timerId);
+                    }
                 }
             }
         });
@@ -420,7 +421,7 @@ export default function CsvEditor({ file, onClose, onSave, validationRules }: Cs
                     <Workbook
                         key={file.name + file.lastModified}
                         ref={workbookRef}
-                        data={sheetData}
+                        data={sheetData as any}
                         onOp={handleOp}
                     />
                 )}

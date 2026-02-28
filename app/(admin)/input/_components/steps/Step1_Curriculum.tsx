@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDownload, faPen, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 import FileDropzone from '../file-upload/FileDropzone';
 import CsvEditor from '../CsvEditor';
-import { CURRICULUM_VALIDATION_RULES, validateFile } from '../validationUtils';
+import { CURRICULUM_VALIDATION_RULES, validateFile, ColumnRule } from '../validationUtils';
 
 import { StepProps } from '../../_types';
 
@@ -61,7 +61,7 @@ export function Step1_Curriculum({ data, onChange, errors }: StepProps) {
                         type="text"
                         value={data.scheduleName || ''}
                         onChange={(e) => onChange('scheduleName', e.target.value)}
-                        className="w-full h-12 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="w-full h-12 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
                         placeholder="Enter schedule name"
                     />
                     {errors.scheduleName && <span className="text-red-500 text-sm">{errors.scheduleName}</span>}
@@ -74,7 +74,7 @@ export function Step1_Curriculum({ data, onChange, errors }: StepProps) {
                         type="number"
                         value={data.year || ''}
                         onChange={(e) => onChange('year', e.target.value)}
-                        className="w-full h-12 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="w-full h-12 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
                         placeholder="Enter year"
                     />
                     {errors.year && <span className="text-red-500 text-sm">{errors.year}</span>}
@@ -87,7 +87,7 @@ export function Step1_Curriculum({ data, onChange, errors }: StepProps) {
                         type="text"
                         value={data.semester || ''}
                         onChange={(e) => onChange('semester', e.target.value)}
-                        className="w-full h-12 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                        className="w-full h-12 p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
                         placeholder="Enter semester"
                     />
                     {errors.semester && <span className="text-red-500 text-sm">{errors.semester}</span>}
@@ -101,7 +101,7 @@ export function Step1_Curriculum({ data, onChange, errors }: StepProps) {
                         <h3 className="text-lg font-semibold text-black">Curriculum</h3>
                         <p className="text-sm text-gray-400">Upload the curriculum data file</p>
                     </div>
-                    <a href="/example_csv/example_curriculum.csv" download className="text-sm text-primary hover:underline flex items-center gap-2">
+                    <a href="/example_csv/example_curriculum.csv" download className="text-sm text-blue-600 hover:underline flex items-center gap-2">
                         <FontAwesomeIcon icon={faDownload} />
                         example_curriculum.csv
                     </a>

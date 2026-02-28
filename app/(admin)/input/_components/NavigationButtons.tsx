@@ -58,7 +58,7 @@ export default function NavigationButtons({
             px-6 py-2.5 rounded-lg text-sm font-medium transition-all shadow-sm
             ${!canProceed || isGenerating
                             ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            : 'bg-primary text-white hover:bg-primary/90 hover:shadow'
+                            : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow'
                         }
           `}
                 >

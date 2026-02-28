@@ -24,7 +24,8 @@ export function Step3_Elective({ data, onChange, errors }: StepProps) {
     } = useCsvStep({
         file: data.electiveFile,
         onFileChange: (file) => onChange('electiveFile', file),
-        validationRules: ELECTIVE_VALIDATION_RULES
+        validationRules: ELECTIVE_VALIDATION_RULES,
+        catchAllRule: { required: false, pattern: /^\d+(\.\d+)?$/, message: "Slot values must be numeric (e.g., 1.0)" }
     });
 
     if (isEditing && data.electiveFile) {
@@ -45,7 +46,7 @@ export function Step3_Elective({ data, onChange, errors }: StepProps) {
                     <h3 className="text-lg font-semibold text-black">Elective Subjects</h3>
                     <p className="text-sm text-gray-400">Upload the elective subjects data file</p>
                 </div>
-                <a href="/example_csv/example_elective.csv" download className="text-sm text-primary hover:underline flex items-center gap-2">
+                <a href="/example_csv/example_elective.csv" download className="text-sm text-blue-600 hover:underline flex items-center gap-2">
                     <FontAwesomeIcon icon={faDownload} />
                     example_elective.csv
                 </a>

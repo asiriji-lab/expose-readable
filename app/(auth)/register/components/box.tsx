@@ -64,10 +64,12 @@ const Box: React.FC = () => {
       });
 
       if (authError) throw authError;
-
-      if (authData.user) {
-        alert('Registration successful! Please check your email for confirmation.');
-        router.push('/login');
+      if (authData.session) {
+        // User is auto-confirmed and logged in
+        router.push('/dashboard');
+      } else if (authData.user) {
+        // User needs to confirm email (OTP)
+        router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
       }
     } catch (error: any) {
       alert(error.message || 'An error occurred during registration');
@@ -79,15 +81,6 @@ const Box: React.FC = () => {
   return (
     <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-[450px]">
       <form onSubmit={handleRegister}>
-        {/* Owl Logo */}
-        <div className="flex justify-center mb-4">
-          <img
-            src="/path-to-your-owl-logo.svg"
-            alt="ScheDool Owl"
-            className="w-20 h-20"
-          />
-        </div>
-
         {/* Title */}
         <h1 className="text-2xl font-bold text-center mb-2">Welcome to ScheDool</h1>
         <p className="text-gray-500 text-center text-sm mb-6">

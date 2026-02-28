@@ -16,6 +16,8 @@ import { Step9_RelatedFiles } from './_components/steps/Step9_RelatedFiles';
 import { Step10_Generate } from './_components/steps/Step10_Generate';
 import { ScheduleFormData } from './_types';
 
+import AdminHeader from '../_components/AdminHeader';
+
 export default function InputPage({ children }: { children: React.ReactNode }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);

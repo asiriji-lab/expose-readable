@@ -12,7 +12,7 @@ export function Step9_RelatedFiles({ data, onChange, errors }: StepProps) {
                     <h3 className="text-lg font-semibold text-black">Related files</h3>
                     <p className="text-sm text-gray-400">Upload the related files data file</p>
                 </div>
-                <a href="#" className="text-sm text-primary hover:underline flex items-center gap-2">
+                <a href="#" className="text-sm text-blue-600 hover:underline flex items-center gap-2">
                     <FontAwesomeIcon icon={faDownload} />
                     example_related_files.csv
                 </a>

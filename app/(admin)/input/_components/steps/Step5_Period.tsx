@@ -45,7 +45,7 @@ export function Step5_Period({ data, onChange, errors }: StepProps) {
                     <h3 className="text-lg font-semibold text-black">Periods</h3>
                     <p className="text-sm text-gray-400">Upload the period definition data file</p>
                 </div>
-                <a href="/example_csv/example_period.csv" download className="text-sm text-primary hover:underline flex items-center gap-2">
+                <a href="/example_csv/example_period.csv" download className="text-sm text-blue-600 hover:underline flex items-center gap-2">
                     <FontAwesomeIcon icon={faDownload} />
                     example_period.csv
                 </a>

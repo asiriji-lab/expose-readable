@@ -91,7 +91,7 @@ export default function Stepper({ currentStep, completedSteps, onStepClick }: St
                                 className={`
                   w-full flex items-center justify-between p-3 rounded-lg text-sm transition-all
                   ${isActive
-                                        ? 'bg-blue-50 text-primary font-medium shadow-sm ring-1 ring-blue-100'
+                                        ? 'bg-blue-50 text-blue-600 font-medium shadow-sm ring-1 ring-blue-100'
                                         : 'text-gray-600 hover:bg-gray-50'
                                     }
                 `}
@@ -102,12 +102,12 @@ export default function Stepper({ currentStep, completedSteps, onStepClick }: St
                     ${isCompleted
                                             ? 'bg-green-500 text-white'
                                             : isActive
-                                                ? 'bg-primary text-white'
+                                                ? 'bg-blue-600 text-white'
                                                 : 'bg-gray-100 text-gray-400'
                                         }
                   `}>
                                         {isCompleted ? (
-                                            <div className="relative w-5 h-5">
+                                            <div className="relative w-5 h-5 flex items-center justify-center text-white">
                                                 <Image
                                                     src="/step_icon/Mark_as_done.svg"
                                                     alt="Completed"
@@ -128,7 +128,7 @@ export default function Stepper({ currentStep, completedSteps, onStepClick }: St
                                     </div>
                                     <span>{step.label}</span>
                                 </div>
-                                <span className={`text-xs ${isActive ? 'text-primary' : 'text-gray-400'}`}>{step.id}</span>
+                                <span className={`text-xs ${isActive ? 'text-blue-600' : 'text-gray-400'}`}>{step.id}</span>
                             </button>
                         );
                     })}

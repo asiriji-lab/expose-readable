@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { Eye, EyeOff, Shield, BookOpen, GraduationCap } from 'lucide-react'; // icons
-import { supabase } from '@/lib/supabase';
+import { loginWithUsernameOrEmail, detectRoleAction } from '../actions';
 import { useRouter } from 'next/navigation';
 
 const Box: React.FC = () => {
@@ -11,33 +11,31 @@ const Box: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<'admin' | 'teacher' | 'student' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [accountExists, setAccountExists] = useState<boolean | null>(null);
 
   // Form State
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
   const detectRole = async () => {
-    if (!username) return;
+    if (!username) {
+      setAccountExists(null);
+      setSelectedRole(null);
+      return;
+    }
     try {
-      const isEmail = username.includes('@');
-      const query = supabase.from('profiles').select('role');
-
-      if (isEmail) {
-        query.eq('email', username);
-      } else {
-        query.eq('username', username);
-      }
-
-      const { data, error } = await query.single();
-
-      if (data) {
-        setSelectedRole(data.role as any);
+      const { role } = await detectRoleAction(username);
+      if (role) {
+        setSelectedRole(role);
+        setAccountExists(true);
       } else {
         setSelectedRole(null);
+        setAccountExists(false);
       }
     } catch (err) {
       console.error('Error detecting role:', err);
       setSelectedRole(null);
+      setAccountExists(null);
     }
   };
 
@@ -46,31 +44,20 @@ const Box: React.FC = () => {
     setLoading(true);
 
     try {
-      let loginEmail = username;
+      const formData = new FormData();
+      formData.append('usernameOrEmail', username);
+      formData.append('password', password);
 
-      // 1. If it's a username, find the associated email first
-      if (!username.includes('@')) {
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('username', username)
-          .single();
+      const result = await loginWithUsernameOrEmail(formData);
 
-        if (profileError || !profile?.email) {
-          throw new Error('Username not found');
+      if (result.error) {
+        if (result.error.toLowerCase().includes('email not confirmed')) {
+          router.push(`/verify-otp?email=${encodeURIComponent(username)}`);
+          return;
         }
-        loginEmail = profile.email;
+        throw new Error(result.error);
       }
 
-      // 2. Authenticate with the email
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
-        password,
-      });
-
-      if (authError) throw authError;
-
-      alert('Login successful!');
       router.push('/dashboard');
     } catch (error: any) {
       alert(error.message || 'An error occurred during login');
@@ -124,8 +111,11 @@ const Box: React.FC = () => {
             onChange={(e) => setUsername(e.target.value)}
             onBlur={detectRole}
             onKeyDown={(e) => e.key === 'Enter' && detectRole()}
-            className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-indigo-500 focus:outline-none"
+            className={`w-full p-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${accountExists === false ? 'border-red-500 bg-red-50' : 'border-gray-200 focus:border-indigo-500'}`}
           />
+          {accountExists === false && (
+            <p className="text-red-500 text-sm mt-1">Account not found. Please check your username/email.</p>
+          )}
         </div>
 
         {/* Password section */}
@@ -135,10 +125,11 @@ const Box: React.FC = () => {
             <input
               type={showPassword ? 'text' : 'password'}
               required
+              disabled={accountExists === false}
               placeholder="Enter password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-indigo-500 focus:outline-none pr-12"
+              className={`w-full p-3 border-2 rounded-lg focus:outline-none pr-12 focus:ring-2 focus:ring-indigo-500 ${accountExists === false ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed' : 'border-gray-200 focus:border-indigo-500'}`}
             />
             <button
               type="button"
@@ -153,8 +144,8 @@ const Box: React.FC = () => {
         {/* Enter button */}
         <button
           type="submit"
-          disabled={loading}
-          className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50"
+          disabled={loading || accountExists === false}
+          className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Entering...' : 'Enter Platform →'}
         </button>

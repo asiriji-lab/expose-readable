@@ -102,5 +102,78 @@ describe('Validation Utils', () => {
             const result = await validateFile(mockFile, CURRICULUM_VALIDATION_RULES);
             expect(result.isValid).toBe(true);
         });
+
+        describe('Relaxed Regex & Cross-Column Logic', () => {
+            const mockFile = new File(['content'], 'test.csv', { type: 'text/csv' });
+
+            it('should allow teacher arrays without quotes', async () => {
+                (Papa.parse as any).mockImplementation((file: any, config: any) => {
+                    config.complete({
+                        data: [
+                            ['Subject ID', 'Name', 'Periods', 'Teacher', 'Block', 'Class', 'Room', 'Unused', 'Fixed'],
+                            ['ท21101', 'Thai', '3', '[T001, T002]', '1', '[1]', '123', '', 'MON_1'],
+                        ]
+                    });
+                });
+                const result = await validateFile(mockFile, CURRICULUM_VALIDATION_RULES);
+                expect(result.isValid).toBe(true);
+            });
+
+            it('should error if subject_name is missing when subject_id is present', async () => {
+                (Papa.parse as any).mockImplementation((file: any, config: any) => {
+                    config.complete({
+                        data: [
+                            ['Subject ID', 'Name', 'Periods', 'Teacher', 'Block', 'Class', 'Room', 'Unused', 'Fixed'],
+                            ['ท21101', '', '3', 'T001', '1', '[1]', '123', '', 'MON_1'],
+                        ]
+                    });
+                });
+                const result = await validateFile(mockFile, CURRICULUM_VALIDATION_RULES);
+                expect(result.isValid).toBe(false);
+                expect(result.errors[0]).toContain('Subject name is required');
+            });
+
+            it('should error if TEAM constraint is used without teacher array', async () => {
+                (Papa.parse as any).mockImplementation((file: any, config: any) => {
+                    config.complete({
+                        data: [
+                            ['Subject ID', 'Name', 'Periods', 'Teacher', 'Block', 'Class', 'Constraint', 'Room', 'Fixed'],
+                            ['ท21101', 'Thai', '3', 'T001', '1', '[1]', 'type=TEAM', '123', 'MON_1'],
+                        ]
+                    });
+                });
+                const result = await validateFile(mockFile, CURRICULUM_VALIDATION_RULES);
+                expect(result.isValid).toBe(false);
+                expect(result.errors[0]).toContain('TEAM constraints require an array');
+            });
+
+            it('should allow student class arrays with quotes and spaces', async () => {
+                (Papa.parse as any).mockImplementation((file: any, config: any) => {
+                    config.complete({
+                        data: [
+                            ['Subject ID', 'Name', 'Periods', 'Teacher', 'Block', 'Class', 'Room', 'Unused', 'Fixed'],
+                            ['ว21101', 'Science', '3', 'T003', '2', "['1', '2']", 'A316', '', ''],
+                        ]
+                    });
+                });
+                const result = await validateFile(mockFile, CURRICULUM_VALIDATION_RULES);
+                expect(result.isValid).toBe(true);
+            });
+
+            it('should allow block patterns with spaces', async () => {
+                (Papa.parse as any).mockImplementation((file: any, config: any) => {
+                    config.complete({
+                        data: [
+                            ['Subject ID', 'Name', 'Periods', 'Teacher', 'Block', 'Class', 'Room', 'Unused', 'Fixed'],
+                            ['อ21101', 'English', '3', 'T004', '2 - 1', '[1]', '', '', ''],
+                        ]
+                    });
+                });
+                const result = await validateFile(mockFile, CURRICULUM_VALIDATION_RULES);
+                expect(result.isValid).toBe(true);
+            });
+        });
+
+
     });
 });

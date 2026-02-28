@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { validateFile } from '../validationUtils';
+import { validateFile, ColumnRule } from '../validationUtils';
 
 interface UseCsvStepProps {
     file: File | null;
     onFileChange: (file: File | null) => void;
-    validationRules: any; // Using 'any' for now, but should ideally be typed
+    validationRules: Record<number, ColumnRule>;
+    catchAllRule?: ColumnRule;
 }
 
-export function useCsvStep({ file, onFileChange, validationRules }: UseCsvStepProps) {
+export function useCsvStep({ file, onFileChange, validationRules, catchAllRule }: UseCsvStepProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [validationErrors, setValidationErrors] = useState<string[]>([]);
     const [isValidating, setIsValidating] = useState(false);
@@ -24,7 +25,7 @@ export function useCsvStep({ file, onFileChange, validationRules }: UseCsvStepPr
     const handleFileValidation = async (fileToValidate: File) => {
         setIsValidating(true);
         try {
-            const result = await validateFile(fileToValidate, validationRules);
+            const result = await validateFile(fileToValidate, validationRules, catchAllRule);
             setValidationErrors(result.errors);
         } catch (error) {
             console.error("Validation failed:", error);

@@ -24,7 +24,8 @@ export function Step4_Scout({ data, onChange, errors }: StepProps) {
     } = useCsvStep({
         file: data.scoutFile,
         onFileChange: (file) => onChange('scoutFile', file),
-        validationRules: SCOUT_VALIDATION_RULES
+        validationRules: SCOUT_VALIDATION_RULES,
+        catchAllRule: { required: false, pattern: /^[TE]\d{3}$/, message: "Must be a valid Teacher ID (e.g., T001)" }
     });
 
     if (isEditing && data.scoutFile) {
@@ -45,7 +46,7 @@ export function Step4_Scout({ data, onChange, errors }: StepProps) {
                     <h3 className="text-lg font-semibold text-black">Scout Activities</h3>
                     <p className="text-sm text-gray-400">Upload the scout activity data file</p>
                 </div>
-                <a href="/example_csv/example_scout.csv" download className="text-sm text-primary hover:underline flex items-center gap-2">
+                <a href="/example_csv/example_scout.csv" download className="text-sm text-blue-600 hover:underline flex items-center gap-2">
                     <FontAwesomeIcon icon={faDownload} />
                     example_scout.csv
                 </a>

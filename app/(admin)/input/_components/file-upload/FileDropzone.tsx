@@ -53,7 +53,7 @@ export default function FileDropzone({
                 border-2 border-dashed rounded-xl p-10 
                 flex flex-col items-center justify-center 
                 cursor-pointer transition-colors duration-200
-                ${isDragging ? 'border-primary bg-blue-50' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}
+                ${isDragging ? 'border-blue-600 bg-blue-50' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'}
             `}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -68,7 +68,7 @@ export default function FileDropzone({
                 onChange={handleFileInput}
             />
 
-            <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4 text-primary">
+            <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4 text-blue-600">
                 <FontAwesomeIcon icon={faUpload} className="text-xl" />
             </div>
 
