@@ -14,11 +14,6 @@ import {
   faStar
 } from '@fortawesome/free-solid-svg-icons';
 
-<<<<<<< HEAD
-export default function HomePage() {
-  redirect('/register');
-}
-=======
 export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50 text-foreground overflow-x-hidden selection:bg-primary/20 selection:text-primary">
@@ -334,4 +329,3 @@ export default function Home() {
 // color codes used: black 000000, FFFFFF, 3584E4, BDD3FF, EAF7FF
 
 // app/page.tsx
->>>>>>> main
