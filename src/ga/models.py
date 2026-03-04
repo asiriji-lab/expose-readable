@@ -16,13 +16,9 @@ import copy
 
 WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI"]
 
-# Values in a grid cell that mean "occupied but not a real lesson" —
-# the GA should treat these as blocked and never overwrite them.
-BLOCKED_CELL_KEYWORDS = [
-    'UNAVAILABLE', 'Homeroom', 'Morning Break', 'Afternoon Break',
-    'Lunch', 'ลูกเสือ', 'ชุมนุม', 'เสรี', 'Bridging', 'preplace',
-    'scout', 'elective', 'constraint',
-]
+# Populated dynamically at GA init from period labels, preplace slot names,
+# and elective subject IDs — see data_loader.build_blocked_keywords().
+BLOCKED_CELL_KEYWORDS: list = []
 
 # =============================================================================
 # DATA CLASSES
@@ -39,18 +35,15 @@ class Lesson:
     block_pattern: str           # "1", "2", "2-1", "2-2", etc.
     required_rooms: List[str]    # resolved room IDs (may be empty)
     fixed_period: Optional[str]
+    # Constraint fields — populated from curriculum 'constraint' column
+    constraint_type: Optional[str] = None          # TEAM | MULTI_CLASS_TEAM | SEPERATE_SLOT | SUB_GROUP | TEACHER_SPLIT
+    constraint_group_id: Optional[str] = None      # links lessons that share a constraint group
 
 
-@dataclass
+@dataclass(frozen=True)
 class TimeSlot:
     day: str         # "MON" .. "FRI"
     period_col: str  # full column header: "2,08.05-08.55"
-
-    def __hash__(self):
-        return hash((self.day, self.period_col))
-
-    def __eq__(self, other):
-        return self.day == other.day and self.period_col == other.period_col
 
     def __repr__(self):
         label = self.period_col.split(',')[0]

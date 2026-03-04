@@ -16,6 +16,7 @@ from src.preschedule.prescheduleProcessor import PrescheduleProcessor
 from .genetic_algorithm import GeneticAlgorithm
 from .exporter import ScheduleExporter
 from .job_manager import JobManager
+from .feasibility_checker import FeasibilityChecker
 
 
 def run_scheduler_job(job_id: str,
@@ -78,10 +79,14 @@ def run_scheduler_job(job_id: str,
     processor.task4_schedule_electives()
     processor.task5_assign_scout()
     
+    # Feasibility check before running the GA
+    checker = FeasibilityChecker(schedule_manager)
+    feasibility_report = checker.check()
+
     # Update status
     if job_manager:
         job_manager.update_job_progress(job_id, 'running_ga', 0, data_stats)
-    
+
     # Define progress callback for GA
     def ga_progress(generation, max_gen, stats):
         progress = (generation / max_gen) * 100
@@ -131,6 +136,7 @@ def run_scheduler_job(job_id: str,
     result = {
         'job_id': job_id,
         'data_stats': data_stats,
+        'feasibility': feasibility_report.to_dict(),
         'ga_result': ga_result,
         'export_result': export_result,
         'success': True

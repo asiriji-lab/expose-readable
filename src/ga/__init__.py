@@ -15,9 +15,11 @@ from .genetic_algorithm import GeneticAlgorithm
 from .exporter import ScheduleExporter
 from .scheduler import run_scheduler_job
 from .job_manager import JobManager
+from .feasibility_checker import FeasibilityChecker, FeasibilityReport
 
 __all__ = [
     'Lesson', 'TimeSlot', 'Chromosome',
     'GeneticAlgorithm', 'ScheduleExporter',
-    'run_scheduler_job', 'JobManager'
+    'run_scheduler_job', 'JobManager',
+    'FeasibilityChecker', 'FeasibilityReport',
 ]

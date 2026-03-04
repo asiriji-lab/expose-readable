@@ -4,120 +4,164 @@ from src.data_cleaning.mapping import create_room_lookup, create_teacher_lookup,
 
 # data cleaning for curriculum sheet (teacher, studetn_class, room)
 def clean_curriculum(
-    df_curriculum: pd.DataFrame, 
-    df_teacher: pd.DataFrame, 
+    df_curriculum: pd.DataFrame,
+    df_teacher: pd.DataFrame,
     df_room: pd.DataFrame,
     df_student: pd.DataFrame,
 ) -> pd.DataFrame:
     if df_curriculum.empty:
         return df_curriculum
-    
+
     print("\n--- Starting Curriculum Data Cleaning ---")
-    
+
     # Process lookups
     teacher_lookup = create_teacher_lookup(df_teacher)
     room_lookup = create_room_lookup(df_room)
     grade_section_counts = get_grade_sections(df_student)
-    
+
     # --- Main Iteration and Logic ---
     processed_rows = []
-    current_grade_sections = [] 
+    current_grade_sections = []
     current_grade = None
-    grade_marker_pattern = re.compile(r'ม\.\d+') 
+    grade_marker_pattern = re.compile(r'ม\.\d+')
 
+    # Carry-forward state for merged-cell propagation
+    prev_subject_id = ''
+    prev_subject_name = ''
+    prev_constraint = ''
+    prev_raw_room = ''
+    prev_fixed_period = ''
+    group_id_counter = 0
+    grade_marker_count = 0
+
+    def _is_empty(val) -> bool:
+        return pd.isna(val) or str(val).strip() in ('', 'nan', 'None')
 
     for _, row in df_curriculum.iterrows():
-        # Get a dictionary representation of the current row (important for manipulation)
         row_dict = row.to_dict()
-        first_col_value = str(row_dict[df_curriculum.columns[0]]).strip() 
+        first_col_value = str(row_dict[df_curriculum.columns[0]]).strip()
 
-        # Check for Grade Marker
+        # Check for Grade Marker — skip, don't update carry-forward state
         if grade_marker_pattern.match(first_col_value):
+            grade_marker_count += 1
+            # if grade_marker_count > 3:
+            #     print(f"  [Cleaner] Stopping at grade marker #{grade_marker_count} ({first_col_value}) — test limit reached.")
+            #     break
             current_grade = first_col_value
             current_grade_sections = grade_section_counts.get(current_grade, [])
-            # print(f"Detected Grade Marker: {current_grade}. Sections: {current_grade_sections}")
+            continue
 
-            # Skip grade marker rows (they are not needed in the final output)
-            # processed_rows.append(row_dict) 
-            continue 
-            
         # --- Process Data Rows (Non-marker rows) ---
-        # A. Clean 'subject_id' and 'subject_name' column
-        current_subject_id = str(row_dict.get('subject_id', '')).strip()
+        # A. Classify row type and propagate subject / group fields
+        current_subject_id   = str(row_dict.get('subject_id',   '')).strip()
         current_subject_name = str(row_dict.get('subject_name', '')).strip()
-        
-        # Check if current subject_id is NaN/empty
-        if pd.isna(row_dict.get('subject_id')) or current_subject_id == '' or current_subject_id == 'nan':
-            # Use previous row's subject_id if available
-            if 'prev_subject_id' in locals() and prev_subject_id:
-                row_dict['subject_id'] = prev_subject_id
-            else:
-                row_dict['subject_id'] = ''
-        else:
-            row_dict['subject_id'] = current_subject_id
-            prev_subject_id = current_subject_id  # Store for next iteration
-        
-        # Check if current subject_name is NaN/empty
-        if pd.isna(row_dict.get('subject_name')) or current_subject_name == '' or current_subject_name == 'nan':
-            # Use previous row's subject_name if available
-            if 'prev_subject_name' in locals() and prev_subject_name:
-                row_dict['subject_name'] = prev_subject_name
-            else:
-                row_dict['subject_name'] = ''
-        else:
-            row_dict['subject_name'] = current_subject_name
-            prev_subject_name = current_subject_name  # Store for next iteration
 
+        subject_id_missing   = _is_empty(row_dict.get('subject_id'))
+        subject_name_missing = _is_empty(row_dict.get('subject_name'))
+
+        # A true continuation row: merged cell — BOTH subject_id and subject_name are blank
+        # An activity row      : subject_id blank but subject_name present (e.g. กิจกรรมแนะแนว, EFF)
+        # An anchor row        : subject_id is present
+        is_true_continuation = subject_id_missing and subject_name_missing
+        is_activity          = subject_id_missing and not subject_name_missing
+        # is_anchor            = not subject_id_missing
+
+        if is_true_continuation:
+            # Inherit subject identity from anchor
+            row_dict['subject_id']   = prev_subject_id
+            row_dict['subject_name'] = prev_subject_name
+            row_dict['group_id']     = group_id_counter
+
+            # Propagate constraint / room / fixed_period only when current value is missing
+            if _is_empty(row_dict.get('constraint')):
+                row_dict['constraint']    = prev_constraint
+            if _is_empty(row_dict.get('room')):
+                row_dict['room']          = prev_raw_room       # raw string, resolved later
+            if _is_empty(row_dict.get('fixed_period')):
+                row_dict['fixed_period']  = prev_fixed_period
+
+        elif is_activity:
+            # No subject_id — use subject_name as the identifier so these rows
+            # don't get merged under the previous subject's ID
+            row_dict['subject_id'] = str(row_dict.get('subject_name', '')).strip()
+            group_id_counter += 1
+            row_dict['group_id']   = group_id_counter
+
+        else:
+            # Anchor row — check if it's a sibling (same subject_id + subject_name
+            # as the previous anchor, e.g. ว31283 split across 5 class rows).
+            # Siblings share the same group_id so constraint groups span all sections.
+            current_fp = '' if _is_empty(row_dict.get('fixed_period')) else str(row_dict.get('fixed_period')).strip()
+            # Rows with different non-empty fixed_period values belong to different groups
+            # (e.g. same subject but one group at TUE_8-10 and another at THU_8-10)
+            fp_conflict = bool(current_fp and prev_fixed_period and current_fp != prev_fixed_period)
+            is_sibling = (
+                prev_subject_id != '' and
+                current_subject_id == prev_subject_id and
+                current_subject_name == prev_subject_name and
+                not fp_conflict
+            )
+
+            if is_sibling:
+                # Reuse the existing group_id so all sections share one constraint group
+                row_dict['group_id'] = group_id_counter
+                # Propagate constraint / room / fixed_period when this row has none
+                if _is_empty(row_dict.get('constraint')):
+                    row_dict['constraint']   = prev_constraint
+                if _is_empty(row_dict.get('room')):
+                    row_dict['room']         = prev_raw_room
+                if _is_empty(row_dict.get('fixed_period')):
+                    row_dict['fixed_period'] = prev_fixed_period
+            else:
+                # Truly new subject — start a new group and reset carry-forward
+                group_id_counter += 1
+                row_dict['group_id'] = group_id_counter
+                prev_constraint   = str(row_dict.get('constraint',   '')).strip()
+                prev_raw_room     = str(row_dict.get('room',         '')).strip()
+                prev_fixed_period = str(row_dict.get('fixed_period', '')).strip()
+
+            row_dict['subject_id'] = current_subject_id
+            prev_subject_id   = current_subject_id
+            prev_subject_name = current_subject_name
+
+        # subject_name: propagate independently (same rule as before)
+        if _is_empty(row_dict.get('subject_name')):
+            row_dict['subject_name'] = prev_subject_name
+        else:
+            prev_subject_name = str(row_dict.get('subject_name', '')).strip()
 
         # B. Clean 'teacher' column
         raw_teacher_name = row_dict.get('teacher')
         row_dict['teacher'] = resolve_teacher_names_to_ids(raw_teacher_name, teacher_lookup)
-        
-        
+
         # C. Clean 'student_class' column
         raw_section_str = row_dict.get('student_class')
-        
         if pd.isna(raw_section_str) or raw_section_str == '':
-            # Rule 1: NaN/Null means all sections for the current grade
             cleaned_sections = current_grade_sections
         else:
-            # Rules 2, 3, 4: Specific/Range/Mixed (uses previously defined parse_student_class_string)
             cleaned_sections = parse_student_class_string(raw_section_str)
-            
-            # Validation: Filter sections to only those valid for the current grade
             valid_sections = [s for s in cleaned_sections if s in current_grade_sections]
             cleaned_sections = valid_sections
 
-        # Convert section numbers to full class_ids using current_grade
-        # e.g. grade="ม.1", section=2 -> "1/2"
         grade_num = current_grade.replace('ม.', '') if current_grade else ''
-        full_class_ids = [f"{grade_num}/{section}" for section in cleaned_sections]
+        row_dict['student_class'] = [f"{grade_num}/{section}" for section in cleaned_sections]
 
-        row_dict['student_class'] = full_class_ids
-        
+        # D. Clean 'room' column (resolve after propagation so raw value is propagated above)
+        row_dict['room'] = resolve_room_to_ids(row_dict.get('room'), room_lookup)
 
-        # D. Clean 'room' column
-        raw_room_str = row_dict.get('room')
-        row_dict['room'] = resolve_room_to_ids(raw_room_str, room_lookup)
-        
-        
         # E. Clean 'block_pattern' column
-        # If NaN or empty, use periods_per_week value
         block_pattern = row_dict.get('block_pattern')
-        if pd.isna(block_pattern) or str(block_pattern).strip() == '' or str(block_pattern).strip() == 'nan':
-            # Use periods_per_week as default block pattern
+        if pd.isna(block_pattern) or str(block_pattern).strip() in ('', 'nan'):
             periods_per_week = row_dict.get('periods_per_week')
             if pd.notna(periods_per_week):
                 row_dict['block_pattern'] = str(int(float(periods_per_week)))
             else:
-                row_dict['block_pattern'] = '1'  # Default to 1 if both are missing
+                row_dict['block_pattern'] = '1'
         else:
             row_dict['block_pattern'] = str(block_pattern).strip()
-        
-        # Append the fully cleaned data row
+
         processed_rows.append(row_dict)
-        
-    # Reconstruct the final DataFrame
+
     df_cleaned = pd.DataFrame(processed_rows)
     print("✅ Curriculum data cleaning complete.")
     print("--- Curriculum Data Cleaning Complete ---")

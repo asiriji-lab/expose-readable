@@ -23,6 +23,7 @@ from src.data_cleaning.data_cleaning import clean_input_data
 from src.preschedule.scheduleManager import ScheduleManager
 from src.preschedule.prescheduleProcessor import PrescheduleProcessor
 from src.ga.genetic_algorithm import GeneticAlgorithm
+from src.ga.feasibility_checker import FeasibilityChecker
 
 
 # =============================================================================
@@ -165,6 +166,16 @@ def main():
         if isinstance(task_result, dict):
             for k, v in task_result.items():
                 print(f"    - {k}: {v}")
+
+    # =========================================================================
+    # STEP 3.5 — Feasibility check (before GA)
+    # =========================================================================
+    print("\n" + "=" * 80)
+    print("STEP 3.5 — FEASIBILITY CHECK")
+    print("=" * 80)
+
+    checker = FeasibilityChecker(schedule_manager)
+    feasibility_report = checker.check()
 
     # =========================================================================
     # STEP 4 — GA hyperparameter tuning (Optuna)
