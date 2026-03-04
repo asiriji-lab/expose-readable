@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { TabName, TabState } from '../../../validators/types';
 
@@ -14,12 +14,12 @@ const TAB_META: Record<TabName, { label: string; thaiLabel: string; icon: string
 };
 
 const STATUS_CONFIG: Record<TabState['status'], { badge: string; badgeClass: string; cardClass: string }> = {
-  pending:    { badge: '⏳ รอตรวจสอบ',    badgeClass: 'bg-gray-100 text-gray-600',              cardClass: 'border-gray-200 bg-white' },
-  validating: { badge: '🔄 กำลังตรวจ...',  badgeClass: 'bg-blue-100 text-blue-600 animate-pulse', cardClass: 'border-blue-300 bg-blue-50' },
+  pending:    { badge: '⏳ รอตรวจสอบ',    badgeClass: 'bg-surface-alt text-foreground-muted',              cardClass: 'border-border bg-surface' },
+  validating: { badge: '🔄 กำลังตรวจ...',  badgeClass: 'bg-primary-light text-primary animate-pulse', cardClass: 'border-primary-border bg-primary-light' },
   passed:     { badge: '✅ ผ่าน',          badgeClass: 'bg-green-100 text-green-700',             cardClass: 'border-green-300 bg-green-50' },
   warnings:   { badge: '⚠️ คำเตือน',       badgeClass: 'bg-yellow-100 text-yellow-700',           cardClass: 'border-yellow-300 bg-yellow-50' },
   errors:     { badge: '❌ พบข้อผิดพลาด',  badgeClass: 'bg-red-100 text-red-700',                 cardClass: 'border-red-300 bg-red-50' },
-  locked:     { badge: '🔒 รอ Phase 1',    badgeClass: 'bg-gray-100 text-gray-400',              cardClass: 'border-gray-200 bg-gray-50 opacity-60' },
+  locked:     { badge: '🔒 รอ Phase 1',    badgeClass: 'bg-surface-alt text-foreground-muted',              cardClass: 'border-border bg-background opacity-60' },
   missing:    { badge: '❓ ไม่พบแท็บ',    badgeClass: 'bg-red-100 text-red-600',                 cardClass: 'border-red-300 bg-red-50' },
 };
 
@@ -55,14 +55,14 @@ export default function TabCard({ tabName, state, onClick }: TabCardProps) {
       <div className="flex items-center gap-2">
         <span className="text-2xl">{meta.icon}</span>
         <div>
-          <p className="font-semibold text-gray-800 text-sm">{meta.thaiLabel}</p>
-          <p className="text-xs text-gray-400">{meta.label}</p>
+          <p className="font-semibold text-foreground text-sm">{meta.thaiLabel}</p>
+          <p className="text-xs text-foreground-muted">{meta.label}</p>
         </div>
       </div>
 
       {/* Row count */}
       {rowCount !== undefined && (
-        <p className="text-xs text-gray-500">{rowCount} แถว</p>
+        <p className="text-xs text-foreground-muted">{rowCount} แถว</p>
       )}
 
       {/* Status badge */}

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { ValidationError } from '../../../validators/types';
 
@@ -12,7 +12,7 @@ interface DataPreviewProps {
 
 export default function DataPreview({ rows, errors, warnings }: DataPreviewProps) {
   if (rows.length === 0) {
-    return <p className="text-sm text-gray-400 italic">ไม่มีข้อมูล</p>;
+    return <p className="text-sm text-foreground-muted italic">ไม่มีข้อมูล</p>;
   }
 
   const headers = Object.keys(rows[0]);
@@ -31,13 +31,13 @@ export default function DataPreview({ rows, errors, warnings }: DataPreviewProps
     .slice(0, 50);
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
+    <div className="overflow-x-auto rounded-lg border border-border">
       <table className="min-w-full text-xs">
-        <thead className="bg-gray-50">
+        <thead className="bg-background">
           <tr>
-            <th className="px-3 py-2 text-left text-gray-500 font-medium border-b border-gray-200 w-10">#</th>
+            <th className="px-3 py-2 text-left text-foreground-muted font-medium border-b border-border w-10">#</th>
             {headers.map((h) => (
-              <th key={h} className="px-3 py-2 text-left text-gray-600 font-medium border-b border-gray-200 whitespace-nowrap">
+              <th key={h} className="px-3 py-2 text-left text-foreground-muted font-medium border-b border-border whitespace-nowrap">
                 {h}
               </th>
             ))}
@@ -48,8 +48,8 @@ export default function DataPreview({ rows, errors, warnings }: DataPreviewProps
             const row = rows[i];
             const dataRowNum = i + 2; // 1-based, row 1 is header
             return (
-              <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="px-3 py-1.5 text-gray-400">{dataRowNum}</td>
+              <tr key={i} className="border-b border-border hover:bg-background">
+                <td className="px-3 py-1.5 text-foreground-muted">{dataRowNum}</td>
                 {headers.map((h, colIdx) => {
                   const cellKey = `${dataRowNum}-${colIdx + 1}`;
                   const isError = errorCells.has(cellKey);
@@ -61,11 +61,11 @@ export default function DataPreview({ rows, errors, warnings }: DataPreviewProps
                       className={`px-3 py-1.5 max-w-[160px] truncate ${
                         isError ? 'bg-red-100 text-red-700 font-medium' :
                         isWarn ? 'bg-yellow-50 text-yellow-700' :
-                        'text-gray-700'
+                        'text-foreground-muted'
                       }`}
                       title={value}
                     >
-                      {value || <span className="text-gray-300 italic">ว่าง</span>}
+                      {value || <span className="text-foreground-muted/40 italic">ว่าง</span>}
                     </td>
                   );
                 })}
@@ -75,7 +75,7 @@ export default function DataPreview({ rows, errors, warnings }: DataPreviewProps
         </tbody>
       </table>
       {rows.length > 50 && (
-        <p className="text-xs text-gray-400 px-3 py-2">
+        <p className="text-xs text-foreground-muted px-3 py-2">
           แสดง {rowIndicesToShow.length} จาก {rows.length} แถว (เฉพาะแถวที่มีปัญหาและแถวแรก)
         </p>
       )}

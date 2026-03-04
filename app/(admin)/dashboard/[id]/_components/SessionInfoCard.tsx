@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 export interface SessionInfo {
   name: string;
@@ -20,16 +20,16 @@ export default function SessionInfoCard({ value, onChange }: SessionInfoCardProp
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
+    <div className="bg-surface border border-border rounded-xl p-5 space-y-4">
       <div className="flex items-center gap-2">
         <span className="text-lg">📋</span>
-        <h2 className="font-semibold text-gray-800">ข้อมูลตารางสอน</h2>
+        <h2 className="font-semibold text-foreground">ข้อมูลตารางสอน</h2>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-3">
         {/* Name */}
         <div className="flex-1 space-y-1">
-          <label className="block text-xs font-medium text-gray-500">
+          <label className="block text-xs font-medium text-foreground-muted">
             ชื่อตาราง <span className="text-red-400">*</span>
           </label>
           <input
@@ -37,19 +37,19 @@ export default function SessionInfoCard({ value, onChange }: SessionInfoCardProp
             value={value.name}
             onChange={(e) => set('name', e.target.value)}
             placeholder="เช่น ตารางสอน ภาคเรียนที่ 1/2568"
-            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-border-strong outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all"
           />
         </div>
 
         {/* Semester */}
         <div className="w-full sm:w-32 space-y-1">
-          <label className="block text-xs font-medium text-gray-500">
+          <label className="block text-xs font-medium text-foreground-muted">
             ภาคเรียน <span className="text-red-400">*</span>
           </label>
           <select
             value={value.semester}
             onChange={(e) => set('semester', Number(e.target.value) as 1 | 2)}
-            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-border-strong outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all bg-surface"
           >
             <option value={1}>1</option>
             <option value={2}>2</option>
@@ -58,13 +58,13 @@ export default function SessionInfoCard({ value, onChange }: SessionInfoCardProp
 
         {/* Year */}
         <div className="w-full sm:w-36 space-y-1">
-          <label className="block text-xs font-medium text-gray-500">
+          <label className="block text-xs font-medium text-foreground-muted">
             ปีการศึกษา <span className="text-red-400">*</span>
           </label>
           <select
             value={value.year}
             onChange={(e) => set('year', Number(e.target.value))}
-            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all bg-white"
+            className="w-full px-3 py-2 text-sm rounded-lg border border-border-strong outline-none focus:border-primary focus:ring-2 focus:ring-primary-light transition-all bg-surface"
           >
             {YEAR_OPTIONS.map((y) => (
               <option key={y} value={y}>{y}</option>

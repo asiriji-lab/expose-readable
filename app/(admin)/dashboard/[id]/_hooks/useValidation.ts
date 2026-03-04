@@ -80,12 +80,12 @@ export function useValidation(sheetData: SheetData) {
     }
 
     // ── Phase 2 ── referential, needs lookups
-    const lookups = buildLookups(phase1Results);
-
-    // preplace structural
+    // preplace must be validated first so its slots are available in buildLookups
     for (const tab of PHASE_2_TABS) setTabState(tab, { status: 'validating' });
 
     const preplaceStructural = validatePreplace(sheetData['preplace'] ?? []);
+    const lookups = buildLookups([...phase1Results, preplaceStructural]);
+
     const scoutStructural = validateScout(sheetData['scout'] ?? []);
     const electiveStructural = validateElective(sheetData['elective'] ?? []);
     const curriculumStructural = validateCurriculum(sheetData['curriculum'] ?? []);

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { TabName, TabState } from '../../../validators/types';
 import DataPreview from './DataPreview';
@@ -27,27 +27,27 @@ export default function ErrorPanel({ tabName, state, sheetUrl, onClose }: ErrorP
       />
 
       {/* Panel */}
-      <div className="fixed top-0 right-0 h-full w-full max-w-2xl bg-white shadow-2xl z-50 flex flex-col overflow-hidden">
+      <div className="fixed top-0 right-0 h-full w-full max-w-2xl bg-surface shadow-2xl z-50 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
-            <h2 className="text-lg font-semibold text-gray-800">
-              {TAB_THAI_LABEL[tabName]} <span className="text-sm font-normal text-gray-400">({tabName})</span>
+            <h2 className="text-lg font-semibold text-foreground">
+              {TAB_THAI_LABEL[tabName]} <span className="text-sm font-normal text-foreground-muted">({tabName})</span>
             </h2>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-foreground-muted">
               {result?.rowCount ?? 0} แถว ·{' '}
               {result?.errors.length ?? 0} ข้อผิดพลาด ·{' '}
               {result?.warnings.length ?? 0} คำเตือน
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">✕</button>
+          <button onClick={onClose} className="text-foreground-muted hover:text-foreground-muted text-2xl leading-none">✕</button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
           {/* Error list */}
           {result && (result.errors.length > 0 || result.warnings.length > 0) ? (
             <div className="px-6 py-4 space-y-2">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">
+              <h3 className="text-sm font-semibold text-foreground-muted mb-3">
                 รายการข้อผิดพลาด / คำเตือน
               </h3>
               {[...result.errors, ...result.warnings].map((e, idx) => (
@@ -77,7 +77,7 @@ export default function ErrorPanel({ tabName, state, sheetUrl, onClose }: ErrorP
           {/* Data preview */}
           {result && result.parsedRows.length > 0 && (
             <div className="px-6 pb-6">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">ตัวอย่างข้อมูล</h3>
+              <h3 className="text-sm font-semibold text-foreground-muted mb-3">ตัวอย่างข้อมูล</h3>
               <DataPreview
                 rows={result.parsedRows}
                 errors={result.errors}
@@ -88,15 +88,15 @@ export default function ErrorPanel({ tabName, state, sheetUrl, onClose }: ErrorP
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200">
-          <p className="text-xs text-gray-500 mb-3">
+        <div className="px-6 py-4 border-t border-border">
+          <p className="text-xs text-foreground-muted mb-3">
             💡 แก้ไขข้อมูลใน Google Sheet แล้วกด "ดึงข้อมูลและตรวจสอบ" อีกครั้ง
           </p>
           <a
             href={sheetUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+            className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary font-medium"
           >
             🔗 เปิด Google Sheet ↗
           </a>

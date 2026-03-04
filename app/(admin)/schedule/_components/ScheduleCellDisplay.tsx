@@ -11,7 +11,7 @@ export default function ScheduleCellDisplay({ data, visibleLabels = ['Teacher', 
 
     // Determine background color based on variant
     const bgColor = !hasData
-        ? 'bg-white'
+        ? 'bg-surface'
         : data.variant === 'red'
             ? 'bg-pink-100'
             : 'bg-green-50';
@@ -20,25 +20,25 @@ export default function ScheduleCellDisplay({ data, visibleLabels = ['Teacher', 
         <div className={`flex flex-col h-full w-full ${bgColor} ${className}`}>
             {/* Subject */}
             {visibleLabels.includes('Subject') && (
-                <div className={`px-2 py-2 text-xs font-semibold text-blue-700 h-10 flex items-center justify-center ${visibleLabels.length > 1 && visibleLabels.indexOf('Subject') > 0 ? 'border-t border-gray-200' : ''}`}>
+                <div className={`px-2 py-2 text-xs font-semibold text-primary h-10 flex items-center justify-center ${visibleLabels.length > 1 && visibleLabels.indexOf('Subject') > 0 ? 'border-t border-border' : ''}`}>
                     {data?.subject || ''}
                 </div>
             )}
             {/* Teacher */}
             {visibleLabels.includes('Teacher') && (
-                <div className={`px-2 py-2 text-xs font-semibold text-gray-800 h-10 flex items-center justify-center ${visibleLabels.length > 1 && visibleLabels.indexOf('Teacher') > 0 ? 'border-t border-gray-200' : ''}`}>
+                <div className={`px-2 py-2 text-xs font-semibold text-foreground h-10 flex items-center justify-center ${visibleLabels.length > 1 && visibleLabels.indexOf('Teacher') > 0 ? 'border-t border-border' : ''}`}>
                     {data?.teacherName?.charAt(0)} {data?.teacher}
                 </div>
             )}
             {/* Class */}
             {visibleLabels.includes('Class') && (
-                <div className={`px-2 py-2 text-xs text-gray-700 h-10 flex items-center justify-center ${visibleLabels.length > 1 && visibleLabels.indexOf('Class') > 0 ? 'border-t border-gray-200' : ''}`}>
+                <div className={`px-2 py-2 text-xs text-foreground-muted h-10 flex items-center justify-center ${visibleLabels.length > 1 && visibleLabels.indexOf('Class') > 0 ? 'border-t border-border' : ''}`}>
                     {data?.classCode || ''}
                 </div>
             )}
             {/* Room */}
             {visibleLabels.includes('Room') && (
-                <div className={`px-2 py-2 text-xs text-gray-700 h-10 flex items-center justify-center ${visibleLabels.length > 1 && visibleLabels.indexOf('Room') > 0 ? 'border-t border-gray-200' : ''}`}>
+                <div className={`px-2 py-2 text-xs text-foreground-muted h-10 flex items-center justify-center ${visibleLabels.length > 1 && visibleLabels.indexOf('Room') > 0 ? 'border-t border-border' : ''}`}>
                     {data?.room || ''}
                 </div>
             )}

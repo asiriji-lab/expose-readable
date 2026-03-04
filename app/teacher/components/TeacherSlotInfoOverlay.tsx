@@ -18,49 +18,49 @@ export default function TeacherSlotInfoOverlay({ isOpen, day, slot, item, onClos
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
 
-      <div className="relative w-[360px] max-w-[92vw] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl">
-        <div className="bg-indigo-600 px-5 py-4">
-          <h3 className="text-2xl font-medium text-white">Slot {slot} : {day}</h3>
+      <div className="relative w-[360px] max-w-[92vw] overflow-hidden rounded-lg border border-border bg-surface shadow-xl">
+        <div className="bg-primary px-5 py-4">
+          <h3 className="text-lg font-semibold text-primary-foreground">Slot {slot} : {day}</h3>
         </div>
 
-        <div className="px-5 pt-5 pb-24 bg-gray-50 min-h-[360px]">
-          <h4 className="text-xl font-semibold text-gray-900 mb-5">Slots Info</h4>
+        <div className="px-5 pt-5 pb-24 bg-surface-alt min-h-[360px]">
+          <h4 className="text-lg font-semibold text-foreground mb-5">Slots Info</h4>
 
           <div className="space-y-3">
             <div className="grid grid-cols-[82px_1fr] items-center gap-3">
-              <label className="text-base text-gray-500 text-right">Subject</label>
+              <label className="text-base text-foreground-muted text-right">Subject</label>
               <input
                 readOnly
                 value={item?.subjectCode || ''}
-                className="h-11 w-full rounded border border-gray-300 bg-gray-100 px-3 text-base text-gray-700"
+                className="h-11 w-full rounded border border-border bg-surface-alt px-3 text-base text-foreground"
               />
             </div>
 
             <div className="grid grid-cols-[82px_1fr] items-center gap-3">
-              <label className="text-base text-gray-500 text-right">Class</label>
+              <label className="text-base text-foreground-muted text-right">Class</label>
               <input
                 readOnly
                 value={item?.classCode || ''}
-                className="h-11 w-full rounded border border-gray-300 bg-gray-100 px-3 text-base text-gray-700"
+                className="h-11 w-full rounded border border-border bg-surface-alt px-3 text-base text-foreground"
               />
             </div>
 
             <div className="grid grid-cols-[82px_1fr] items-center gap-3">
-              <label className="text-base text-gray-500 text-right">Room</label>
+              <label className="text-base text-foreground-muted text-right">Room</label>
               <input
                 readOnly
                 value={item?.room || ''}
-                className="h-11 w-full rounded border border-gray-300 bg-gray-100 px-3 text-base text-gray-700"
+                className="h-11 w-full rounded border border-border bg-surface-alt px-3 text-base text-foreground"
               />
             </div>
           </div>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 px-4 py-3 bg-gray-50 flex items-center justify-between">
+        <div className="absolute bottom-0 left-0 right-0 px-4 py-3 bg-surface-alt border-t border-border flex items-center justify-between">
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-9 items-center gap-2 rounded-xl border border-gray-300 bg-gray-100 px-3 text-sm text-gray-600 hover:bg-gray-200 transition-colors"
+            className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm text-foreground-muted hover:bg-surface-alt transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
@@ -69,7 +69,7 @@ export default function TeacherSlotInfoOverlay({ isOpen, day, slot, item, onClos
           <button
             type="button"
             onClick={onClose}
-            className="h-9 rounded-xl bg-indigo-600 px-5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+            className="h-9 rounded-xl bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary-hover transition-colors"
           >
             Select
           </button>

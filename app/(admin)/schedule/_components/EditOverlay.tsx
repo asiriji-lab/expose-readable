@@ -53,11 +53,11 @@ export default function EditOverlay({ isOpen, onClose, onSave, initialData }: Ed
 
     return (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-md z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+            <div className="bg-surface rounded-lg shadow-xl w-full max-w-md overflow-hidden">
                 {/* Header */}
-                <div className="bg-blue-600 px-6 py-4 flex justify-between items-center">
+                <div className="bg-primary px-6 py-4 flex justify-between items-center">
                     <h3 className="text-white text-lg font-bold">Edit Schedule</h3>
-                    <button onClick={onClose} className="text-blue-100 hover:text-white">
+                    <button onClick={onClose} className="text-white/70 hover:text-white">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -70,20 +70,20 @@ export default function EditOverlay({ isOpen, onClose, onSave, initialData }: Ed
                     {/* Teacher */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">T.Code</label>
+                            <label className="block text-sm font-medium text-foreground-muted mb-1">T.Code</label>
                             <input
                                 type="text"
-                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                                className="w-full border border-border-strong rounded px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none text-foreground"
                                 value={teacher}
                                 onChange={(e) => setTeacher(e.target.value)}
                                 placeholder="Ex. 9301"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                            <label className="block text-sm font-medium text-foreground-muted mb-1">Name</label>
                             <input
                                 type="text"
-                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                                className="w-full border border-border-strong rounded px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none text-foreground"
                                 value={teacherName}
                                 onChange={(e) => setTeacherName(e.target.value)}
                                 placeholder="Ex. Somchai"
@@ -93,10 +93,10 @@ export default function EditOverlay({ isOpen, onClose, onSave, initialData }: Ed
 
                     {/* Subject */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Subject Code</label>
+                        <label className="block text-sm font-medium text-foreground-muted mb-1">Subject Code</label>
                         <input
                             type="text"
-                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                            className="w-full border border-border-strong rounded px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none text-foreground"
                             value={subjectCode}
                             onChange={(e) => setSubjectCode(e.target.value)}
                             placeholder="Ex. S1001"
@@ -105,10 +105,10 @@ export default function EditOverlay({ isOpen, onClose, onSave, initialData }: Ed
 
                     {/* Class */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Class</label>
+                        <label className="block text-sm font-medium text-foreground-muted mb-1">Class</label>
                         <input
                             type="text"
-                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                            className="w-full border border-border-strong rounded px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none text-foreground"
                             value={classCode}
                             onChange={(e) => setClassCode(e.target.value)}
                             placeholder="Ex. 6/15"
@@ -118,20 +118,20 @@ export default function EditOverlay({ isOpen, onClose, onSave, initialData }: Ed
                     {/* Room */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Room Code</label>
+                            <label className="block text-sm font-medium text-foreground-muted mb-1">Room Code</label>
                             <input
                                 type="text"
-                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                                className="w-full border border-border-strong rounded px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none text-foreground"
                                 value={room}
                                 onChange={(e) => setRoom(e.target.value)}
                                 placeholder="Ex. 7401"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Room Name</label>
+                            <label className="block text-sm font-medium text-foreground-muted mb-1">Room Name</label>
                             <input
                                 type="text"
-                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                                className="w-full border border-border-strong rounded px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none text-foreground"
                                 value={roomName}
                                 onChange={(e) => setRoomName(e.target.value)}
                                 placeholder="Ex. Lab 1"
@@ -144,13 +144,13 @@ export default function EditOverlay({ isOpen, onClose, onSave, initialData }: Ed
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 text-sm font-medium"
+                            className="px-4 py-2 border border-border-strong rounded text-foreground-muted hover:bg-background text-sm font-medium"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-bold shadow-sm"
+                            className="px-4 py-2 bg-primary text-white rounded hover:bg-primary-hover text-sm font-bold shadow-sm"
                         >
                             Save Changes
                         </button>

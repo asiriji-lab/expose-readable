@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 /**
  * TODO: Google Sheets Integration
@@ -27,17 +27,17 @@ export default function SheetEmbed({ spreadsheetId }: SheetEmbedProps) {
     : null;
 
   return (
-    <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-6 space-y-4">
+    <div className="rounded-xl border-2 border-dashed border-border bg-background p-6 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2">
         <span className="text-lg">📊</span>
-        <h2 className="font-semibold text-gray-700">Google Sheet</h2>
+        <h2 className="font-semibold text-foreground-muted">Google Sheet</h2>
         <span className="ml-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 border border-yellow-200">
           🚧 Coming Soon
         </span>
       </div>
 
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-foreground-muted">
         เมื่อระบบพร้อม ผู้ดูแลจะสร้าง Google Sheet อัตโนมัติต่อ Session
         และวางลิงก์ที่นี่เพื่อดึงข้อมูลทั้ง 8 แท็บโดยอัตโนมัติ
       </p>
@@ -49,22 +49,22 @@ export default function SheetEmbed({ spreadsheetId }: SheetEmbedProps) {
           disabled
           placeholder="https://docs.google.com/spreadsheets/d/..."
           defaultValue={sheetUrl ?? ''}
-          className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-400 placeholder:text-gray-300 cursor-not-allowed"
+          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground-muted placeholder:text-foreground-muted/40 cursor-not-allowed"
         />
         <button
           disabled
-          className="rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-400 cursor-not-allowed whitespace-nowrap"
+          className="rounded-lg bg-border px-4 py-2 text-sm font-semibold text-foreground-muted cursor-not-allowed whitespace-nowrap"
         >
           เชื่อมต่อ
         </button>
       </div>
 
       {/* Developer checklist */}
-      <div className="rounded-lg bg-white border border-gray-200 p-4">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+      <div className="rounded-lg bg-surface border border-border p-4">
+        <p className="text-xs font-semibold text-foreground-muted uppercase tracking-wide mb-3">
           Developer Checklist
         </p>
-        <ol className="space-y-2 text-sm text-gray-400 list-none">
+        <ol className="space-y-2 text-sm text-foreground-muted list-none">
           {[
             'สร้าง Google Cloud Project + เปิดใช้ Sheets API & Drive API',
             'สร้าง Service Account → เพิ่ม GOOGLE_SERVICE_ACCOUNT_KEY ใน .env.local',
@@ -75,14 +75,14 @@ export default function SheetEmbed({ spreadsheetId }: SheetEmbedProps) {
             'Wire useGoogleSheet() + fetchSheet() ใน page.tsx',
           ].map((step, i) => (
             <li key={i} className="flex items-start gap-2">
-              <span className="mt-0.5 text-gray-300 font-mono text-xs">{i + 1}.</span>
+              <span className="mt-0.5 text-foreground-muted/40 font-mono text-xs">{i + 1}.</span>
               {step}
             </li>
           ))}
         </ol>
       </div>
 
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-foreground-muted">
         💡 ระหว่างรอ: Validate ผ่าน manual CSV upload ด้านล่างได้เลย
       </p>
     </div>

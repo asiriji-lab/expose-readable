@@ -67,7 +67,7 @@ export default function TeachingSlotSidebar({ presets, onDropPayload, onDeletePr
                                 e.dataTransfer.setData('text/plain', json); // Fallback
                                 e.dataTransfer.effectAllowed = 'move';
                             }}
-                            className="bg-white border border-gray-400 rounded-lg shadow-sm relative group cursor-grab hover:shadow-md transition-shadow overflow-hidden mx-auto w-[160px] h-[100px]"
+                            className="bg-surface border border-border-strong rounded-lg shadow-sm relative group cursor-grab hover:shadow-md transition-shadow overflow-hidden mx-auto w-[160px] h-[100px]"
                         >
                             {/* Content */}
                             <ScheduleCellDisplay
@@ -79,7 +79,7 @@ export default function TeachingSlotSidebar({ presets, onDropPayload, onDeletePr
                             {/* Delete button (only for manual cleanup, but drag also removes now) */}
                             <button
                                 onClick={() => onDeletePreset?.(index)}
-                                className="absolute top-1 right-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                className="absolute top-1 right-1 text-foreground-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-20"
                             >
                                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

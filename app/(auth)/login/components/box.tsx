@@ -74,33 +74,33 @@ const Box: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-8 w-[450px] min-h-[600px]">
+    <div className="bg-surface rounded-2xl shadow-xl p-8 w-[450px] min-h-[600px]">
       <form onSubmit={handleLogin}>
         {/* Title */}
         <h1 className="text-2xl font-bold text-center mb-2">Welcome to ScheDool</h1>
-        <p className="text-gray-500 text-center mb-6">Select your role to access the platform</p>
+        <p className="text-foreground-muted text-center mb-6">Select your role to access the platform</p>
 
         {/* Role selection (Now read-only or highlighted based on username) */}
         <div className="mb-6">
           <p className="mb-3 font-medium">Your detected role:</p>
           <div className="grid grid-cols-3 gap-3">
             {/* Admin */}
-            <div className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all ${selectedRole === 'admin' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 opacity-50'
-              }`}>
+            <div
+              className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all ${selectedRole === 'admin' ? 'border-primary bg-primary-light' : 'border-border opacity-50'}`}>
               <Shield className="w-7 h-7 mb-2" />
               <div className="font-semibold text-sm">Admin</div>
             </div>
 
             {/* Teacher */}
-            <div className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all ${selectedRole === 'teacher' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 opacity-50'
-              }`}>
+            <div
+              className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all ${selectedRole === 'teacher' ? 'border-primary bg-primary-light' : 'border-border opacity-50'}`}>
               <BookOpen className="w-8 h-8 mb-2" />
               <div className="font-semibold text-sm">Teacher</div>
             </div>
 
             {/* Student */}
-            <div className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all ${selectedRole === 'student' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 opacity-50'
-              }`}>
+            <div
+              className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all ${selectedRole === 'student' ? 'border-primary bg-primary-light' : 'border-border opacity-50'}`}>
               <GraduationCap className="w-8 h-8 mb-2" />
               <div className="font-semibold text-sm">Student</div>
             </div>
@@ -118,7 +118,7 @@ const Box: React.FC = () => {
             onChange={(e) => setUsername(e.target.value)}
             onBlur={detectRole}
             onKeyDown={(e) => e.key === 'Enter' && detectRole()}
-            className={`w-full p-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${accountExists === false ? 'border-red-500 bg-red-50' : 'border-gray-200 focus:border-indigo-500'}`}
+            className={`w-full p-3 border-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${accountExists === false ? 'border-danger bg-danger-light' : 'border-border focus:border-primary'}`}
           />
           {accountExists === false && (
             <p className="text-red-500 text-sm mt-1">Account not found. Please check your username/email.</p>
@@ -136,12 +136,12 @@ const Box: React.FC = () => {
               placeholder="Enter password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className={`w-full p-3 border-2 rounded-lg focus:outline-none pr-12 focus:ring-2 focus:ring-indigo-500 ${accountExists === false ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed' : 'border-gray-200 focus:border-indigo-500'}`}
+              className={`w-full p-3 border-2 rounded-lg focus:outline-none pr-12 focus:ring-2 focus:ring-primary ${accountExists === false ? 'border-border bg-surface-alt opacity-50 cursor-not-allowed' : 'border-border focus:border-primary'}`}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-gray-500"
+              className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-foreground-muted"
             >
               {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
             </button>
@@ -152,7 +152,7 @@ const Box: React.FC = () => {
         <button
           type="submit"
           disabled={loading || accountExists === false}
-          className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full bg-primary text-primary-foreground py-3 rounded-lg hover:bg-primary-hover transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Entering...' : 'Enter Platform →'}
         </button>
@@ -160,7 +160,7 @@ const Box: React.FC = () => {
         <div className="mt-4 flex justify-center">
           <Link
             href="/register"
-            className="text-gray-400 text-sm cursor-pointer hover:text-gray-600"
+            className="text-foreground-muted text-sm cursor-pointer hover:text-foreground-muted"
           >
             Don't have an account? Register
           </Link>

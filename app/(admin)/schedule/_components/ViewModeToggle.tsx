@@ -49,9 +49,9 @@ export default function ViewModeToggle({ activeMode, onChange }: ViewModeToggleP
     const activeIndex = modes.findIndex((mode) => mode.id === activeMode);
 
     return (
-        <div className="relative inline-grid grid-cols-4 rounded-xl bg-gray-100 p-1 border border-gray-200 overflow-hidden">
+        <div className="relative inline-grid grid-cols-4 rounded-xl bg-surface-alt p-1 border border-border overflow-hidden">
             <span
-                className="absolute top-1 bottom-1 left-1 rounded-lg bg-white border border-gray-200 shadow-sm transition-transform duration-300 ease-out"
+                className="absolute top-1 bottom-1 left-1 rounded-lg bg-surface border border-border shadow-sm transition-transform duration-300 ease-out"
                 style={{
                     width: 'calc((100% - 8px) / 4)',
                     transform: `translateX(${activeIndex * 100}%)`,
@@ -62,8 +62,8 @@ export default function ViewModeToggle({ activeMode, onChange }: ViewModeToggleP
                     key={mode.id}
                     onClick={() => onChange(mode.id)}
                     className={`relative z-10 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${activeMode === mode.id
-                            ? 'text-indigo-600'
-                            : 'text-gray-800 hover:bg-white/60'
+                            ? 'text-primary'
+                            : 'text-foreground hover:bg-surface/60'
                         }`}
                 >
                     {mode.icon}

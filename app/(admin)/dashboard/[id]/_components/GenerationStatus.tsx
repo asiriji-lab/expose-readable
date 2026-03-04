@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 
@@ -46,16 +46,16 @@ export default function GenerationStatus({ state, sessionId }: GenerationStatusP
   }
 
   return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50 px-6 py-8 text-center space-y-4">
+    <div className="rounded-xl border border-primary-border bg-primary-light px-6 py-8 text-center space-y-4">
       <div className="text-4xl animate-spin">🔄</div>
-      <p className="text-lg font-semibold text-blue-800">กำลังสร้างตารางสอน...</p>
-      <div className="w-full bg-blue-100 rounded-full h-3 overflow-hidden">
+      <p className="text-lg font-semibold text-primary">กำลังสร้างตารางสอน...</p>
+      <div className="w-full bg-primary-light rounded-full h-3 overflow-hidden">
         <div
-          className="bg-blue-500 h-3 rounded-full transition-all duration-1000"
+          className="bg-primary h-3 rounded-full transition-all duration-1000"
           style={{ width: `${progress}%` }}
         />
       </div>
-      <p className="text-sm text-blue-600">ประมาณ 2–5 นาที</p>
+      <p className="text-sm text-primary">ประมาณ 2–5 นาที</p>
     </div>
   );
 }

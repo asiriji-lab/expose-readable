@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -45,23 +45,23 @@ export default function SessionDetailPage() {
   >('idle');
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <AdminHeader />
 
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Link href="/dashboard" className="hover:text-blue-600">
+        <div className="flex items-center gap-2 text-sm text-foreground-muted">
+          <Link href="/dashboard" className="hover:text-primary">
             ← รายการตารางสอน
           </Link>
           <span>/</span>
-          <span className="text-gray-800 font-medium">นำเข้าข้อมูล</span>
+          <span className="text-foreground font-medium">นำเข้าข้อมูล</span>
         </div>
 
         {/* Page header */}
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">นำเข้าข้อมูลตารางสอน</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-foreground">นำเข้าข้อมูลตารางสอน</h1>
+          <p className="text-sm text-foreground-muted mt-1">
             เชื่อมต่อ Google Sheet ที่มีข้อมูล 8 แท็บ แล้วตรวจสอบก่อนสร้างตาราง
           </p>
         </div>

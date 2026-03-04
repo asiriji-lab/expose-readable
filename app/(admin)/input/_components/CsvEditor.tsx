@@ -368,28 +368,28 @@ export default function CsvEditor({ file, onClose, onSave, validationRules, catc
     }, [validateValue]);
 
     return (
-        <div className="fixed inset-0 bg-white z-50 flex flex-col">
+        <div className="fixed inset-0 bg-surface z-50 flex flex-col">
             {/* Header */}
-            <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm z-10">
+            <header className="bg-surface border-b border-border px-6 py-4 flex items-center justify-between shadow-sm z-10">
                 <div className="flex items-center gap-4">
                     <button
                         onClick={onClose}
-                        className="text-gray-500 hover:text-gray-700 transition-colors"
+                        className="text-foreground-muted hover:text-foreground-muted transition-colors"
                     >
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                         </svg>
                     </button>
                     <div>
-                        <h1 className="text-xl font-bold text-gray-900">Edit {file.name.endsWith('.xlsx') ? 'Excel' : 'CSV'}</h1>
-                        <p className="text-sm text-gray-500">{file.name}</p>
+                        <h1 className="text-xl font-bold text-foreground">Edit {file.name.endsWith('.xlsx') ? 'Excel' : 'CSV'}</h1>
+                        <p className="text-sm text-foreground-muted">{file.name}</p>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-3">
                     <button
                         onClick={handleDownload}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors flex items-center gap-2"
+                        className="px-4 py-2 text-sm font-medium text-foreground-muted hover:bg-background rounded-lg border border-border transition-colors flex items-center gap-2"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -398,12 +398,12 @@ export default function CsvEditor({ file, onClose, onSave, validationRules, catc
                     </button>
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg border border-gray-200 transition-colors"
+                        className="px-4 py-2 text-sm font-medium text-foreground-muted hover:bg-background rounded-lg border border-border transition-colors"
                     >
                         Cancel
                     </button>
                     <button
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm"
+                        className="px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-hover rounded-lg transition-colors shadow-sm"
                         onClick={handleSave}
                     >
                         Save Changes
@@ -412,10 +412,10 @@ export default function CsvEditor({ file, onClose, onSave, validationRules, catc
             </header>
 
             {/* Editor Content */}
-            <div className="flex-1 bg-gray-50 overflow-hidden relative">
+            <div className="flex-1 bg-background overflow-hidden relative">
                 {isLoading ? (
                     <div className="flex items-center justify-center h-full">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                     </div>
                 ) : (
                     <Workbook

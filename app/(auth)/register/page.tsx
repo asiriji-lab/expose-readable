@@ -1,9 +1,9 @@
-import React from 'react';
+﻿import React from 'react';
 import Box from './components/box';
 
 const App: React.FC = () => {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-surface">
       {/* Owl Logo at Top */}
       <div className="mb-2">
         <img 

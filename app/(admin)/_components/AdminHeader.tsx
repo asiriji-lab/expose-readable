@@ -72,26 +72,26 @@ export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
     const currentRole = roleLabel || (user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Admin');
     const normalizedRole = currentRole.toLowerCase();
     const roleBadgeClass = normalizedRole === 'student'
-        ? 'bg-orange-100 text-orange-700'
+        ? 'bg-[var(--role-student-bg)] text-[var(--role-student)]'
         : normalizedRole === 'admin'
-            ? 'bg-purple-100 text-purple-700'
-            : 'bg-green-100 text-green-700';
+            ? 'bg-[var(--role-admin-bg)] text-[var(--role-admin)]'
+            : 'bg-[var(--role-teacher-bg)] text-[var(--role-teacher)]';
     // Use first letter of first name, else a generic icon SVG
     const avatarText = user?.firstName ? user.firstName.charAt(0).toUpperCase() : null;
 
     return (
-        <header className="bg-white border-b border-gray-200 w-full relative z-50">
+        <header className="bg-surface border-b border-border w-full relative z-50">
             <div className="max-w-7xl mx-auto px-6 py-3">
                 <div className="flex items-center justify-between h-10">
                     {/* Left: Logo and School Name */}
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
                             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                         </div>
-                        <h1 className="text-xl font-bold text-gray-900">ScheDool</h1>
-                        <span className="text-gray-400 text-sm md:text-base hidden sm:inline">Bodindecha School</span>
+                        <h1 className="text-xl font-bold text-foreground">ScheDool</h1>
+                        <span className="text-foreground-muted text-sm md:text-base hidden sm:inline">Bodindecha School</span>
                     </div>
 
                     {/* Right: Admin Badge and User Icon */}
@@ -103,12 +103,12 @@ export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
                         {/* Profile Trigger */}
                         <button
                             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                            className="w-9 h-9 bg-gray-200 hover:bg-gray-300 transition-colors rounded-full flex items-center justify-center font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                            className="w-9 h-9 bg-border hover:bg-border-strong transition-colors rounded-full flex items-center justify-center font-bold text-foreground-muted focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
                         >
                             {avatarText ? (
                                 <span>{avatarText}</span>
                             ) : (
-                                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-5 h-5 text-foreground-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                 </svg>
                             )}
@@ -116,12 +116,12 @@ export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
 
                         {/* Profile Dropdown */}
                         {isDropdownOpen && (
-                            <div className="absolute right-0 top-12 w-56 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden transform opacity-100 scale-100 transition-all origin-top-right">
-                                <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
-                                    <p className="text-sm font-semibold text-gray-900 truncate">
+                            <div className="absolute right-0 top-12 w-56 bg-surface rounded-xl shadow-xl border border-border overflow-hidden transform opacity-100 scale-100 transition-all origin-top-right">
+                                <div className="px-4 py-3 bg-background border-b border-border">
+                                    <p className="text-sm font-semibold text-foreground truncate">
                                         {user?.firstName} {user?.lastName}
                                     </p>
-                                    <p className="text-xs text-gray-500 truncate mt-0.5">
+                                    <p className="text-xs text-foreground-muted truncate mt-0.5">
                                         {user?.email}
                                     </p>
                                 </div>

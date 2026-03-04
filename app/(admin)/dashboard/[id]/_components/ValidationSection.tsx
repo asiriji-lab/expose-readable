@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { TabName, AllTabStates } from '../../../validators/types';
 import TabCard from './TabCard';
@@ -50,7 +50,7 @@ export default function ValidationSection({
       {/* Phase 1 */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-700">Phase 1: ตรวจโครงสร้าง</h3>
+          <h3 className="text-sm font-semibold text-foreground-muted">Phase 1: ตรวจโครงสร้าง</h3>
           {phase1Done && (
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
               PHASE_1_TABS.every((t) => tabStates[t].status !== 'errors')
@@ -71,7 +71,7 @@ export default function ValidationSection({
       {/* Phase 2 */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-700">Phase 2: ตรวจความสัมพันธ์</h3>
+          <h3 className="text-sm font-semibold text-foreground-muted">Phase 2: ตรวจความสัมพันธ์</h3>
           {phase1Done && PHASE_2_TABS.every((t) => tabStates[t].status !== 'locked') && (
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
               PHASE_2_TABS.every((t) => tabStates[t].status !== 'errors')
@@ -96,8 +96,8 @@ export default function ValidationSection({
         className={`
           w-full py-3 rounded-xl font-semibold text-sm transition-all
           ${isRunning
-            ? 'bg-blue-100 text-blue-400 cursor-not-allowed'
-            : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md'}
+            ? 'bg-primary-light text-foreground-muted cursor-not-allowed'
+            : 'bg-primary hover:bg-primary-hover text-white shadow-sm hover:shadow-md'}
         `}
       >
         {isRunning ? '🔄 กำลังตรวจสอบ...' : '▶ ตรวจสอบข้อมูลทั้งหมด'}
@@ -108,13 +108,13 @@ export default function ValidationSection({
         <div className={`rounded-xl border p-4 ${hasErrors ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}>
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="text-sm">
-              <span className="font-semibold text-gray-700">{totalRows} แถว</span>
-              <span className="mx-2 text-gray-400">·</span>
+              <span className="font-semibold text-foreground-muted">{totalRows} แถว</span>
+              <span className="mx-2 text-foreground-muted">·</span>
               <span className={`font-semibold ${totalErrors > 0 ? 'text-red-600' : 'text-green-600'}`}>
                 {totalErrors} ข้อผิดพลาด
               </span>
-              <span className="mx-2 text-gray-400">·</span>
-              <span className={`font-semibold ${totalWarnings > 0 ? 'text-yellow-600' : 'text-gray-400'}`}>
+              <span className="mx-2 text-foreground-muted">·</span>
+              <span className={`font-semibold ${totalWarnings > 0 ? 'text-yellow-600' : 'text-foreground-muted'}`}>
                 {totalWarnings} คำเตือน
               </span>
             </div>
@@ -134,7 +134,7 @@ export default function ValidationSection({
 function SubmitButton({ allPassed, hasErrors, totalWarnings }: { allPassed: boolean; hasErrors: boolean; totalWarnings: number }) {
   if (hasErrors) {
     return (
-      <button disabled className="px-5 py-2 rounded-lg text-sm bg-gray-200 text-gray-400 cursor-not-allowed font-semibold">
+      <button disabled className="px-5 py-2 rounded-lg text-sm bg-border text-foreground-muted cursor-not-allowed font-semibold">
         🚀 ส่งข้อมูล (ปิดใช้งาน)
       </button>
     );

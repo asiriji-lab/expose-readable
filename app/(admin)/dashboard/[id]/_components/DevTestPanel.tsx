@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useCallback } from 'react';
 import Papa from 'papaparse';
@@ -175,7 +175,7 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
                 onClick={() => setActiveTab(mode)}
                 className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   activeTab === mode
-                    ? 'bg-white text-yellow-800 shadow-sm'
+                    ? 'bg-surface text-yellow-800 shadow-sm'
                     : 'text-yellow-600 hover:text-yellow-800'
                 }`}
               >
@@ -194,7 +194,7 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
                   onChange={(e) => { setLinkInput(e.target.value); setLinkError(''); setLinkStatus('idle'); }}
                   onKeyDown={(e) => e.key === 'Enter' && handleFetchSheet()}
                   placeholder="https://docs.google.com/spreadsheets/d/..."
-                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-yellow-300 bg-white outline-none focus:border-yellow-500 focus:ring-2 focus:ring-yellow-100 transition-all"
+                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-yellow-300 bg-surface outline-none focus:border-yellow-500 focus:ring-2 focus:ring-yellow-100 transition-all"
                 />
                 <button
                   onClick={handleFetchSheet}
@@ -239,7 +239,7 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
                 className={`rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
-                  isDragging ? 'border-yellow-500 bg-yellow-100' : 'border-yellow-300 bg-white'
+                  isDragging ? 'border-yellow-500 bg-yellow-100' : 'border-yellow-300 bg-surface'
                 }`}
               >
                 <p className="text-sm text-yellow-700">
@@ -259,10 +259,10 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
                     <div
                       key={tab}
                       className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs border ${
-                        loaded ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
+                        loaded ? 'bg-green-50 border-green-200' : 'bg-surface border-border'
                       }`}
                     >
-                      <span className={loaded ? 'text-green-800 font-medium' : 'text-gray-500'}>
+                      <span className={loaded ? 'text-green-800 font-medium' : 'text-foreground-muted'}>
                         {TAB_META[tab].icon} {tab}
                         {loaded && (
                           <span className="ml-1 text-green-600 font-normal">({rowCount} rows)</span>

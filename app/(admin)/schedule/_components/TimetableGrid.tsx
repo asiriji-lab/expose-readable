@@ -51,7 +51,7 @@ export default function TimetableGrid({ scheduleData, viewMode, onCellClick, onD
                     <div
                         key={day}
                         // Multiply height by number of visible labels
-                        className={`flex items-center justify-center bg-white font-bold text-gray-800 text-sm`}
+                        className={`flex items-center justify-center bg-surface font-bold text-foreground text-sm`}
                         style={{ height: `${visibleLabels.length * 40}px` }}
                     >
                         {day}
@@ -60,19 +60,19 @@ export default function TimetableGrid({ scheduleData, viewMode, onCellClick, onD
             </div>
 
             {/* Wrapper for the Grid part (Labels + Slots) to have a unified border */}
-            <div className="flex flex-1 border border-gray-300 rounded-lg overflow-hidden ml-2">
+            <div className="flex flex-1 border border-border-strong rounded-lg overflow-hidden ml-2">
                 {/* Second column: Labels (Teacher, Class, Room) */}
-                <div className="flex flex-col border-r border-gray-300">
+                <div className="flex flex-col border-r border-border-strong">
                     {/* Slots header cell */}
-                    <div className="bg-gray-100 border-b border-gray-300 px-3 py-2 h-10 text-center text-sm font-bold text-gray-700 flex items-center justify-center">Slots</div>
+                    <div className="bg-surface-alt border-b border-border-strong px-3 py-2 h-10 text-center text-sm font-bold text-foreground-muted flex items-center justify-center">Slots</div>
 
                     {/* Labels repeated for each day */}
                     {days.map((day, dayIndex) => (
-                        <div key={day} className={`flex flex-col ${dayIndex < days.length - 1 ? 'border-b border-gray-300' : ''}`}>
+                        <div key={day} className={`flex flex-col ${dayIndex < days.length - 1 ? 'border-b border-border-strong' : ''}`}>
                             {visibleLabels.map((label, labelIndex) => (
                                 <div
                                     key={label}
-                                    className={`px-3 py-2 text-xs text-gray-600 bg-white h-10 flex items-center justify-center min-w-[80px] ${labelIndex < visibleLabels.length - 1 ? 'border-b border-gray-200' : ''}`}
+                                    className={`px-3 py-2 text-xs text-foreground-muted bg-surface h-10 flex items-center justify-center min-w-[80px] ${labelIndex < visibleLabels.length - 1 ? 'border-b border-border' : ''}`}
                                 >
                                     {label}
                                 </div>
@@ -85,9 +85,9 @@ export default function TimetableGrid({ scheduleData, viewMode, onCellClick, onD
                 <div className="flex-1 overflow-x-auto">
                     <div className="flex">
                         {slots.map((slot, slotIndex) => (
-                            <div key={slot} className={`flex flex-col flex-1 min-w-[80px] ${slotIndex < slots.length - 1 ? 'border-r border-gray-300' : ''}`}>
+                            <div key={slot} className={`flex flex-col flex-1 min-w-[80px] ${slotIndex < slots.length - 1 ? 'border-r border-border-strong' : ''}`}>
                                 {/* Slot header */}
-                                <div className="bg-gray-100 border-b border-gray-300 px-2 py-2 text-center text-sm font-bold text-gray-700 h-10 flex items-center justify-center">
+                                <div className="bg-surface-alt border-b border-border-strong px-2 py-2 text-center text-sm font-bold text-foreground-muted h-10 flex items-center justify-center">
                                     {slot}
                                 </div>
 
@@ -130,7 +130,7 @@ export default function TimetableGrid({ scheduleData, viewMode, onCellClick, onD
                                                     }
                                                 }
                                             }}
-                                            className={`flex flex-col cursor-pointer hover:opacity-80 transition-opacity ${dayIndex < days.length - 1 ? 'border-b border-gray-300' : ''}`}
+                                            className={`flex flex-col cursor-pointer hover:opacity-80 transition-opacity ${dayIndex < days.length - 1 ? 'border-b border-border-strong' : ''}`}
                                             onClick={() => onCellClick?.(day, slot)}
                                         >
                                             <ScheduleCellDisplay

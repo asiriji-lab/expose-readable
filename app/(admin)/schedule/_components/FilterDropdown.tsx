@@ -112,17 +112,17 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
     return (
         <div className="flex items-center gap-2">
             {/* Label on the left with fixed width */}
-            <label className={`text-xs text-black font-medium whitespace-nowrap ${labelClassName}`}>{label}</label>
+            <label className={`text-xs text-foreground font-medium whitespace-nowrap ${labelClassName}`}>{label}</label>
 
             {/* Dropdown */}
             <div className="relative">
                 <button
                     onClick={() => setIsOpen(!isOpen)}
-                    className="flex items-center justify-between gap-2 px-3 py-1.5 border border-gray-300 rounded bg-white hover:bg-gray-50 transition-colors text-xs min-w-[100px]"
+                    className="flex items-center justify-between gap-2 px-3 py-1.5 border border-border-strong rounded bg-surface hover:bg-background transition-colors text-xs min-w-[100px]"
                 >
-                    <span className="text-gray-900">{value}</span>
+                    <span className="text-foreground">{value}</span>
                     <svg
-                        className={`w-3 h-3 text-gray-500 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
+                        className={`w-3 h-3 text-foreground-muted transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -133,95 +133,86 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
 
                 {isOpen && (
                     <>
+                        {/* Transparent backdrop — closes dropdown on outside click */}
                         <div
-                            className="fixed inset-0 z-30 bg-black/20"
+                            className="fixed inset-0 z-30"
                             onClick={() => {
                                 setIsOpen(false);
                                 setSearchText('');
                             }}
                         />
-                        <div className="fixed top-1/2 left-1/2 z-40 w-[560px] max-w-[92vw] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden">
-                            <div className="bg-indigo-100 px-5 py-3 border-b border-gray-200">
-                                <h3 className="text-2xl font-semibold text-gray-900">Search : {searchTitle}</h3>
-                            </div>
 
-                            <div className="px-5 py-4 border-b border-gray-100">
-                                <p className="text-3xl leading-none mb-3 text-gray-900">Filter</p>
-                                <div className="flex flex-wrap gap-x-4 gap-y-2 mb-3">
-                                    {searchableFields.map((field) => (
-                                        <label key={field} className="inline-flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600"
-                                                checked={selectedFields.includes(field)}
-                                                onChange={() => toggleField(field)}
-                                            />
-                                            <span>{field}</span>
-                                        </label>
-                                    ))}
-                                </div>
-
+                        {/* Anchored popover */}
+                        <div className="absolute left-0 top-full mt-1 z-40 w-[380px] max-w-[90vw] rounded-xl border border-border bg-surface shadow-xl overflow-hidden animate-in fade-in-0 zoom-in-95">
+                            {/* Search input (always visible at top) */}
+                            <div className="px-3 py-2 border-b border-border">
                                 <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        className="px-3 py-1 rounded bg-indigo-100 border border-indigo-200 text-sm font-semibold text-gray-700"
-                                    >
-                                        Search
-                                    </button>
+                                    <svg className="w-4 h-4 text-foreground-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                    </svg>
                                     <input
                                         type="text"
                                         value={searchText}
                                         onChange={(event) => setSearchText(event.target.value)}
-                                        placeholder="Text"
-                                        className="flex-1 border border-gray-300 rounded px-2.5 py-1.5 text-sm text-gray-700"
+                                        placeholder={`Search ${searchTitle.toLowerCase()}…`}
+                                        className="flex-1 bg-transparent text-sm text-foreground placeholder:text-foreground-muted outline-none"
+                                        autoFocus
                                     />
                                 </div>
                             </div>
 
-                            <div className="max-h-[320px] overflow-auto px-5 py-3">
-                                <div className="border border-gray-300 rounded-sm overflow-hidden">
-                                    <div className="grid border-b border-gray-300 bg-indigo-100 text-xs font-semibold text-gray-700" style={{ gridTemplateColumns: `repeat(${searchableFields.length}, minmax(0, 1fr))` }}>
-                                        {searchableFields.map((field) => (
-                                            <div key={field} className="px-3 py-2 border-r border-gray-300 last:border-r-0">{field}</div>
-                                        ))}
-                                    </div>
-
-                                    {filteredRecords.map((record) => (
-                                        <button
-                                            key={record.value}
-                                            type="button"
-                                            onClick={() => {
-                                                onChange(record.value);
-                                                setIsOpen(false);
-                                                setSearchText('');
-                                            }}
-                                            className={`grid w-full text-left text-sm border-b border-gray-200 last:border-b-0 hover:bg-gray-50 transition-colors ${value === record.value ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}`}
-                                            style={{ gridTemplateColumns: `repeat(${searchableFields.length}, minmax(0, 1fr))` }}
-                                        >
-                                            {searchableFields.map((field) => (
-                                                <span key={field} className="px-3 py-2 border-r border-gray-200 last:border-r-0 truncate">
-                                                    {record.fields[field] || '-'}
-                                                </span>
-                                            ))}
-                                        </button>
-                                    ))}
-                                    {filteredRecords.length === 0 && (
-                                        <p className="px-3 py-6 text-center text-sm text-gray-500">No result found</p>
-                                    )}
-                                </div>
+                            {/* Field filter chips */}
+                            <div className="px-3 py-1.5 border-b border-border flex flex-wrap gap-1.5">
+                                {searchableFields.map((field) => (
+                                    <button
+                                        key={field}
+                                        type="button"
+                                        onClick={() => toggleField(field)}
+                                        className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${selectedFields.includes(field)
+                                            ? 'bg-primary text-white'
+                                            : 'bg-surface-alt text-foreground-muted hover:bg-border'
+                                            }`}
+                                    >
+                                        {field}
+                                    </button>
+                                ))}
                             </div>
 
-                            <div className="px-5 py-3 flex justify-end border-t border-gray-100">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsOpen(false);
-                                        setSearchText('');
-                                    }}
-                                    className="px-6 py-1 rounded bg-indigo-100 text-gray-700 font-semibold hover:bg-indigo-200 transition-colors"
+                            {/* Results table */}
+                            <div className="max-h-[260px] overflow-auto">
+                                {/* Table header */}
+                                <div
+                                    className="grid sticky top-0 bg-surface-alt text-xs font-semibold text-foreground-muted border-b border-border"
+                                    style={{ gridTemplateColumns: `repeat(${searchableFields.length}, minmax(0, 1fr))` }}
                                 >
-                                    Back
-                                </button>
+                                    {searchableFields.map((field) => (
+                                        <div key={field} className="px-3 py-1.5 border-r border-border last:border-r-0 truncate">{field}</div>
+                                    ))}
+                                </div>
+
+                                {/* Table rows */}
+                                {filteredRecords.map((record) => (
+                                    <button
+                                        key={record.value}
+                                        type="button"
+                                        onClick={() => {
+                                            onChange(record.value);
+                                            setIsOpen(false);
+                                            setSearchText('');
+                                        }}
+                                        className={`grid w-full text-left text-sm border-b border-border last:border-b-0 hover:bg-surface-alt transition-colors ${value === record.value ? 'bg-primary-light text-primary font-medium' : 'text-foreground-muted'}`}
+                                        style={{ gridTemplateColumns: `repeat(${searchableFields.length}, minmax(0, 1fr))` }}
+                                    >
+                                        {searchableFields.map((field) => (
+                                            <span key={field} className="px-3 py-1.5 border-r border-border last:border-r-0 truncate">
+                                                {record.fields[field] || '-'}
+                                            </span>
+                                        ))}
+                                    </button>
+                                ))}
+                                {filteredRecords.length === 0 && (
+                                    <p className="px-3 py-4 text-center text-sm text-foreground-muted">No results</p>
+                                )}
                             </div>
                         </div>
                     </>

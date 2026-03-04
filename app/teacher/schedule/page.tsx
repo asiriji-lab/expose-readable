@@ -51,7 +51,7 @@ export default function TeacherSchedulePage() {
           teacherOnlySchedule[day][slot] = {
             ...item,
             teacher: teacherCode,
-            teacherName: 'ธนาโชค ใจดี',
+            teacherName: 'เธเธเธฒเนเธเธ เนเธเธ”เธต',
           };
         }
       });
@@ -83,16 +83,16 @@ export default function TeacherSchedulePage() {
   const hasUnreadInbox = enableInboxAlert && inboxMessages.some((message) => message.unread);
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-background">
       <AdminHeader roleLabel="Teacher" />
 
-      <header className="bg-white border-b border-gray-200 px-6 py-3">
+      <header className="bg-surface border-b border-border px-6 py-3">
         <div className="grid grid-cols-[auto_1fr_auto] gap-x-8 gap-y-2 py-2 items-start">
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3 h-8">
               <button
                 onClick={() => router.push('/teacher/dashboard')}
-                className="flex items-center gap-1 text-gray-600 hover:text-gray-900 transition-colors"
+                className="flex items-center gap-1 text-foreground-muted hover:text-foreground transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -101,15 +101,15 @@ export default function TeacherSchedulePage() {
               </button>
 
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-gray-900">My Teaching Schedule</h2>
-                <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-semibold">Read only</span>
+                <h2 className="text-sm font-bold text-foreground">My Teaching Schedule</h2>
+                <span className="px-1.5 py-0.5 bg-primary-light text-primary rounded text-xs font-semibold">Read only</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2 h-10">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 rounded text-sm text-gray-700">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-surface border border-border-strong rounded text-sm text-foreground-muted">
                 <span className="font-medium">Total periods:</span>
-                <span className="font-bold text-gray-900">{totalPeriods}</span>
+                <span className="font-bold text-foreground">{totalPeriods}</span>
               </div>
             </div>
           </div>
@@ -125,11 +125,11 @@ export default function TeacherSchedulePage() {
                 />
               </div>
               <div className="h-8 flex items-center gap-2">
-                <label className="text-xs text-black font-medium whitespace-nowrap w-20 text-right">T. name</label>
+                <label className="text-xs text-foreground font-medium whitespace-nowrap w-20 text-right">T. name</label>
                 <input
                   type="text"
-                  className="px-2 py-1 border border-gray-300 rounded text-xs w-36 text-black bg-gray-50"
-                  value="ธนาโชค ใจดี"
+                  className="px-2 py-1 border border-border-strong rounded text-xs w-36 text-foreground bg-background"
+                  value="เธเธเธฒเนเธเธ เนเธเธ”เธต"
                   readOnly
                 />
               </div>
@@ -155,7 +155,7 @@ export default function TeacherSchedulePage() {
             <button
               type="button"
               onClick={() => setIsInboxOpen(true)}
-              className="relative inline-flex h-11 w-11 items-center justify-center rounded-md border border-blue-700 bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              className="relative inline-flex h-11 w-11 items-center justify-center rounded-md border border-primary bg-primary text-white hover:bg-primary-hover transition-colors"
               aria-label="Inbox"
               title="Inbox"
             >
