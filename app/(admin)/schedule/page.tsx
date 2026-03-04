@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import FilterDropdown from './_components/FilterDropdown';
 import ViewModeToggle from './_components/ViewModeToggle';
@@ -27,6 +27,8 @@ export default function SchedulePage() {
   const [room, setRoom] = useState('7401');
   const [viewMode, setViewMode] = useState<'all' | 'teacher' | 'class' | 'room'>('all');
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Schedule Data State
   const [scheduleData, setScheduleData] = useState<ScheduleData>({});
   // Sidebar Presets State (Lifted up)
@@ -49,6 +51,95 @@ export default function SchedulePage() {
     });
     setScheduleData(newScheduleData);
   }, []);
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const jsonPayload = JSON.parse(text);
+
+      const response = await fetch('/api/schedule/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(jsonPayload),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to import JSON');
+      }
+
+      const result = await response.json();
+      console.log('Import Successful:', result.data);
+      alert('JSON imported successfully (check console for payload)! Integration into grid will happen in a later phase.');
+      // Here you would transform result.data into ScheduleData state format
+      // setScheduleData(transformJSONToScheduleData(result.data));
+
+    } catch (e) {
+      console.error('Import error:', e);
+      alert('Failed to parse or import JSON file.');
+    } finally {
+      // Clear the input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleExportClick = async () => {
+    try {
+      // We pass the current schedule state, but as planned, it should ultimately 
+      // generate the format like 'sample don't change.json'
+      // For now, testing the API connection with dummy wrapper
+      const exportData = {
+        config: {
+          academic_year: "2026",
+          semester: 1,
+          columns: [
+            { key: "day", label: "Day", type: "text" },
+            { key: "1", label: "1", time: "08.30-09.20" },
+            { key: "2", label: "2", time: "09.25-10.15" },
+            { key: "3", label: "3", time: "10.20-11.10" }
+          ]
+        },
+        teachers: [],
+        students: [],
+        rooms: [],
+        // Raw data included for debugging/future transformation
+        _rawState: scheduleData
+      };
+
+      const response = await fetch('/api/schedule/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(exportData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate export');
+      }
+
+      // Trigger download
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = 'schedule.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+
+    } catch (e) {
+      console.error('Export error:', e);
+      alert('Failed to export schedule.');
+    }
+  };
 
 
 
@@ -127,6 +218,7 @@ export default function SchedulePage() {
       room: data.room || '',
       roomName: data.roomName || '',
       subjectCode: data.subjectCode || '',
+      subject: data.subject || '',
       variant: data.variant || 'green', // Default
     };
 
@@ -178,8 +270,6 @@ export default function SchedulePage() {
       {/* Top Header */}
       <AdminHeader />
       <header className="bg-white border-b border-gray-200 px-6 py-3">
-<<<<<<< HEAD
-=======
         <div className="flex items-center justify-between mb-3">
           {/* Left: Logo and School Name */}
           <div className="flex items-center gap-3">
@@ -204,8 +294,6 @@ export default function SchedulePage() {
             </div>
           </div>
         </div>
-
->>>>>>> main
         {/* Grid Layout for Header Alignment */}
         <div className="grid grid-cols-[auto_1fr_auto] gap-x-8 gap-y-2 py-2 items-start">
 
@@ -230,6 +318,27 @@ export default function SchedulePage() {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2 h-10">
+              <input
+                type="file"
+                accept=".json"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <button onClick={handleImportClick} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                <span>Import JSON</span>
+              </button>
+              <button onClick={handleExportClick} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span>Export JSON</span>
+              </button>
+              <div className="w-px h-6 bg-gray-300 mx-1"></div>
+
               <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />

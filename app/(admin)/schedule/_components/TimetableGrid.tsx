@@ -25,14 +25,18 @@ export default function TimetableGrid({ scheduleData, viewMode, onCellClick, onD
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Summary'];
     const slots = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-    const visibleLabels =
-        viewMode === 'teacher'
-            ? ['Teacher']
-            : viewMode === 'class'
-                ? ['Class']
-                : viewMode === 'room'
-                    ? ['Room']
-                    : ['Teacher', 'Class', 'Room'];
+    // Determine which labels to show based on viewMode
+    let visibleLabels: string[] = [];
+    if (viewMode === 'teacher') {
+        visibleLabels = ['Subject', 'Class', 'Room'];
+    } else if (viewMode === 'class') {
+        visibleLabels = ['Subject', 'Teacher', 'Room'];
+    } else if (viewMode === 'room') {
+        visibleLabels = ['Subject', 'Teacher', 'Class'];
+    } else {
+        // 'all' view remains backwards compatible or shows everything
+        visibleLabels = ['Teacher', 'Class', 'Room'];
+    }
 
     return (
         <div className="flex gap-0 overflow-hidden">
