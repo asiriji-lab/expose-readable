@@ -1,55 +1,27 @@
-import ScheduleCard from './ScheduleCard';
+import ScheduleCard, { Session } from './ScheduleCard';
 
-// example
-const mockSchedules = [
+// TODO: Replace with real Supabase fetch
+const mockSchedules: Session[] = [
   {
-    id: 'sem2-2025',
-    name: 'Schedule Semester 2/ 2025',
-    semester: '2/2025',
-    lastEdited: '11/8/2025',
-    status: 'draft' as const,
+    id: 'sem1-2569',
+    name: 'ตารางสอน ภาคเรียนที่ 1/2569',
+    semester: '1/2569',
+    lastEdited: '5/3/2569',
+    status: 'awaiting_data',
   },
   {
-    id: 'sem1-2025',
-    name: 'Schedule Semester 1/ 2025',
-    semester: '1/2025',
-    lastEdited: '11/1/2025',
-    status: 'published' as const,
+    id: 'sem2-2568',
+    name: 'ตารางสอน ภาคเรียนที่ 2/2568',
+    semester: '2/2568',
+    lastEdited: '15/10/2568',
+    status: 'completed',
   },
   {
-    id: 'sem2-2024',
-    name: 'Schedule Semester 2/ 2024',
-    semester: '2/2024',
-    lastEdited: '11/8/2024',
-    status: 'published' as const,
-  },
-  {
-    id: 'sem1-2024',
-    name: 'Schedule Semester 1/ 2024',
-    semester: '1/2024',
-    lastEdited: '11/1/2024',
-    status: 'published' as const,
-  },
-  {
-    id: 'sem2-2023',
-    name: 'Schedule Semester 2/ 2023',
-    semester: '2/2023',
-    lastEdited: '11/8/2023',
-    status: 'published' as const,
-  },
-  {
-    id: 'sem1-2023',
-    name: 'Schedule Semester 1/ 2023',
-    semester: '1/2023',
-    lastEdited: '11/1/2023',
-    status: 'published' as const,
-  },
-  {
-    id: 'sem2-2022',
-    name: 'Schedule Semester 2/ 2022',
-    semester: '2/2022',
-    lastEdited: '11/8/2022',
-    status: 'published' as const,
+    id: 'sem1-2568',
+    name: 'ตารางสอน ภาคเรียนที่ 1/2568',
+    semester: '1/2568',
+    lastEdited: '1/5/2568',
+    status: 'completed',
   },
 ];
 
@@ -58,7 +30,7 @@ export default function ScheduleList() {
     <div className="bg-white rounded-lg shadow">
       {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200">
-        <h3 className="text-lg font-semibold text-gray-900">All Schedules</h3>
+        <h3 className="text-lg font-semibold text-gray-900">รายการตารางสอน</h3>
       </div>
 
       {/* Table */}
@@ -67,19 +39,19 @@ export default function ScheduleList() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Schedule Name
+                ชื่อตาราง
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Semester
+                ภาคเรียน
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Last Edited
+                แก้ไขล่าสุด
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
+                สถานะ
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
+                จัดการ
               </th>
             </tr>
           </thead>

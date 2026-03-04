@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# agent working files — raw data and Python scripts are local-only
+.agent/solver_something/context/raw/
+.agent/solver_something/cleaned/
+.agent/solver_something/*.py
+.agent/solver_something/.venv/
