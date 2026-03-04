@@ -66,10 +66,15 @@ const Box: React.FC = () => {
       if (authError) throw authError;
       if (authData.session) {
         // User is auto-confirmed and logged in
-        router.push('/dashboard');
+        const redirectPath = selectedRole === 'teacher'
+          ? '/teacher/dashboard'
+          : selectedRole === 'student'
+            ? '/student/dashboard'
+            : '/dashboard';
+        router.push(redirectPath);
       } else if (authData.user) {
         // User needs to confirm email (OTP)
-        router.push(`/verify-otp?email=${encodeURIComponent(email)}`);
+        router.push(`/verify-otp?email=${encodeURIComponent(email)}&role=${selectedRole}`);
       }
     } catch (error: any) {
       alert(error.message || 'An error occurred during registration');
@@ -285,7 +290,7 @@ const Box: React.FC = () => {
         {/* Sign In Link */}
         <p className="text-center text-gray-500 text-sm">
           Already have an account?{' '}
-          <a href="/login" className="text-indigo-600 hover:text-indigo-700 font-medium">
+          <a href="/login?switch=1" className="text-indigo-600 hover:text-indigo-700 font-medium">
             Sign In
           </a>
         </p>

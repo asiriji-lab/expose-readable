@@ -9,6 +9,7 @@ const VerifyBox: React.FC = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
     const email = searchParams.get('email') || '';
+    const role = searchParams.get('role') as 'admin' | 'teacher' | 'student' | null;
 
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [loading, setLoading] = useState(false);
@@ -88,7 +89,12 @@ const VerifyBox: React.FC = () => {
 
             setIsSuccess(true);
             setTimeout(() => {
-                router.push('/dashboard');
+                const redirectPath = role === 'teacher'
+                    ? '/teacher/dashboard'
+                    : role === 'student'
+                        ? '/student/dashboard'
+                        : '/dashboard';
+                router.push(redirectPath);
             }, 1500);
 
         } catch (err: any) {

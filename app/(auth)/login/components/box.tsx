@@ -52,13 +52,20 @@ const Box: React.FC = () => {
 
       if (result.error) {
         if (result.error.toLowerCase().includes('email not confirmed')) {
-          router.push(`/verify-otp?email=${encodeURIComponent(username)}`);
+          const roleQuery = selectedRole ? `&role=${selectedRole}` : '';
+          router.push(`/verify-otp?email=${encodeURIComponent(username)}${roleQuery}`);
           return;
         }
         throw new Error(result.error);
       }
 
-      router.push('/dashboard');
+      const roleToUse = result.role;
+      const redirectPath = roleToUse === 'teacher'
+        ? '/teacher/dashboard'
+        : roleToUse === 'student'
+          ? '/student/dashboard'
+          : '/dashboard';
+      router.push(redirectPath);
     } catch (error: any) {
       alert(error.message || 'An error occurred during login');
     } finally {

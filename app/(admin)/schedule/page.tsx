@@ -143,50 +143,8 @@ export default function SchedulePage() {
     setEditingItem(null);
   };
 
-  // --- Filtering Logic (All Views Show All) ---
-  // Requested change: "make teacher view, room view, class view show every grid like view all"
-  // So we just return scheduleData directly, but keeping the function structure in case we want to re-add filtering later or soft-filtering.
-  // --- Filtering Logic ---
-  const getFilteredScheduleData = () => {
-    if (viewMode === 'all') return scheduleData;
-
-    const filtered: ScheduleData = {};
-    const days = Object.keys(scheduleData);
-
-    days.forEach(day => {
-      const slots = scheduleData[day];
-      if (!slots) return;
-
-      const filteredSlots: { [slot: number]: ScheduleItem } = {};
-      let hasData = false;
-
-      Object.entries(slots).forEach(([slotStr, item]) => {
-        const slot = parseInt(slotStr);
-        let match = false;
-
-        if (viewMode === 'teacher') {
-          match = item.teacher === tCode;
-        } else if (viewMode === 'class') {
-          match = item.classCode === classCode;
-        } else if (viewMode === 'room') {
-          match = item.room === room;
-        }
-
-        if (match) {
-          filteredSlots[slot] = item;
-          hasData = true;
-        }
-      });
-
-      if (hasData) {
-        filtered[day] = filteredSlots;
-      }
-    });
-
-    return filtered;
-  };
-
-  const filteredScheduleData = getFilteredScheduleData();
+  // Keep all view modes aligned to teacher schedule style (full timetable shown)
+  const filteredScheduleData = scheduleData;
 
   // Handle drop onto the Sidebar
   const handleSidebarDrop = (payload: any) => {

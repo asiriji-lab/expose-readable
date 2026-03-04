@@ -5,29 +5,46 @@ import { supabase } from '@/lib/supabase';
 import { signOutAction } from '../_actions/auth';
 import { LogOut } from 'lucide-react';
 
-export default function AdminHeader() {
+interface AdminHeaderProps {
+    roleLabel?: string;
+}
+
+export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [user, setUser] = useState<{ firstName: string; lastName: string; email: string; role: string } | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         async function fetchUser() {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user) return;
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
 
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .single();
+                if (error) {
+                    const isInvalidRefreshToken = error.message?.toLowerCase().includes('invalid refresh token');
+                    if (isInvalidRefreshToken) {
+                        await supabase.auth.signOut({ scope: 'local' });
+                    }
+                    return;
+                }
 
-            if (profile) {
-                setUser({
-                    firstName: profile.first_name || '',
-                    lastName: profile.last_name || '',
-                    email: profile.email || session.user.email || '',
-                    role: profile.role || 'Admin',
-                });
+                if (!session?.user) return;
+
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', session.user.id)
+                    .single();
+
+                if (profile) {
+                    setUser({
+                        firstName: profile.first_name || '',
+                        lastName: profile.last_name || '',
+                        email: profile.email || session.user.email || '',
+                        role: profile.role || 'Admin',
+                    });
+                }
+            } catch {
+                return;
             }
         }
 
@@ -44,7 +61,7 @@ export default function AdminHeader() {
 
         document.addEventListener('mousedown', handleClickOutside);
         return () => {
-            document.addEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('mousedown', handleClickOutside);
         };
     }, []);
 
@@ -52,7 +69,13 @@ export default function AdminHeader() {
         await signOutAction();
     };
 
-    const currentRole = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Admin';
+    const currentRole = roleLabel || (user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Admin');
+    const normalizedRole = currentRole.toLowerCase();
+    const roleBadgeClass = normalizedRole === 'student'
+        ? 'bg-orange-100 text-orange-700'
+        : normalizedRole === 'admin'
+            ? 'bg-purple-100 text-purple-700'
+            : 'bg-green-100 text-green-700';
     // Use first letter of first name, else a generic icon SVG
     const avatarText = user?.firstName ? user.firstName.charAt(0).toUpperCase() : null;
 
@@ -73,7 +96,7 @@ export default function AdminHeader() {
 
                     {/* Right: Admin Badge and User Icon */}
                     <div className="flex items-center gap-3 relative" ref={dropdownRef}>
-                        <span className="px-3 py-1.5 bg-green-100 text-green-700 rounded-md text-sm font-medium">
+                        <span className={`px-3 py-1.5 rounded-md text-sm font-medium ${roleBadgeClass}`}>
                             {currentRole}
                         </span>
 

@@ -25,14 +25,14 @@ export default function TimetableGrid({ scheduleData, viewMode, onCellClick, onD
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Summary'];
     const slots = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-    // Determine which labels to show based on viewMode
-    // ALWAYS show all labels as per "like View All" request
-    const allLabels = ['Teacher', 'Class', 'Room'];
-    const visibleLabels = allLabels;
-    // Previous logic removed to show full info in all views
-    // Previous logic removed to show full info in all views
-    // if (viewMode === 'teacher') visibleLabels = ['Teacher'];
-    // ...
+    const visibleLabels =
+        viewMode === 'teacher'
+            ? ['Teacher']
+            : viewMode === 'class'
+                ? ['Class']
+                : viewMode === 'room'
+                    ? ['Room']
+                    : ['Teacher', 'Class', 'Room'];
 
     return (
         <div className="flex gap-0 overflow-hidden">

@@ -1,7 +1,16 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+function normalizeRole(value: unknown): 'admin' | 'teacher' | 'student' | null {
+    if (typeof value !== 'string') return null
+    const role = value.trim().toLowerCase()
+    if (role === 'admin' || role === 'teacher' || role === 'student') {
+        return role
+    }
+    return null
+}
+
+export async function proxy(request: NextRequest) {
     let supabaseResponse = NextResponse.next({
         request,
     })
@@ -34,7 +43,8 @@ export async function middleware(request: NextRequest) {
         data: { user },
     } = await supabase.auth.getUser()
 
-    const isAuthRoute = request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/register');
+    const isLoginRoute = request.nextUrl.pathname.startsWith('/login');
+    const isSwitchAccount = request.nextUrl.searchParams.get('switch') === '1';
     const isDashboardRoute = request.nextUrl.pathname.startsWith('/dashboard') || request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/teacher') || request.nextUrl.pathname.startsWith('/student');
 
     if (!user && isDashboardRoute) {
@@ -44,10 +54,24 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url)
     }
 
-    if (user && isAuthRoute) {
-        // user is already logged in, redirect them to dashboard
+    if (user && isLoginRoute && !isSwitchAccount) {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+        const role = normalizeRole(profile?.role)
+
+        // user is already logged in, redirect them by role
         const url = request.nextUrl.clone()
-        url.pathname = '/dashboard'
+        if (role === 'teacher') {
+            url.pathname = '/teacher/dashboard'
+        } else if (role === 'student') {
+            url.pathname = '/student/dashboard'
+        } else {
+            url.pathname = '/dashboard'
+        }
         return NextResponse.redirect(url)
     }
 
