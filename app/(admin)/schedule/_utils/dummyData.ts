@@ -34,8 +34,8 @@ export const generateClassCode = () => {
 // 4. Room (xyzz)
 // x: Building (1-9), y: Floor (1-9), zz: Room num (01-20)
 // Room Name: British curriculum subjects
-const subjects = [
-    "Mathematics", "Science", "History", "Geography", "English", "Art", "Music", "PE", "Physics", "Chemistry", "Biology", "Computing"
+const roomNames = [
+    "Mathematics Lab", "Science Lab", "History Room", "Geography Room", "English Room", "Art Studio", "Music Room", "PE Hall", "Physics Lab", "Chemistry Lab", "Biology Lab", "Computer Lab"
 ];
 
 export const generateRoomCode = () => {
@@ -46,7 +46,7 @@ export const generateRoomCode = () => {
 };
 
 export const generateRoomName = () => {
-    return subjects[getRandomInt(0, subjects.length - 1)];
+    return roomNames[getRandomInt(0, roomNames.length - 1)];
 };
 
 // 5. Subject Code (x + 5 digits)
@@ -59,6 +59,15 @@ export const generateSubjectCode = () => {
     return `${prefix}${digits}`;
 };
 
+// 6. Subject Name (Thai)
+const thaiSubjects = [
+    "คณิตศาสตร์", "วิทยาศาสตร์", "ภาษาอังกฤษ", "ภาษาไทย", "สังคมศึกษา", "ประวัติศาสตร์", "ศิลปะ", "ดนตรี", "พลศึกษา"
+];
+
+export const generateSubjectName = () => {
+    return thaiSubjects[getRandomInt(0, thaiSubjects.length - 1)];
+};
+
 export interface ScheduleItem {
     teacher: string;
     teacherName: string;
@@ -66,6 +75,7 @@ export interface ScheduleItem {
     room: string;
     roomName: string;
     subjectCode: string;
+    subject: string;
     variant: 'red' | 'green';
 }
 
@@ -83,6 +93,7 @@ export const generateScheduleItem = (): ScheduleItem => {
         room: generateRoomCode(),
         roomName: generateRoomName(),
         subjectCode: generateSubjectCode(),
+        subject: generateSubjectName(),
         variant: Math.random() > 0.5 ? 'red' : 'green',
     };
 };

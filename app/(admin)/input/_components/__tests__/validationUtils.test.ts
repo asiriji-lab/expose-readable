@@ -21,7 +21,7 @@ class MockFile {
 // Let's mock PapaParse and XLSX for easier testing without dealing with binary file creation in tests.
 
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 
 // Mocking the modules
 vi.mock('papaparse', () => {
@@ -32,7 +32,7 @@ vi.mock('papaparse', () => {
     };
 });
 
-vi.mock('xlsx', () => {
+vi.mock('xlsx-js-style', () => {
     return {
         read: vi.fn(),
         utils: {

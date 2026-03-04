@@ -18,10 +18,15 @@ export default function ScheduleCellDisplay({ data, visibleLabels = ['Teacher', 
 
     return (
         <div className={`flex flex-col h-full w-full ${bgColor} ${className}`}>
-            {/* Teacher */}
+            {/* Subject */}
+            {visibleLabels.includes('Subject') && (
+                <div className={`px-2 py-2 text-xs font-semibold text-blue-700 h-10 flex items-center justify-center ${visibleLabels.length > 1 && visibleLabels.indexOf('Subject') > 0 ? 'border-t border-gray-200' : ''}`}>
+                    {data?.subject || ''}
+                </div>
+            )}
             {/* Teacher */}
             {visibleLabels.includes('Teacher') && (
-                <div className={`px-2 py-2 text-xs font-semibold text-gray-800 h-10 flex items-center justify-center`}>
+                <div className={`px-2 py-2 text-xs font-semibold text-gray-800 h-10 flex items-center justify-center ${visibleLabels.length > 1 && visibleLabels.indexOf('Teacher') > 0 ? 'border-t border-gray-200' : ''}`}>
                     {data?.teacherName?.charAt(0)} {data?.teacher}
                 </div>
             )}
