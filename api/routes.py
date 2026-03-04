@@ -48,6 +48,8 @@ def create_schedule():
     Request JSON:
     {
         "job_name": "optional job name",
+        "academic_year": "2026",
+        "semester": 1,
         "ga_params": {
             "population_size": 150,
             "max_generations": 500,
@@ -81,6 +83,8 @@ def create_schedule():
         'crossover_rate': ga_params.get('crossover_rate', current_app.config['GA_CROSSOVER_RATE']),
         'elite_size': ga_params.get('elite_size', current_app.config['GA_ELITE_SIZE']),
         'tournament_size': ga_params.get('tournament_size', current_app.config['GA_TOURNAMENT_SIZE']),
+        'academic_year': str(data.get('academic_year', '')),
+        'semester': int(data.get('semester', 1)),
     }
     
     # Create job folder
@@ -171,14 +175,23 @@ def start_job(job_id):
             job_id=job_id,
             job_folder=job_folder,
             params=job['params'],
-            job_manager=job_manager
+            job_manager=job_manager,
+            academic_year=job['params'].get('academic_year', ''),
+            semester=job['params'].get('semester', 1),
         )
-        
-        return jsonify({
+
+        response = {
             "success": True,
             "message": "Scheduling completed",
-            "result": result
-        })
+            "result": {
+                "job_id":        result.get('job_id'),
+                "data_stats":    result.get('data_stats'),
+                "ga_result":     result.get('ga_result'),
+                "export_result": result.get('export_result'),
+            },
+            "schedule": result.get('schedule_json'),
+        }
+        return jsonify(response)
         
     except Exception as e:
         job_manager.update_job_status(job_id, 'failed', error=str(e))

@@ -8,6 +8,7 @@ Main scheduler orchestration - ties together data loading, GA, and export.
 
 import os
 import glob
+import json
 from typing import Dict, Optional, Callable
 
 from src.data_cleaning.data_cleaning import clean_input_data
@@ -15,6 +16,7 @@ from src.preschedule.scheduleManager import ScheduleManager
 from src.preschedule.prescheduleProcessor import PrescheduleProcessor
 from .genetic_algorithm import GeneticAlgorithm
 from .exporter import ScheduleExporter
+from .json_exporter import ScheduleJsonExporter
 from .job_manager import JobManager
 from .feasibility_checker import FeasibilityChecker
 
@@ -23,7 +25,9 @@ def run_scheduler_job(job_id: str,
                       job_folder: str,
                       params: Dict,
                       job_manager: Optional[JobManager] = None,
-                      progress_callback: Optional[Callable] = None) -> Dict:
+                      progress_callback: Optional[Callable] = None,
+                      academic_year: str = "",
+                      semester: int = 1) -> Dict:
     """
     Run a complete scheduling job.
     
@@ -121,29 +125,56 @@ def run_scheduler_job(job_id: str,
     
     # Export results
     # Use the refactored Exporter which takes Manager and Chromosome
+    schedule_json = None
+    json_path = None
     if best_solution:
+        # ── CSV export → job_folder/outputs/{teachers,students,rooms}/*.csv ──
         exporter = ScheduleExporter(
-            schedule_manager=schedule_manager, 
-            chromosome=best_solution, 
+            schedule_manager=schedule_manager,
+            chromosome=best_solution,
             output_dir=outputs_folder
         )
         # Note: We pass ga.lessons here as per our previous fix
         export_result = exporter.export_all(ga.lessons)
+
+        # Register CSV output folder in the job record
+        if job_manager:
+            job_manager.add_file_to_job(job_id, 'output_csv_dir', outputs_folder)
+
+        # ── JSON export → job_folder/outputs/schedule.json ──────────────────
+        json_exporter = ScheduleJsonExporter(
+            schedule_manager=schedule_manager,
+            chromosome=best_solution,
+            academic_year=academic_year,
+            semester=semester,
+        )
+        schedule_json = json_exporter.export(ga.lessons)
+
+        json_path = os.path.join(outputs_folder, 'schedule.json')
+        with open(json_path, 'w', encoding='utf-8') as _f:
+            json.dump(schedule_json, _f, ensure_ascii=False, indent=2)
+
+        # Register JSON output file in the job record
+        if job_manager:
+            job_manager.add_file_to_job(job_id, 'output_json', json_path)
     else:
-         export_result = {'error': 'No solution found'}
-    
-    # Compile final result
-    result = {
-        'job_id': job_id,
-        'data_stats': data_stats,
-        'feasibility': feasibility_report.to_dict(),
-        'ga_result': ga_result,
+        export_result = {'error': 'No solution found'}
+
+    # Slim result stored in jobs.json — no schedule content, just metadata + paths.
+    stored_result = {
+        'job_id':        job_id,
+        'data_stats':    data_stats,
+        'feasibility':   feasibility_report.to_dict(),
+        'ga_result':     ga_result,
         'export_result': export_result,
-        'success': True
+        'outputs_folder': outputs_folder,
+        'json_path':     json_path,
+        'success':       True,
     }
-    
-    # Update final status
+
+    # Update final status (stored_result goes into jobs.json, must stay small)
     if job_manager:
-        job_manager.update_job_status(job_id, 'completed', result=result)
-    
-    return result
+        job_manager.update_job_status(job_id, 'completed', result=stored_result)
+
+    # Return full result including schedule_json for the API response
+    return {**stored_result, 'schedule_json': schedule_json}

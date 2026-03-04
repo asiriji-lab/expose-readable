@@ -190,14 +190,9 @@ class ScheduleExporter:
         # If we want rich text, we need to reconstruct it from assignments.
         
         for slot, room, lesson in assignments:
-            # Re-format the cell to be pretty
-            # Find column
-            target_col = None
-            for col in df.columns:
-                if col.startswith(f"{slot.period},"):
-                    target_col = col
-                    break
-            
+            # slot.period_col is already the full column header ("2,08.05-08.55")
+            target_col = slot.period_col if slot.period_col in df.columns else None
+
             if target_col and slot.day in df.index:
                 # Construct pretty string
                 if entity_type == 'student':

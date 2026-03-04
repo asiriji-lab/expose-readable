@@ -13,13 +13,14 @@ Contains the main scheduling logic:
 from .models import Lesson, TimeSlot, Chromosome
 from .genetic_algorithm import GeneticAlgorithm
 from .exporter import ScheduleExporter
+from .json_exporter import ScheduleJsonExporter
 from .scheduler import run_scheduler_job
 from .job_manager import JobManager
 from .feasibility_checker import FeasibilityChecker, FeasibilityReport
 
 __all__ = [
     'Lesson', 'TimeSlot', 'Chromosome',
-    'GeneticAlgorithm', 'ScheduleExporter',
+    'GeneticAlgorithm', 'ScheduleExporter', 'ScheduleJsonExporter',
     'run_scheduler_job', 'JobManager',
     'FeasibilityChecker', 'FeasibilityReport',
 ]
