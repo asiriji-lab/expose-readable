@@ -7,7 +7,7 @@ Execution order:
   1. Load raw CSV files           (input_dataset/)
   2. Data cleaning                (src.data_cleaning)
   3. Preschedule processing       (src.preschedule)
-  4. GA optimisation              (src.ga.genetic_algorithm)
+  4. GA optimisation              (src.ga.island_ga)
   5. Export  — CSV  → output/final/{teachers,students,rooms}/
              — JSON → output/schedule.json
   6. Verification — list generated files, preview JSON
@@ -23,7 +23,7 @@ from typing import Dict
 from src.data_cleaning.data_cleaning import clean_input_data
 from src.preschedule.scheduleManager import ScheduleManager
 from src.preschedule.prescheduleProcessor import PrescheduleProcessor
-from src.ga.genetic_algorithm import GeneticAlgorithm
+from src.ga.island_ga import IslandGeneticAlgorithm
 from src.ga.exporter import ScheduleExporter
 from src.ga.json_exporter import ScheduleJsonExporter
 from src.ga.feasibility_checker import FeasibilityChecker
@@ -41,14 +41,20 @@ CLEANED_DIR = "cleaned_input"
 ACADEMIC_YEAR = "2026"
 SEMESTER      = 1
 
-# GA parameters (feel free to tweak)
+# Island GA parameters (feel free to tweak)
 GA_PARAMS = dict(
-    population_size=500,
+    n_islands=4,
+    island_population_size=125,
+    migration_interval=50,
+    migration_rate=0.1,
+    topology='ring',
     mutation_rate=0.015,
     crossover_rate=0.9,
     tournament_size=9,
     max_generations=10000,
     elite_size=10,
+    stagnation_limit=50,
+    catastrophic_after=3,
 )
 
 
@@ -307,7 +313,7 @@ def main():
     print("STEP 4 — GENETIC ALGORITHM")
     print("=" * 80)
 
-    ga = GeneticAlgorithm(schedule_manager=schedule_manager, **GA_PARAMS)
+    ga = IslandGeneticAlgorithm(schedule_manager=schedule_manager, **GA_PARAMS)
     best_chromosome = ga.evolve()
     ga_result = ga.get_result_summary()
 
@@ -335,7 +341,7 @@ def main():
         chromosome=best_chromosome,
         output_dir=final_dir,
     )
-    csv_stats = csv_exporter.export_all(ga.lessons)
+    csv_stats = csv_exporter.export_all(ga.islands[0].lessons)
     print(f"  ✅ Teachers : {csv_stats['teachers_exported']} files")
     print(f"  ✅ Students : {csv_stats['students_exported']} files")
     print(f"  ✅ Rooms    : {csv_stats['rooms_exported']} files")
@@ -348,7 +354,7 @@ def main():
         academic_year=ACADEMIC_YEAR,
         semester=SEMESTER,
     )
-    schedule_json = json_exporter.export(ga.lessons)
+    schedule_json = json_exporter.export(ga.islands[0].lessons)
 
     with open(json_path, 'w', encoding='utf-8') as f:
         json.dump(schedule_json, f, ensure_ascii=False, indent=2)

@@ -155,6 +155,7 @@ class GeneticAlgorithm:
         self.best_chromosome: Optional[Chromosome] = None
         self.generation_stats: List[Dict] = []
         self._gens_without_improvement: int = 0
+        self._current_generation: int = 0
 
         print(f"  [GA] Teaching columns : {len(self.teaching_cols)}")
         print(f"  [GA] Lessons to place : {len(self.lessons)}")
@@ -840,6 +841,68 @@ class GeneticAlgorithm:
 
         self.population = keep + fresh
         self._gens_without_improvement = 0
+
+    # =========================================================================
+    # ISLAND GA HELPER — evolve for a fixed number of generations
+    # =========================================================================
+
+    def evolve_n_generations(self, n_generations: int, verbose: bool = False) -> None:
+        """
+        Run the inner GA loop for exactly n_generations.
+        Population must already be initialized and evaluated before calling.
+        Used by IslandGeneticAlgorithm to evolve each island between migrations.
+        """
+        for _ in range(n_generations):
+            self._current_generation += 1
+
+            self.population.sort(key=lambda c: c.fitness)
+            new_pop: List[Chromosome] = [c.copy() for c in self.population[:self.elite_size]]
+
+            while len(new_pop) < self.population_size:
+                p1 = self._tournament_select()
+                p2 = self._tournament_select()
+                retries = 0
+                while p2 is p1 and retries < 5:
+                    p2 = self._tournament_select()
+                    retries += 1
+                c1, c2 = self._crossover(p1, p2)
+                self._mutate(c1)
+                self._mutate(c2)
+                self.evaluate_fitness(c1)
+                self.evaluate_fitness(c2)
+                new_pop.extend([c1, c2])
+
+            self.population = new_pop[:self.population_size]
+
+            gen_best = min(self.population, key=lambda c: c.fitness)
+            if gen_best.fitness < self.best_chromosome.fitness:
+                self.best_chromosome = gen_best.copy()
+                self._gens_without_improvement = 0
+            else:
+                self._gens_without_improvement += 1
+
+            if self._gens_without_improvement >= self.stagnation_limit:
+                self._restart_bottom_half()
+
+            avg_fitness = sum(c.fitness for c in self.population) / len(self.population)
+            stat = {
+                'generation': self._current_generation,
+                'best_fitness': self.best_chromosome.fitness,
+                'avg_fitness': avg_fitness,
+                'violations': self.best_chromosome.violations,
+                'stagnation': self._gens_without_improvement,
+            }
+            self.generation_stats.append(stat)
+
+            if self.progress_callback:
+                self.progress_callback(self._current_generation, self.max_generations, stat)
+
+            if verbose and (self._current_generation % 10 == 0 or self.best_chromosome.fitness == 0):
+                print(f"  Gen {self._current_generation:>4d} | Best: {self.best_chromosome.fitness:.0f} | "
+                      f"Avg: {avg_fitness:.0f} | Stag: {self._gens_without_improvement:>3d}")
+
+            if self.best_chromosome.fitness == 0:
+                break
 
     # =========================================================================
     # EVOLUTION LOOP
