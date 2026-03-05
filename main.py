@@ -47,7 +47,7 @@ GA_PARAMS = dict(
     mutation_rate=0.015,
     crossover_rate=0.9,
     tournament_size=9,
-    max_generations=100,
+    max_generations=10000,
     elite_size=10,
 )
 
