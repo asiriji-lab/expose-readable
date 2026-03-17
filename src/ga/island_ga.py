@@ -263,6 +263,24 @@ class IslandGeneticAlgorithm:
         print(f"  Final fitness  : {self.best_chromosome.fitness}")
         print(f"  Best island    : {self.best_island_idx}")
         print(f"  Final violations: {self.best_chromosome.violations}")
+
+        # Unassigned slot detail (mirrors GeneticAlgorithm.evolve reporting)
+        best_island = self.islands[self.best_island_idx]
+        unassigned = []
+        for lesson in best_island.lessons:
+            assigned = len(self.best_chromosome.genes.get(lesson.lesson_id, []))
+            expected = best_island._expected_periods[lesson.lesson_id]
+            if assigned < expected:
+                unassigned.append((lesson, assigned, expected))
+
+        if unassigned:
+            print(f"\n  Unassigned slots ({len(unassigned)} lessons):")
+            for lesson, assigned, expected in unassigned:
+                print(f"    {lesson.lesson_id} | {lesson.subject_id} | {lesson.subject_name} | "
+                      f"classes={lesson.student_classes} | "
+                      f"assigned={assigned}/{expected} | missing={expected - assigned}")
+        else:
+            print("\n  All lessons fully assigned.")
         print("=" * 60 + "\n")
 
         return self.best_chromosome
