@@ -25,7 +25,7 @@ export default function TeacherDashboardPage() {
           </div>
           <div className="bg-surface rounded-lg border border-border p-5">
             <p className="text-xs text-foreground-muted">Homeroom</p>
-            <p className="text-2xl font-bold text-foreground mt-1">6/15</p>
+            <p className="text-2xl font-bold text-foreground mt-1">6/1</p>
             <p className="text-xs text-foreground-muted mt-1">Current assigned room</p>
           </div>
         </div>

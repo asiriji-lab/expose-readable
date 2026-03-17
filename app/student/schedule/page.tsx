@@ -6,24 +6,17 @@ import { Mail } from 'lucide-react';
 import AdminHeader from '@/app/(admin)/_components/AdminHeader';
 import FilterDropdown from '@/app/(admin)/schedule/_components/FilterDropdown';
 import ViewModeToggle from '@/app/(admin)/schedule/_components/ViewModeToggle';
-import { generateScheduleItem, ScheduleItem } from '@/app/(admin)/schedule/_utils/dummyData';
+import { getClassSchedule, ScheduleItem, ScheduleData, CLASS_META } from '@/app/(admin)/schedule/_utils/dummyData';
 import InboxOverlay, { InboxMessage } from '@/app/teacher/components/InboxOverlay';
 import TeacherSlotInfoOverlay from '@/app/teacher/components/TeacherSlotInfoOverlay';
 import TeacherTimetableGrid from '@/app/teacher/components/TeacherTimetableGrid';
 
-interface ScheduleData {
-  [day: string]: {
-    [slot: number]: ScheduleItem;
-  };
-}
-
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-const SLOTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 export default function StudentSchedulePage() {
   const router = useRouter();
   const [scheduleData, setScheduleData] = useState<ScheduleData>({});
-  const [classCode, setClassCode] = useState('6/15');
+  const [classCode, setClassCode] = useState('6/1');
   const [selectedDay, setSelectedDay] = useState('All days');
   const [viewMode, setViewMode] = useState<'all' | 'teacher' | 'class' | 'room'>('class');
   const [isInboxOpen, setIsInboxOpen] = useState(false);
@@ -48,22 +41,7 @@ export default function StudentSchedulePage() {
   ];
 
   useEffect(() => {
-    const classSchedule: ScheduleData = {};
-
-    DAYS.forEach((day) => {
-      classSchedule[day] = {};
-      SLOTS.forEach((slot) => {
-        if (Math.random() > 0.35) {
-          const item = generateScheduleItem();
-          classSchedule[day][slot] = {
-            ...item,
-            classCode,
-          };
-        }
-      });
-    });
-
-    setScheduleData(classSchedule);
+    setScheduleData(getClassSchedule(classCode));
   }, [classCode]);
 
   const totalPeriods = useMemo(() => {
@@ -125,7 +103,7 @@ export default function StudentSchedulePage() {
                 <FilterDropdown
                   label="Class"
                   value={classCode}
-                  options={['6/15', '6/16', '6/17', '7/1', '7/2']}
+                  options={['6/1', '6/2', '6/3', '6/4', '7/1', '7/2', '7/3', '7/4']}
                   onChange={setClassCode}
                 />
               </div>
@@ -134,7 +112,7 @@ export default function StudentSchedulePage() {
                 <input
                   type="text"
                   className="px-2 py-1 border border-border-strong rounded text-xs w-24 text-foreground bg-background"
-                  value="5410"
+                  value={CLASS_META[classCode]?.defaultRoom ?? ''}
                   readOnly
                 />
               </div>

@@ -93,6 +93,7 @@ export default function ValidationSection({
       <button
         onClick={onValidate}
         disabled={isRunning}
+        data-testid="main-validate-button"
         className={`
           w-full py-3 rounded-xl font-semibold text-sm transition-all
           ${isRunning

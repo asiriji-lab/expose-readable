@@ -20,12 +20,12 @@ export default function StudentDashboardPage() {
           </div>
           <div className="bg-surface rounded-lg border border-border p-5">
             <p className="text-xs text-foreground-muted">Current Class</p>
-            <p className="text-2xl font-bold text-foreground mt-1">6/15</p>
+            <p className="text-2xl font-bold text-foreground mt-1">6/1</p>
             <p className="text-xs text-foreground-muted mt-1">Homeroom assignment</p>
           </div>
           <div className="bg-surface rounded-lg border border-border p-5">
             <p className="text-xs text-foreground-muted">Default Room</p>
-            <p className="text-2xl font-bold text-foreground mt-1">5410</p>
+            <p className="text-2xl font-bold text-foreground mt-1">5401</p>
             <p className="text-xs text-foreground-muted mt-1">Primary classroom</p>
           </div>
         </div>

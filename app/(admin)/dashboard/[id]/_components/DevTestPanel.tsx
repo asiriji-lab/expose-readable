@@ -144,7 +144,7 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <div className="rounded-xl border-2 border-dashed border-yellow-300 bg-yellow-50 overflow-hidden">
+    <div data-testid="dev-test-panel" className="rounded-xl border-2 border-dashed border-yellow-300 bg-yellow-50 overflow-hidden">
       {/* Header bar */}
       <button
         className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-yellow-100 transition-colors"

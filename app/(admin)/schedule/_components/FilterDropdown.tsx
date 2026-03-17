@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { TEACHER_META, CLASS_META, ROOM_META } from '../_utils/dummyData';
 
 interface FilterDropdownProps {
     label: string;
@@ -21,12 +22,12 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
 
     const searchableFields = useMemo(() => {
         if (label.toLowerCase().includes('t.')) {
-            return ["Teacher's code", "Teacher's name", "Teacher's surname"];
+            return ["Code", "Name"];
         }
         if (label.toLowerCase().includes('room')) {
-            return ["Room's code", "Room's name"];
+            return ["Code", "Name", "Type"];
         }
-        return ['Class', "Default Room's code"];
+        return ['Class', "Level", "Homeroom"];
     }, [label]);
 
     const [selectedFields, setSelectedFields] = useState<string[]>(() => [searchableFields[0]]);
@@ -38,50 +39,43 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
 
     const records = useMemo<SearchRecord[]>(() => {
         if (label.toLowerCase().includes('t.')) {
-            const teacherNames = ['ธนาโชค', 'ณัฐกร', 'วิชิรวิทย์', 'ธัญญวุฒิ', 'ศศิธร'];
-            const teacherSurnames = ['ใจดี', 'วงศ์ประเสริฐ', 'อำนาจกิจ', 'เพ็ชร์ดี', 'กล้าหาญ'];
-
-            return options.map((option, index) => ({
-                value: option,
-                fields: {
-                    "Teacher's code": option,
-                    "Teacher's name": teacherNames[index % teacherNames.length],
-                    "Teacher's surname": teacherSurnames[index % teacherSurnames.length],
-                },
-            }));
+            return options.map((code) => {
+                const meta = TEACHER_META[code];
+                return {
+                    value: code,
+                    fields: {
+                        "Code": code,
+                        "Name": meta?.firstName || code,
+                    },
+                };
+            });
         }
 
         if (label.toLowerCase().includes('room')) {
-            const roomNameByCode: Record<string, string> = {
-                '7401': 'Computer room',
-                '7402': 'Chemistry Lab',
-                '7403': 'Science Lab',
-            };
-
-            return options.map((option) => ({
-                value: option,
-                fields: {
-                    "Room's code": option,
-                    "Room's name": roomNameByCode[option] || option,
-                },
-            }));
+            return options.map((code) => {
+                const meta = ROOM_META[code];
+                return {
+                    value: code,
+                    fields: {
+                        "Code": code,
+                        "Name": meta?.name || code,
+                        "Type": meta?.type || '',
+                    },
+                };
+            });
         }
 
-        const defaultRoomByClass: Record<string, string> = {
-            '6/15': '5410',
-            '6/16': '5409',
-            '6/17': '5408',
-            '7/1': '5407',
-            '7/2': '5406',
-        };
-
-        return options.map((option) => ({
-            value: option,
-            fields: {
-                Class: option,
-                "Default Room's code": defaultRoomByClass[option] || '5401',
-            },
-        }));
+        return options.map((code) => {
+            const meta = CLASS_META[code];
+            return {
+                value: code,
+                fields: {
+                    Class: code,
+                    "Level": meta?.level || '',
+                    "Homeroom": meta?.defaultRoom || '—',
+                },
+            };
+        });
     }, [label, options]);
 
     const filteredRecords = useMemo(() => {
@@ -109,6 +103,19 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
         });
     };
 
+    // Display label for the button — show name alongside code for teachers
+    const displayLabel = useMemo(() => {
+        if (label.toLowerCase().includes('t.')) {
+            const meta = TEACHER_META[value];
+            return meta ? `${value} — ${meta.firstName}` : value;
+        }
+        if (label.toLowerCase().includes('room')) {
+            const meta = ROOM_META[value];
+            return meta?.name && meta.name !== value ? `${value} — ${meta.name}` : value;
+        }
+        return value;
+    }, [label, value]);
+
     return (
         <div className="flex items-center gap-2">
             {/* Label on the left with fixed width */}
@@ -118,9 +125,9 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
             <div className="relative">
                 <button
                     onClick={() => setIsOpen(!isOpen)}
-                    className="flex items-center justify-between gap-2 px-3 py-1.5 border border-border-strong rounded bg-surface hover:bg-background transition-colors text-xs min-w-[100px]"
+                    className="flex items-center justify-between gap-2 px-3 py-1.5 border border-border-strong rounded bg-surface hover:bg-background transition-colors text-xs min-w-[140px] max-w-[260px]"
                 >
-                    <span className="text-foreground">{value}</span>
+                    <span className="text-foreground truncate">{displayLabel}</span>
                     <svg
                         className={`w-3 h-3 text-foreground-muted transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
                         fill="none"
@@ -158,6 +165,7 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
                                         className="flex-1 bg-transparent text-sm text-foreground placeholder:text-foreground-muted outline-none"
                                         autoFocus
                                     />
+                                    <span className="text-[10px] text-foreground-muted">{filteredRecords.length}/{records.length}</span>
                                 </div>
                             </div>
 
@@ -179,7 +187,7 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
                             </div>
 
                             {/* Results table */}
-                            <div className="max-h-[260px] overflow-auto">
+                            <div className="max-h-[320px] overflow-auto">
                                 {/* Table header */}
                                 <div
                                     className="grid sticky top-0 bg-surface-alt text-xs font-semibold text-foreground-muted border-b border-border"
@@ -205,7 +213,7 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
                                     >
                                         {searchableFields.map((field) => (
                                             <span key={field} className="px-3 py-1.5 border-r border-border last:border-r-0 truncate">
-                                                {record.fields[field] || '-'}
+                                                {record.fields[field] || '—'}
                                             </span>
                                         ))}
                                     </button>

@@ -6,19 +6,12 @@ import { Mail } from 'lucide-react';
 import AdminHeader from '@/app/(admin)/_components/AdminHeader';
 import FilterDropdown from '@/app/(admin)/schedule/_components/FilterDropdown';
 import ViewModeToggle from '@/app/(admin)/schedule/_components/ViewModeToggle';
-import { generateScheduleItem, ScheduleItem } from '@/app/(admin)/schedule/_utils/dummyData';
+import { getTeacherSchedule, ScheduleItem, ScheduleData, TEACHER_META } from '@/app/(admin)/schedule/_utils/dummyData';
 import InboxOverlay, { InboxMessage } from '../components/InboxOverlay';
 import TeacherSlotInfoOverlay from '../components/TeacherSlotInfoOverlay';
 import TeacherTimetableGrid from '../components/TeacherTimetableGrid';
 
-interface ScheduleData {
-  [day: string]: {
-    [slot: number]: ScheduleItem;
-  };
-}
-
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-const SLOTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 export default function TeacherSchedulePage() {
   const router = useRouter();
@@ -41,23 +34,7 @@ export default function TeacherSchedulePage() {
   ];
 
   useEffect(() => {
-    const teacherOnlySchedule: ScheduleData = {};
-
-    DAYS.forEach((day) => {
-      teacherOnlySchedule[day] = {};
-      SLOTS.forEach((slot) => {
-        if (Math.random() > 0.45) {
-          const item = generateScheduleItem();
-          teacherOnlySchedule[day][slot] = {
-            ...item,
-            teacher: teacherCode,
-            teacherName: 'เธเธเธฒเนเธเธ เนเธเธ”เธต',
-          };
-        }
-      });
-    });
-
-    setScheduleData(teacherOnlySchedule);
+    setScheduleData(getTeacherSchedule(teacherCode));
   }, [teacherCode]);
 
   const totalPeriods = useMemo(() => {
@@ -79,7 +56,12 @@ export default function TeacherSchedulePage() {
     setIsSlotOverlayOpen(true);
   };
 
+  const teacherMeta = TEACHER_META[teacherCode];
+  const teacherDisplayName = teacherMeta
+    ? `${teacherMeta.prefix}${teacherMeta.firstName} ${teacherMeta.lastName}`
+    : teacherCode;
   const enableInboxAlert = true;
+
   const hasUnreadInbox = enableInboxAlert && inboxMessages.some((message) => message.unread);
 
   return (
@@ -120,7 +102,7 @@ export default function TeacherSchedulePage() {
                 <FilterDropdown
                   label="T. code"
                   value={teacherCode}
-                  options={['9301', '9302', '9303']}
+                  options={['0301', '9301', '9302', '9303', '9304', '9305', '9306', '9307']}
                   onChange={setTeacherCode}
                 />
               </div>
@@ -129,7 +111,7 @@ export default function TeacherSchedulePage() {
                 <input
                   type="text"
                   className="px-2 py-1 border border-border-strong rounded text-xs w-36 text-foreground bg-background"
-                  value="เธเธเธฒเนเธเธ เนเธเธ”เธต"
+                  value={teacherDisplayName}
                   readOnly
                 />
               </div>

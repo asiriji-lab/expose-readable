@@ -44,6 +44,7 @@ export default function TabCard({ tabName, state, onClick }: TabCardProps) {
     <button
       onClick={() => isClickable && onClick(tabName)}
       disabled={!isClickable}
+      data-testid={`tab-card-${tabName}`}
       className={`
         flex flex-col items-start gap-2 p-4 rounded-xl border-2 text-left w-full
         transition-all duration-200

@@ -1,5 +1,5 @@
-import ScheduleCellDisplay from '@/app/(admin)/schedule/_components/ScheduleCellDisplay';
 import { ScheduleItem } from '@/app/(admin)/schedule/_utils/dummyData';
+import UnifiedScheduleCell, { buildRowsForMode, ROW_HEIGHT } from '@/app/(admin)/schedule/_components/UnifiedScheduleCell';
 
 interface ScheduleData {
   [day: string]: {
@@ -13,86 +13,86 @@ interface TeacherTimetableGridProps {
   onCellClick?: (day: string, slot: number, item: ScheduleItem | null) => void;
 }
 
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] as const;
+const SLOTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
+const DAY_ABBREV: Record<string, string> = {
+  Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri',
+};
+
 export default function TeacherTimetableGrid({ scheduleData, viewMode, onCellClick }: TeacherTimetableGridProps) {
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-  const slots = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
   const visibleLabels =
     viewMode === 'teacher'
-      ? ['Teacher']
+      ? ['Subject', 'Class', 'Room']
       : viewMode === 'class'
-      ? ['Class']
+      ? ['Subject', 'Teacher', 'Room']
       : viewMode === 'room'
-      ? ['Room']
-      : ['Teacher', 'Class', 'Room'];
+      ? ['Subject', 'Teacher', 'Class']
+      : ['Subject', 'Class', 'Room'];
+
+  const cellHeight = 3 * ROW_HEIGHT;
 
   return (
-    <div className="flex gap-0 overflow-hidden">
-      <div className="flex flex-col min-w-[100px]">
-        <div className="px-3 py-2 h-10 border-b border-transparent" />
-        {days.map((day) => (
-          <div
-            key={day}
-            className="flex items-center justify-center bg-surface font-bold text-foreground text-sm"
-            style={{ height: `${visibleLabels.length * 40}px` }}
-          >
-            {day}
-          </div>
-        ))}
-      </div>
-
-      <div className="flex flex-1 border border-border-strong rounded-lg overflow-hidden ml-2">
-        <div className="flex flex-col border-r border-border-strong">
-          <div className="bg-surface-alt border-b border-border-strong px-3 py-2 h-10 text-center text-sm font-bold text-foreground-muted flex items-center justify-center">
-            Slots
-          </div>
-
-          {days.map((day, dayIndex) => (
-            <div
-              key={day}
-              className={`flex flex-col ${dayIndex < days.length - 1 ? 'border-b border-border-strong' : ''}`}
-            >
-              {visibleLabels.map((label, labelIndex) => (
-                <div
-                  key={label}
-                  className={`px-3 py-2 text-xs text-foreground-muted bg-surface h-10 flex items-center justify-center min-w-[80px] ${
-                    labelIndex < visibleLabels.length - 1 ? 'border-b border-border' : ''
-                  }`}
-                >
-                  {label}
-                </div>
+    <div className="overflow-hidden rounded-xl border border-border-strong shadow-sm bg-surface">
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse" style={{ minWidth: `${76 * SLOTS.length + 134}px` }}>
+          <thead>
+            <tr className="bg-surface-alt">
+              <th className="sticky left-0 z-20 bg-surface-alt w-[72px] min-w-[72px] border-b border-r border-border-strong">
+                <div className="h-9 flex items-center justify-center text-[9px] font-bold text-foreground-muted uppercase tracking-wider">Day</div>
+              </th>
+              <th className="sticky left-[72px] z-20 bg-surface-alt w-[62px] min-w-[62px] border-b border-r border-border-strong">
+                <div className="h-9 flex items-center justify-center text-[9px] font-bold text-foreground-muted uppercase tracking-wider">Info</div>
+              </th>
+              {SLOTS.map(slot => (
+                <th key={slot} className="border-b border-border-strong min-w-[76px]">
+                  <div className="h-9 flex items-center justify-center">
+                    <span className="text-sm font-bold text-primary">{slot}</span>
+                  </div>
+                </th>
               ))}
-            </div>
-          ))}
-        </div>
-
-        <div className="flex-1 overflow-x-auto">
-          <div className="flex">
-            {slots.map((slot, slotIndex) => (
-              <div
-                key={slot}
-                className={`flex flex-col flex-1 min-w-[80px] ${slotIndex < slots.length - 1 ? 'border-r border-border-strong' : ''}`}
-              >
-                <div className="bg-surface-alt border-b border-border-strong px-2 py-2 text-center text-sm font-bold text-foreground-muted h-10 flex items-center justify-center">
-                  {slot}
-                </div>
-
-                {days.map((day, dayIndex) => {
+            </tr>
+          </thead>
+          <tbody>
+            {DAYS.map((day, di) => (
+              <tr key={day} className={di < DAYS.length - 1 ? 'border-b border-border' : ''}>
+                <td className="sticky left-0 z-10 bg-surface-alt border-r border-border-strong">
+                  <div className="flex items-center justify-center font-bold text-foreground text-xs" style={{ height: `${cellHeight}px` }}>
+                    <span className="hidden lg:inline">{day}</span>
+                    <span className="lg:hidden">{DAY_ABBREV[day]}</span>
+                  </div>
+                </td>
+                <td className="sticky left-[72px] z-10 bg-surface border-r border-border-strong">
+                  <div className="flex flex-col" style={{ height: `${cellHeight}px` }}>
+                    {visibleLabels.map((label, li) => (
+                      <div
+                        key={label}
+                        className={`flex items-center justify-center text-[9px] text-foreground-muted/70 ${li > 0 ? 'border-t border-border/40' : ''}`}
+                        style={{ height: `${ROW_HEIGHT}px` }}
+                      >
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                </td>
+                {SLOTS.map((slot, si) => {
                   const cellData = scheduleData[day]?.[slot];
+                  const rows = buildRowsForMode(viewMode, cellData);
 
                   return (
-                    <div
-                      key={day}
-                      className={`flex flex-col cursor-pointer hover:opacity-85 transition-opacity ${dayIndex < days.length - 1 ? 'border-b border-border-strong' : ''}`}
-                      onClick={() => onCellClick?.(day, slot, cellData || null)}
-                    >
-                      <ScheduleCellDisplay data={cellData} visibleLabels={visibleLabels} className="h-full" />
-                    </div>
+                    <td key={slot} className={`p-0 ${si < SLOTS.length - 1 ? 'border-r border-border/30' : ''}`}>
+                      <UnifiedScheduleCell
+                        mode="individual"
+                        rows={rows}
+                        variant={cellData?.variant}
+                        onClick={() => onCellClick?.(day, slot, cellData || null)}
+                      />
+                    </td>
                   );
                 })}
-              </div>
+              </tr>
             ))}
-          </div>
-        </div>
+          </tbody>
+        </table>
       </div>
     </div>
   );
