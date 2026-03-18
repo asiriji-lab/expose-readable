@@ -69,6 +69,7 @@ class GeneticAlgorithm:
         elite_size: int = 5,
         tournament_size: int = 3,       # lowered from 5-7 for more diversity
         stagnation_limit: int = 50,
+        plateau_patience: int = 150,
         block_crossover_rate: float = 0.5,  # probability of block-level mixing per lesson in crossover
         progress_callback: Optional[Callable] = None,
     ):
@@ -80,6 +81,7 @@ class GeneticAlgorithm:
         self.elite_size = elite_size
         self.tournament_size = tournament_size
         self.stagnation_limit = stagnation_limit
+        self.plateau_patience = plateau_patience
         self.block_crossover_rate = block_crossover_rate
         self.progress_callback = progress_callback
 
@@ -154,7 +156,9 @@ class GeneticAlgorithm:
         self.population: List[Chromosome] = []
         self.best_chromosome: Optional[Chromosome] = None
         self.generation_stats: List[Dict] = []
-        self._gens_without_improvement: int = 0
+        self._gens_without_improvement: int = 0   # resets on restart
+        self._global_stagnation: int = 0           # never resets on restart; drives plateau stop
+        self._stopped_early: bool = False
         self._current_generation: int = 0
 
         print(f"  [GA] Teaching columns : {len(self.teaching_cols)}")
@@ -919,6 +923,7 @@ class GeneticAlgorithm:
         print(f"  Crossover    : {self.crossover_rate}")
         print(f"  Tournament   : {self.tournament_size}")
         print(f"  Stagnation   : restart after {self.stagnation_limit} gens")
+        print(f"  Plateau stop : after {self.plateau_patience} gens with no global improvement")
         print("=" * 60 + "\n")
 
         self.initialize_population()
@@ -962,21 +967,32 @@ class GeneticAlgorithm:
             if gen_best.fitness < self.best_chromosome.fitness:
                 self.best_chromosome = gen_best.copy()
                 self._gens_without_improvement = 0
+                self._global_stagnation = 0          # genuine improvement → reset plateau counter
             else:
                 self._gens_without_improvement += 1
+                self._global_stagnation += 1         # tracks across restarts
 
             # Stagnation restart (improvement 5)
             if self._gens_without_improvement >= self.stagnation_limit:
                 self._restart_bottom_half()
 
+            # Plateau early stop — fires only after genuine global stagnation
+            if self._global_stagnation >= self.plateau_patience:
+                self._stopped_early = True
+                print(f"\n  ⏹  Plateau stop at gen {gen}: no global improvement for "
+                      f"{self.plateau_patience} generations "
+                      f"(best fitness = {self.best_chromosome.fitness:.0f})")
+                break
+
             # Stats
             avg_fitness = sum(c.fitness for c in self.population) / len(self.population)
             stat = {
-                'generation':   gen,
-                'best_fitness': self.best_chromosome.fitness,
-                'avg_fitness':  avg_fitness,
-                'violations':   self.best_chromosome.violations,
-                'stagnation':   self._gens_without_improvement,
+                'generation':        gen,
+                'best_fitness':      self.best_chromosome.fitness,
+                'avg_fitness':       avg_fitness,
+                'violations':        self.best_chromosome.violations,
+                'stagnation':        self._gens_without_improvement,
+                'global_stagnation': self._global_stagnation,
             }
             self.generation_stats.append(stat)
 
@@ -1088,9 +1104,10 @@ class GeneticAlgorithm:
         if not self.best_chromosome:
             return {}
         return {
-            'final_fitness':    self.best_chromosome.fitness,
-            'generations_run':  len(self.generation_stats),
-            'solution_found':   self.best_chromosome.fitness == 0,
-            'final_violations': self.best_chromosome.violations,
+            'final_fitness':     self.best_chromosome.fitness,
+            'generations_run':   len(self.generation_stats),
+            'solution_found':    self.best_chromosome.fitness == 0,
+            'stopped_early':     self._stopped_early,
+            'final_violations':  self.best_chromosome.violations,
             'lessons_scheduled': len(self.lessons),
         }

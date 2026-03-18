@@ -3,22 +3,70 @@
 GA SCHEDULER - Scheduler Runner
 ================================================================================
 
-Main scheduler orchestration - ties together data loading, GA, and export.
+Main scheduler orchestration — mirrors the pipeline in main.py:
+  1. Load raw CSVs from uploads folder
+  2. Data cleaning (rename Thai columns → English)
+  3. Preschedule processing (all 5 tasks via run_all_tasks)
+  4. Feasibility check
+  5. GA optimisation (Island GA by default)
+  6. Export — CSV + JSON
+================================================================================
 """
 
 import os
-import glob
 import json
+import pandas as pd
 from typing import Dict, Optional, Callable
 
 from src.data_cleaning.data_cleaning import clean_input_data
 from src.preschedule.scheduleManager import ScheduleManager
 from src.preschedule.prescheduleProcessor import PrescheduleProcessor
+from .island_ga import IslandGeneticAlgorithm
 from .genetic_algorithm import GeneticAlgorithm
 from .exporter import ScheduleExporter
 from .json_exporter import ScheduleJsonExporter
 from .job_manager import JobManager
 from .feasibility_checker import FeasibilityChecker
+
+
+# Canonical filenames expected in the uploads folder (matching input_dataset/)
+_INPUT_FILES = {
+    'curriculum': 'curriculum.csv',
+    'elective':   'elective.csv',
+    'teacher':    'teacher.csv',
+    'period':     'period.csv',
+    'preplace':   'preplace.csv',
+    'room':       'room.csv',
+    'student':    'student.csv',
+    'scout':      'scout.csv',
+}
+
+# Island GA defaults matching main.py
+_ISLAND_GA_DEFAULTS = dict(
+    n_islands=4,
+    island_population_size=125,
+    migration_interval=50,
+    migration_rate=0.1,
+    topology='ring',
+    mutation_rate=0.015,
+    crossover_rate=0.9,
+    tournament_size=9,
+    max_generations=1000,
+    elite_size=10,
+    stagnation_limit=50,
+    catastrophic_after=3,
+    plateau_patience=150,
+)
+
+
+def _load_raw_data(uploads_folder: str) -> Dict[str, pd.DataFrame]:
+    """Load all present CSV files from uploads_folder into a DataFrame dict."""
+    raw_data: Dict[str, pd.DataFrame] = {}
+    for key, filename in _INPUT_FILES.items():
+        path = os.path.join(uploads_folder, filename)
+        if os.path.exists(path):
+            raw_data[key] = pd.read_csv(path, encoding='utf-8-sig')
+    return raw_data
 
 
 def run_scheduler_job(job_id: str,
@@ -29,119 +77,126 @@ def run_scheduler_job(job_id: str,
                       academic_year: str = "",
                       semester: int = 1) -> Dict:
     """
-    Run a complete scheduling job.
-    
+    Run a complete scheduling job, mirroring the main.py pipeline.
+
     Args:
-        job_id: Unique job identifier
-        job_folder: Path to job folder containing uploads/outputs
-        params: GA parameters
-        job_manager: Optional JobManager for status updates
-        progress_callback: Optional callback for progress updates
-        
+        job_id:            Unique job identifier
+        job_folder:        Path containing uploads/ and outputs/ subdirs
+        params:            GA parameters (merged over defaults)
+        job_manager:       Optional JobManager for status/progress updates
+        progress_callback: Optional external progress callback
+        academic_year:     Written into the JSON output config
+        semester:          Written into the JSON output config
+
     Returns:
-        Dictionary with job results
+        Dict with job results and schedule_json key for the API response.
     """
     uploads_folder = os.path.join(job_folder, 'uploads')
     outputs_folder = os.path.join(job_folder, 'outputs')
-    
-    # Ensure output folder exists
     os.makedirs(outputs_folder, exist_ok=True)
-    
-    # Update status
+
+    # ── Step 1: Load raw CSVs ─────────────────────────────────────────────────
     if job_manager:
         job_manager.update_job_status(job_id, 'loading_data')
-    
-    # 1. Clean Data (replaces DataLoader)
+
     try:
-        cleaned_data = clean_input_data(uploads_folder)
+        raw_data = _load_raw_data(uploads_folder)
+        if not raw_data:
+            raise ValueError("No input files found in uploads folder")
+
+        cleaned_data = clean_input_data(raw_data)
+
+        curriculum_df = cleaned_data.get('curriculum')
+        room_df       = cleaned_data.get('room')
         data_stats = {
-            'curriculum_rows': len(cleaned_data.get('curriculum', [])),
-            'rooms_rows': len(cleaned_data.get('rooms', [])),
+            'curriculum_rows': len(curriculum_df) if curriculum_df is not None else 0,
+            'rooms_rows':      len(room_df)       if room_df       is not None else 0,
         }
     except Exception as e:
         if job_manager:
-             job_manager.update_job_status(job_id, 'failed', result={'error': str(e)})
+            job_manager.update_job_status(job_id, 'failed', result={'error': str(e)})
         return {'success': False, 'error': str(e)}
-        
-    # 2. Initialize ScheduleManager
+
+    # ── Step 2: Preschedule (all 5 tasks) ────────────────────────────────────
     schedule_manager = ScheduleManager()
-    
-    # 3. Preschedule Processing (Tasks 1-5)
-    # We need to run the prescheduler pipeline to populate initial state
     processor = PrescheduleProcessor(schedule_manager)
-    
-    # Task 1: Setup
-    processor.task1_process_data_and_setup(cleaned_data)
-    
-    # Task 2: Allocations (if any logic exists here)
-    processor.task2_preplace_allocation()
-    
-    # Task 3: Availability
-    processor.task3_mark_unavailable()
-    
-    # Task 4 & 5: Electives & Scout
-    processor.task4_schedule_electives()
-    processor.task5_assign_scout()
-    
-    # Feasibility check before running the GA
+    processor.run_all_tasks(cleaned_data)
+
+    # ── Step 3: Feasibility check ─────────────────────────────────────────────
     checker = FeasibilityChecker(schedule_manager)
     feasibility_report = checker.check()
 
-    # Update status
+    # ── Step 4: GA ────────────────────────────────────────────────────────────
     if job_manager:
         job_manager.update_job_progress(job_id, 'running_ga', 0, data_stats)
 
-    # Define progress callback for GA
     def ga_progress(generation, max_gen, stats):
         progress = (generation / max_gen) * 100
         if job_manager:
             job_manager.update_job_progress(job_id, 'running_ga', progress, {
-                'generation': generation,
+                'generation':    generation,
                 'max_generations': max_gen,
-                'best_fitness': stats['best_fitness'],
-                'violations': stats['violations']
+                'best_fitness':  stats['best_fitness'],
+                'violations':    stats['violations'],
             })
         if progress_callback:
             progress_callback(generation, max_gen, stats)
-    
-    # Run GA
-    ga = GeneticAlgorithm(
-        schedule_manager=schedule_manager, # Replaces data_loader
-        population_size=params.get('population_size', 150),
-        max_generations=params.get('max_generations', 500),
-        mutation_rate=params.get('mutation_rate', 0.20),
-        crossover_rate=params.get('crossover_rate', 0.80),
-        elite_size=params.get('elite_size', 10),
-        tournament_size=params.get('tournament_size', 7),
-        progress_callback=ga_progress
-    )
-    
+
+    # Use Island GA by default (n_islands ≥ 2), matching main.py
+    n_islands = params.get('n_islands', _ISLAND_GA_DEFAULTS['n_islands'])
+    if n_islands > 1:
+        ga_kwargs = {**_ISLAND_GA_DEFAULTS, **params, 'n_islands': n_islands}
+        ga = IslandGeneticAlgorithm(
+            schedule_manager=schedule_manager,
+            n_islands=ga_kwargs['n_islands'],
+            island_population_size=ga_kwargs['island_population_size'],
+            max_generations=ga_kwargs['max_generations'],
+            migration_interval=ga_kwargs['migration_interval'],
+            migration_rate=ga_kwargs['migration_rate'],
+            topology=ga_kwargs['topology'],
+            mutation_rate=ga_kwargs['mutation_rate'],
+            crossover_rate=ga_kwargs['crossover_rate'],
+            tournament_size=ga_kwargs['tournament_size'],
+            elite_size=ga_kwargs['elite_size'],
+            stagnation_limit=ga_kwargs['stagnation_limit'],
+            catastrophic_after=ga_kwargs['catastrophic_after'],
+            progress_callback=ga_progress,
+        )
+    else:
+        ga = GeneticAlgorithm(
+            schedule_manager=schedule_manager,
+            population_size=params.get('population_size', 150),
+            max_generations=params.get('max_generations', 500),
+            mutation_rate=params.get('mutation_rate', 0.20),
+            crossover_rate=params.get('crossover_rate', 0.80),
+            elite_size=params.get('elite_size', 10),
+            tournament_size=params.get('tournament_size', 7),
+            progress_callback=ga_progress,
+        )
+
     best_solution = ga.evolve()
-    ga_result = ga.get_result_summary()
-    
-    # Update status
+    ga_result     = ga.get_result_summary()
+
+    # ── Step 5: Export ────────────────────────────────────────────────────────
     if job_manager:
         job_manager.update_job_status(job_id, 'exporting')
-    
-    # Export results
-    # Use the refactored Exporter which takes Manager and Chromosome
+
     schedule_json = None
-    json_path = None
+    json_path     = None
+
     if best_solution:
-        # ── CSV export → job_folder/outputs/{teachers,students,rooms}/*.csv ──
+        # CSV export
         exporter = ScheduleExporter(
             schedule_manager=schedule_manager,
             chromosome=best_solution,
-            output_dir=outputs_folder
+            output_dir=outputs_folder,
         )
-        # Note: We pass ga.lessons here as per our previous fix
         export_result = exporter.export_all(ga.lessons)
 
-        # Register CSV output folder in the job record
         if job_manager:
             job_manager.add_file_to_job(job_id, 'output_csv_dir', outputs_folder)
 
-        # ── JSON export → job_folder/outputs/schedule.json ──────────────────
+        # JSON export
         json_exporter = ScheduleJsonExporter(
             schedule_manager=schedule_manager,
             chromosome=best_solution,
@@ -154,27 +209,24 @@ def run_scheduler_job(job_id: str,
         with open(json_path, 'w', encoding='utf-8') as _f:
             json.dump(schedule_json, _f, ensure_ascii=False, indent=2)
 
-        # Register JSON output file in the job record
         if job_manager:
             job_manager.add_file_to_job(job_id, 'output_json', json_path)
     else:
         export_result = {'error': 'No solution found'}
 
-    # Slim result stored in jobs.json — no schedule content, just metadata + paths.
+    # Slim result stored in jobs.json — no schedule content, just metadata + paths
     stored_result = {
-        'job_id':        job_id,
-        'data_stats':    data_stats,
-        'feasibility':   feasibility_report.to_dict(),
-        'ga_result':     ga_result,
-        'export_result': export_result,
+        'job_id':         job_id,
+        'data_stats':     data_stats,
+        'feasibility':    feasibility_report.to_dict(),
+        'ga_result':      ga_result,
+        'export_result':  export_result,
         'outputs_folder': outputs_folder,
-        'json_path':     json_path,
-        'success':       True,
+        'json_path':      json_path,
+        'success':        True,
     }
 
-    # Update final status (stored_result goes into jobs.json, must stay small)
     if job_manager:
         job_manager.update_job_status(job_id, 'completed', result=stored_result)
 
-    # Return full result including schedule_json for the API response
     return {**stored_result, 'schedule_json': schedule_json}

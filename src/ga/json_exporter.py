@@ -117,6 +117,18 @@ class ScheduleJsonExporter:
         """'2,08.30-09.20' → '2'"""
         return period_col.split(',')[0]
 
+    def _count_expected_periods(self, block_pattern: str) -> int:
+        """Return total period count implied by a block pattern like '2-1' or '2'."""
+        if not block_pattern:
+            return 1
+        total = 0
+        for part in str(block_pattern).split('-'):
+            try:
+                total += int(part.strip())
+            except ValueError:
+                total += 1
+        return total
+
     def _is_special(self, value: Any) -> bool:
         """Return True if the cell value is a blocked/special slot, not a real lesson."""
         if value is None:
@@ -227,6 +239,29 @@ class ScheduleJsonExporter:
                 columns.append({period.label: cell})
             rows.append({"day": day, "columns": columns})
         return rows
+
+    # =========================================================================
+    # UNFILLED SLOTS
+    # =========================================================================
+
+    def _build_unfilled_slots(self, lessons: List[Lesson]) -> List[Dict]:
+        """Return lessons whose chromosome assignment is fewer periods than expected."""
+        unfilled = []
+        for lesson in lessons:
+            assigned = len(self.chromosome.genes.get(lesson.lesson_id, []))
+            expected = self._count_expected_periods(lesson.block_pattern)
+            if assigned < expected:
+                unfilled.append({
+                    "lesson_id":       lesson.lesson_id,
+                    "subject_id":      lesson.subject_id,
+                    "subject_name":    lesson.subject_name,
+                    "teacher_ids":     lesson.teacher_ids,
+                    "student_classes": lesson.student_classes,
+                    "assigned_periods": assigned,
+                    "expected_periods": expected,
+                    "missing_periods":  expected - assigned,
+                })
+        return unfilled
 
     # =========================================================================
     # CONFIG BUILDER
@@ -356,8 +391,9 @@ class ScheduleJsonExporter:
             })
 
         return {
-            "config":   self._build_config(),
-            "teachers": teachers,
-            "students": students,
-            "rooms":    rooms,
+            "config":          self._build_config(),
+            "teachers":        teachers,
+            "students":        students,
+            "rooms":           rooms,
+            "unfilled_slots":  self._build_unfilled_slots(lessons),
         }

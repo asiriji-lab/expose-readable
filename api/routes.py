@@ -10,17 +10,220 @@ import os
 import uuid
 import json
 import shutil
+import threading
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app, send_file
 from werkzeug.utils import secure_filename
 
-from core.scheduler import run_scheduler_job
-from core.job_manager import JobManager
-from utils.validators import validate_curriculum, validate_rooms, validate_timetable
-from utils.file_helpers import allowed_file, get_job_folder, create_zip_archive
+from src.ga.scheduler import run_scheduler_job
+from src.ga.job_manager import JobManager
+from src.utils.validators import validate_curriculum, validate_rooms, validate_timetable
+from src.utils.file_helpers import allowed_file, get_job_folder, create_zip_archive
 
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
+
+
+# =============================================================================
+# BACKGROUND JOB RUNNER
+# =============================================================================
+
+def _run_job_background(app, job_id, job_folder, params, academic_year, semester):
+    """Run a scheduling job inside a background thread with its own app context."""
+    with app.app_context():
+        job_manager = JobManager(app.config['JOBS_FOLDER'])
+        try:
+            run_scheduler_job(
+                job_id=job_id,
+                job_folder=job_folder,
+                params=params,
+                job_manager=job_manager,
+                academic_year=academic_year,
+                semester=semester,
+            )
+        except Exception as e:
+            job_manager.update_job_status(job_id, 'failed', error=str(e))
+
+
+# =============================================================================
+# SINGLE SUBMIT ENDPOINT
+# =============================================================================
+
+@api_bp.route('/schedule', methods=['POST'])
+def submit_schedule():
+    """
+    Submit a complete scheduling job in one request.
+    ---
+    tags:
+      - Scheduling
+    summary: Submit a scheduling job (preferred entry point)
+    description: >
+      Upload all input files and optional parameters in a single multipart
+      request. The job runs in the background — poll GET /api/v1/schedule/{job_id}
+      for status. The pipeline mirrors main.py exactly.
+      curriculum.csv and room.csv are required; the other six are strongly
+      recommended for correct results.
+    consumes:
+      - multipart/form-data
+    parameters:
+      - name: curriculum
+        in: formData
+        type: file
+        required: true
+        description: "Curriculum CSV (Thai headers: รหัสวิชา, คาบ/สัปดาห์, ครู, ห้อง (นักเรียน) ที่สอน, ...)"
+      - name: room
+        in: formData
+        type: file
+        required: true
+        description: "Room list CSV (Thai header: ห้องทั้งหมด)"
+      - name: elective
+        in: formData
+        type: file
+        required: false
+        description: Elective course CSV
+      - name: teacher
+        in: formData
+        type: file
+        required: false
+        description: Teacher availability CSV
+      - name: period
+        in: formData
+        type: file
+        required: false
+        description: Period definition CSV
+      - name: preplace
+        in: formData
+        type: file
+        required: false
+        description: Pre-placed slot CSV
+      - name: student
+        in: formData
+        type: file
+        required: false
+        description: Student class list CSV
+      - name: scout
+        in: formData
+        type: file
+        required: false
+        description: Scout session CSV
+      - name: job_name
+        in: formData
+        type: string
+        required: false
+        description: Human-readable label for this job
+      - name: academic_year
+        in: formData
+        type: string
+        required: false
+        description: Academic year written into the JSON output e.g. 2026
+      - name: semester
+        in: formData
+        type: integer
+        required: false
+        default: 1
+        description: Semester number written into the JSON output
+      - name: ga_params
+        in: formData
+        type: string
+        required: false
+        description: >
+          Optional JSON string overriding Island GA defaults.
+          Keys: n_islands, island_population_size, max_generations,
+          migration_interval, migration_rate, topology, mutation_rate,
+          crossover_rate, tournament_size, elite_size, stagnation_limit,
+          catastrophic_after. Set n_islands=1 to use the standard GA instead.
+    responses:
+      202:
+        description: Job accepted and running in background
+        schema:
+          type: object
+          properties:
+            success:      {type: boolean, example: true}
+            job_id:       {type: string}
+            job_name:     {type: string}
+            message:      {type: string}
+            status_url:   {type: string}
+            download_url: {type: string}
+      400:
+        description: Missing required file or unreadable CSV
+    """
+    # ── Required files ────────────────────────────────────────────────────────
+    _REQUIRED = ['curriculum', 'room']
+    for name in _REQUIRED:
+        if name not in request.files or request.files[name].filename == '':
+            return jsonify({"success": False, "error": f"'{name}.csv' is required"}), 400
+
+    # ── Parse form parameters ─────────────────────────────────────────────────
+    job_name      = request.form.get('job_name', '').strip()
+    academic_year = request.form.get('academic_year', '')
+    try:
+        semester = int(request.form.get('semester', 1))
+    except (ValueError, TypeError):
+        semester = 1
+    try:
+        ga_params = json.loads(request.form.get('ga_params', '{}'))
+    except (json.JSONDecodeError, TypeError):
+        ga_params = {}
+
+    # ── Create job ────────────────────────────────────────────────────────────
+    job_id = str(uuid.uuid4())
+    if not job_name:
+        job_name = f'Schedule Job {job_id[:8]}'
+
+    # Pass all ga_params through; scheduler merges with Island GA defaults
+    params = {**ga_params, 'academic_year': academic_year, 'semester': semester}
+
+    job_folder     = get_job_folder(current_app.config['JOBS_FOLDER'], job_id)
+    uploads_folder = os.path.join(job_folder, 'uploads')
+    os.makedirs(uploads_folder, exist_ok=True)
+    os.makedirs(os.path.join(job_folder, 'outputs'), exist_ok=True)
+
+    job_manager = JobManager(current_app.config['JOBS_FOLDER'])
+    job_manager.create_job(job_id, job_name, params)
+
+    # ── Save all uploaded files with canonical names ───────────────────────────
+    # The canonical names match input_dataset/ so the cleaning pipeline can find them.
+    _FILE_KEYS = ['curriculum', 'elective', 'teacher', 'period',
+                  'preplace', 'room', 'student', 'scout']
+    for key in _FILE_KEYS:
+        fobj = request.files.get(key)
+        if not fobj or fobj.filename == '':
+            continue
+        if not allowed_file(fobj.filename, current_app.config['ALLOWED_EXTENSIONS']):
+            shutil.rmtree(job_folder, ignore_errors=True)
+            job_manager.delete_job(job_id)
+            return jsonify({"success": False,
+                            "error": f"'{key}' must be a CSV file"}), 400
+        dest = os.path.join(uploads_folder, f'{key}.csv')
+        fobj.save(dest)
+        # Basic readability check
+        try:
+            import pandas as _pd
+            _pd.read_csv(dest, nrows=1)
+        except Exception as exc:
+            shutil.rmtree(job_folder, ignore_errors=True)
+            job_manager.delete_job(job_id)
+            return jsonify({"success": False,
+                            "error": f"Could not read '{key}.csv': {exc}"}), 400
+        job_manager.add_file_to_job(job_id, key, dest)
+
+    # ── Launch background thread ──────────────────────────────────────────────
+    app = current_app._get_current_object()
+    thread = threading.Thread(
+        target=_run_job_background,
+        args=(app, job_id, job_folder, params, academic_year, semester),
+        daemon=True,
+    )
+    thread.start()
+
+    return jsonify({
+        "success":      True,
+        "job_id":       job_id,
+        "job_name":     job_name,
+        "message":      "Job queued and running. Poll the status endpoint for updates.",
+        "status_url":   f"/api/v1/schedule/{job_id}",
+        "download_url": f"/api/v1/schedule/{job_id}/download",
+    }), 202
 
 
 # =============================================================================
@@ -29,7 +232,21 @@ api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
 @api_bp.route('/jobs', methods=['GET'])
 def list_jobs():
-    """List all scheduling jobs."""
+    """
+    List all scheduling jobs.
+    ---
+    tags:
+      - Scheduling
+    responses:
+      200:
+        description: Array of job objects
+        schema:
+          type: object
+          properties:
+            success: {type: boolean}
+            count:   {type: integer}
+            jobs:    {type: array, items: {type: object}}
+    """
     job_manager = JobManager(current_app.config['JOBS_FOLDER'])
     jobs = job_manager.list_jobs()
     
@@ -43,29 +260,45 @@ def list_jobs():
 @api_bp.route('/schedule/create', methods=['POST'])
 def create_schedule():
     """
-    Create a new scheduling job.
-    
-    Request JSON:
-    {
-        "job_name": "optional job name",
-        "academic_year": "2026",
-        "semester": 1,
-        "ga_params": {
-            "population_size": 150,
-            "max_generations": 500,
-            "mutation_rate": 0.20,
-            "crossover_rate": 0.80,
-            "elite_size": 10,
-            "tournament_size": 7
-        }
-    }
-    
-    Returns:
-    {
-        "success": true,
-        "job_id": "uuid",
-        "message": "Job created successfully"
-    }
+    (Legacy) Create a scheduling job without files.
+    ---
+    tags:
+      - Scheduling
+    summary: "(Legacy) Create job — then upload files and call /start separately"
+    description: >
+      Prefer **POST /api/v1/schedule** for a single-request workflow.
+      This endpoint only creates the job record; you must separately upload
+      files and call POST /api/v1/schedule/{job_id}/start.
+    consumes:
+      - application/json
+    parameters:
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            job_name:      {type: string,  example: "My Schedule"}
+            academic_year: {type: string,  example: "2026"}
+            semester:      {type: integer, example: 1}
+            ga_params:
+              type: object
+              properties:
+                population_size: {type: integer, example: 150}
+                max_generations: {type: integer, example: 500}
+                mutation_rate:   {type: number,  example: 0.20}
+                crossover_rate:  {type: number,  example: 0.80}
+                elite_size:      {type: integer, example: 10}
+                tournament_size: {type: integer, example: 7}
+    responses:
+      201:
+        description: Job created
+        schema:
+          type: object
+          properties:
+            success:  {type: boolean}
+            job_id:   {type: string}
+            job_name: {type: string}
+            message:  {type: string}
     """
     # Generate job ID
     job_id = str(uuid.uuid4())
@@ -113,7 +346,39 @@ def create_schedule():
 
 @api_bp.route('/schedule/<job_id>', methods=['GET'])
 def get_job_status(job_id):
-    """Get the status of a scheduling job."""
+    """
+    Get the status and result of a scheduling job.
+    ---
+    tags:
+      - Scheduling
+    parameters:
+      - name: job_id
+        in: path
+        type: string
+        required: true
+        description: Job UUID returned by POST /api/v1/schedule
+    responses:
+      200:
+        description: Job object with status, progress, and result when completed
+        schema:
+          type: object
+          properties:
+            success: {type: boolean}
+            job:
+              type: object
+              properties:
+                job_id:           {type: string}
+                job_name:         {type: string}
+                status:           {type: string, enum: [created, loading_data, running_ga, exporting, completed, failed]}
+                progress:         {type: number, description: "0–100"}
+                progress_details: {type: object}
+                result:           {type: object}
+                error:            {type: string}
+                created_at:       {type: string}
+                updated_at:       {type: string}
+      404:
+        description: Job not found
+    """
     job_manager = JobManager(current_app.config['JOBS_FOLDER'])
     job = job_manager.get_job(job_id)
     
@@ -131,7 +396,37 @@ def get_job_status(job_id):
 
 @api_bp.route('/schedule/<job_id>/start', methods=['POST'])
 def start_job(job_id):
-    """Start the scheduling job."""
+    """
+    (Legacy) Start a previously created job synchronously.
+    ---
+    tags:
+      - Scheduling
+    summary: "(Legacy) Start job — blocks until scheduling completes"
+    description: >
+      Prefer **POST /api/v1/schedule** which runs asynchronously.
+      This endpoint blocks the HTTP connection for the full duration of the GA.
+    parameters:
+      - name: job_id
+        in: path
+        type: string
+        required: true
+    responses:
+      200:
+        description: Scheduling completed; full schedule JSON returned in response
+        schema:
+          type: object
+          properties:
+            success:  {type: boolean}
+            message:  {type: string}
+            result:   {type: object}
+            schedule: {type: object, description: "Full schedule JSON"}
+      400:
+        description: Missing files or invalid job state
+      404:
+        description: Job not found
+      500:
+        description: Scheduling failed
+    """
     job_manager = JobManager(current_app.config['JOBS_FOLDER'])
     job = job_manager.get_job(job_id)
     
@@ -203,7 +498,26 @@ def start_job(job_id):
 
 @api_bp.route('/schedule/<job_id>/download', methods=['GET'])
 def download_results(job_id):
-    """Download completed schedules as a ZIP file."""
+    """
+    Download completed schedules as a ZIP archive.
+    ---
+    tags:
+      - Scheduling
+    parameters:
+      - name: job_id
+        in: path
+        type: string
+        required: true
+    produces:
+      - application/zip
+    responses:
+      200:
+        description: ZIP file containing teacher/student/room CSVs and schedule.json
+      400:
+        description: Job not yet completed
+      404:
+        description: Job not found
+    """
     job_manager = JobManager(current_app.config['JOBS_FOLDER'])
     job = job_manager.get_job(job_id)
     
@@ -236,7 +550,27 @@ def download_results(job_id):
 
 @api_bp.route('/schedule/<job_id>', methods=['DELETE'])
 def delete_job(job_id):
-    """Delete a scheduling job and its files."""
+    """
+    Delete a scheduling job and all its files.
+    ---
+    tags:
+      - Scheduling
+    parameters:
+      - name: job_id
+        in: path
+        type: string
+        required: true
+    responses:
+      200:
+        description: Job deleted
+        schema:
+          type: object
+          properties:
+            success: {type: boolean}
+            message: {type: string}
+      404:
+        description: Job not found
+    """
     job_manager = JobManager(current_app.config['JOBS_FOLDER'])
     job = job_manager.get_job(job_id)
     
@@ -267,11 +601,37 @@ def delete_job(job_id):
 @api_bp.route('/curriculum/upload', methods=['POST'])
 def upload_curriculum():
     """
-    Upload curriculum CSV file.
-    
-    Form data:
-    - job_id: The job ID to associate with this file
-    - file: The curriculum CSV file
+    (Legacy) Upload curriculum CSV to an existing job.
+    ---
+    tags:
+      - Files
+    summary: "(Legacy) Upload curriculum CSV"
+    consumes:
+      - multipart/form-data
+    parameters:
+      - name: job_id
+        in: formData
+        type: string
+        required: true
+        description: Job UUID from POST /api/v1/schedule/create
+      - name: file
+        in: formData
+        type: file
+        required: true
+        description: "Curriculum CSV (required cols: subject_id, periods_per_week, teacher, student_class)"
+    responses:
+      200:
+        description: File uploaded and validated
+        schema:
+          type: object
+          properties:
+            success:       {type: boolean}
+            lessons_count: {type: integer}
+            grades:        {type: array, items: {type: string}}
+      400:
+        description: Validation error or missing fields
+      404:
+        description: Job not found
     """
     if 'file' not in request.files:
         return jsonify({
@@ -337,11 +697,35 @@ def upload_curriculum():
 @api_bp.route('/rooms/upload', methods=['POST'])
 def upload_rooms():
     """
-    Upload rooms CSV file.
-    
-    Form data:
-    - job_id: The job ID to associate with this file
-    - file: The rooms CSV file
+    (Legacy) Upload rooms CSV to an existing job.
+    ---
+    tags:
+      - Files
+    summary: "(Legacy) Upload rooms CSV"
+    consumes:
+      - multipart/form-data
+    parameters:
+      - name: job_id
+        in: formData
+        type: string
+        required: true
+      - name: file
+        in: formData
+        type: file
+        required: true
+        description: "Rooms CSV (required column: room_id)"
+    responses:
+      200:
+        description: File uploaded and validated
+        schema:
+          type: object
+          properties:
+            success:     {type: boolean}
+            rooms_count: {type: integer}
+      400:
+        description: Validation error or missing fields
+      404:
+        description: Job not found
     """
     if 'file' not in request.files:
         return jsonify({
@@ -406,22 +790,49 @@ def upload_rooms():
 @api_bp.route('/timetables/upload', methods=['POST'])
 def upload_timetables():
     """
-    Upload existing timetable CSV files (student, teacher, or room timetables).
-    
-    Accepts multiple files under a single key. The endpoint checks for files
-    under any of these keys: 'files', 'file', 'timetables', or 'timetable'.
-    
-    Form data:
-    - job_id: The job ID to associate with these files
-    - files (or file/timetables/timetable): Multiple timetable CSV files
-    - type: 'student', 'teacher', or 'room' (optional, auto-detected from filename)
-    
-    Example curl:
-        curl -X POST http://localhost:5000/api/v1/timetables/upload \
-            -F "job_id=<job_id>" \
-            -F "files=@student_1_1.csv" \
-            -F "files=@student_1_2.csv" \
-            -F "files=@teacher_T001.csv"
+    (Legacy) Upload existing timetable CSVs to an existing job.
+    ---
+    tags:
+      - Files
+    summary: "(Legacy) Upload existing timetable CSVs"
+    description: >
+      Accepts multiple files under any of these keys: files, file, timetables, timetable.
+      Type (student/teacher/room) is auto-detected from the filename
+      (e.g. student_1_1.csv, teacher_T001.csv, room_A101.csv).
+    consumes:
+      - multipart/form-data
+    parameters:
+      - name: job_id
+        in: formData
+        type: string
+        required: true
+      - name: files
+        in: formData
+        type: file
+        required: true
+        description: One or more timetable CSV files (repeatable)
+    responses:
+      200:
+        description: Upload summary
+        schema:
+          type: object
+          properties:
+            success:        {type: boolean}
+            uploaded_count: {type: integer}
+            error_count:    {type: integer}
+            uploaded:
+              type: array
+              items:
+                type: object
+                properties:
+                  filename:  {type: string}
+                  type:      {type: string}
+                  entity_id: {type: string}
+            errors: {type: array, items: {type: string}}
+      400:
+        description: No files provided or missing job_id
+      404:
+        description: Job not found
     """
     # Accept files under multiple possible key names
     files = []
@@ -502,123 +913,3 @@ def upload_timetables():
     })
 
 
-# =============================================================================
-# UTILITY ENDPOINTS
-# =============================================================================
-
-@api_bp.route('/docs', methods=['GET'])
-def api_docs():
-    """Return API documentation."""
-    return jsonify({
-        "name": "GA Scheduler API",
-        "version": "1.0.0",
-        "description": "Genetic Algorithm School Timetable Completion System",
-        "base_url": "/api/v1",
-        "endpoints": [
-            {
-                "method": "GET",
-                "path": "/jobs",
-                "description": "List all scheduling jobs",
-                "parameters": None,
-                "response": {"jobs": "array of job objects"}
-            },
-            {
-                "method": "POST",
-                "path": "/schedule/create",
-                "description": "Create a new scheduling job",
-                "parameters": {
-                    "job_name": "string (optional)",
-                    "ga_params": {
-                        "population_size": "int (default: 150)",
-                        "max_generations": "int (default: 500)",
-                        "mutation_rate": "float (default: 0.20)",
-                        "crossover_rate": "float (default: 0.80)",
-                        "elite_size": "int (default: 10)",
-                        "tournament_size": "int (default: 7)"
-                    }
-                },
-                "response": {"job_id": "string", "message": "string"}
-            },
-            {
-                "method": "GET",
-                "path": "/schedule/<job_id>",
-                "description": "Get job status and details",
-                "parameters": None,
-                "response": {"job": "job object"}
-            },
-            {
-                "method": "POST",
-                "path": "/schedule/<job_id>/start",
-                "description": "Start the scheduling algorithm",
-                "parameters": None,
-                "response": {"result": "scheduling result"}
-            },
-            {
-                "method": "GET",
-                "path": "/schedule/<job_id>/download",
-                "description": "Download completed schedules as ZIP",
-                "parameters": None,
-                "response": "ZIP file"
-            },
-            {
-                "method": "DELETE",
-                "path": "/schedule/<job_id>",
-                "description": "Delete a job and its files",
-                "parameters": None,
-                "response": {"message": "string"}
-            },
-            {
-                "method": "POST",
-                "path": "/curriculum/upload",
-                "description": "Upload curriculum CSV file",
-                "parameters": {
-                    "job_id": "string (form field)",
-                    "file": "CSV file"
-                },
-                "response": {"lessons_count": "int", "grades": "array"}
-            },
-            {
-                "method": "POST",
-                "path": "/rooms/upload",
-                "description": "Upload rooms CSV file",
-                "parameters": {
-                    "job_id": "string (form field)",
-                    "file": "CSV file"
-                },
-                "response": {"rooms_count": "int"}
-            },
-            {
-                "method": "POST",
-                "path": "/timetables/upload",
-                "description": "Upload existing timetable CSV files (multiple files under one key)",
-                "parameters": {
-                    "job_id": "string (form field, required)",
-                    "files": "multiple CSV files (also accepts keys: 'file', 'timetables', 'timetable')",
-                    "type": "string (student/teacher/room, optional - auto-detected from filename)"
-                },
-                "example": "curl -F 'job_id=xxx' -F 'files=@student_1_1.csv' -F 'files=@teacher_T001.csv' URL",
-                "response": {
-                    "uploaded": "array of {filename, type, entity_id}",
-                    "uploaded_count": "int",
-                    "errors": "array of error strings or null",
-                    "error_count": "int"
-                }
-            }
-        ],
-        "file_formats": {
-            "curriculum": {
-                "columns": ["subject_id", "subject_name", "periods_per_week", 
-                           "teacher", "block_pattern", "student_class", 
-                           "constraint", "room", "fixed_period"],
-                "example": "See curriculum_cleaned.csv"
-            },
-            "rooms": {
-                "columns": ["room_id", "note", "tag"],
-                "example": "See room_cleaned.csv"
-            },
-            "timetables": {
-                "format": "CSV with days as rows, periods as columns",
-                "naming": "student_<class>.csv, teacher_<id>.csv, room_<id>.csv"
-            }
-        }
-    })

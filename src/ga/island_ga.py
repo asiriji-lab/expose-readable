@@ -50,6 +50,7 @@ class IslandGeneticAlgorithm:
         stagnation_limit: int = 50,
         block_crossover_rate: float = 0.5,
         catastrophic_after: int = 3,   # epochs with no global improvement → full island reset
+        plateau_patience: int = 150,   # generations with no global improvement → early stop
         progress_callback: Optional[Callable] = None,
     ):
         self.schedule_manager = schedule_manager
@@ -66,6 +67,8 @@ class IslandGeneticAlgorithm:
         self.stagnation_limit = stagnation_limit
         self.block_crossover_rate = block_crossover_rate
         self.catastrophic_after = catastrophic_after
+        # Plateau patience in epochs (convert from generations, min 1)
+        self.plateau_patience_epochs = max(1, plateau_patience // migration_interval)
         self.progress_callback = progress_callback
 
         self.n_migrants: int = max(1, int(island_population_size * migration_rate))
@@ -75,11 +78,16 @@ class IslandGeneticAlgorithm:
         self.best_island_idx: int = 0
         self.generation_stats: List[Dict] = []
 
-        # Global stagnation tracking (for catastrophic reset)
+        # Global stagnation tracking (for catastrophic reset — resets on reset)
         self._global_stagnation: int = 0
         self._prev_best_fitness: float = float('inf')
 
-        # Build islands
+        # Plateau tracking (for early stop — never resets on catastrophic reset)
+        self._plateau_epochs: int = 0       # epochs since last genuine global improvement
+        self._stopped_early: bool = False
+
+        # Build islands — individual islands do NOT get the progress_callback;
+        # IslandGA reports progress at the coarser epoch level instead.
         mutation_rates = self._spread_mutation_rates(mutation_rate, n_islands)
         self.islands: List[GeneticAlgorithm] = []
         for i, mr in enumerate(mutation_rates):
@@ -93,9 +101,18 @@ class IslandGeneticAlgorithm:
                 elite_size=elite_size,
                 stagnation_limit=stagnation_limit,
                 block_crossover_rate=block_crossover_rate,
-                progress_callback=progress_callback,
+                progress_callback=None,  # progress reported at epoch level by IslandGA
             )
             self.islands.append(island)
+
+    # =========================================================================
+    # PROPERTIES
+    # =========================================================================
+
+    @property
+    def lessons(self):
+        """Expose the shared lesson list (identical across all islands)."""
+        return self.islands[0].lessons if self.islands else []
 
     # =========================================================================
     # HELPERS
@@ -187,6 +204,7 @@ class IslandGeneticAlgorithm:
         print(f"  Generations  : {self.max_generations}")
         print(f"  Migrate every: {self.migration_interval} gens  ({self.n_migrants} migrants/island)")
         print(f"  Topology     : {self.topology}")
+        print(f"  Plateau stop : after {self.plateau_patience_epochs} epochs ({self.plateau_patience_epochs * self.migration_interval} gens) with no global improvement")
         mutation_rates = [isl.mutation_rate for isl in self.islands]
         for i, mr in enumerate(mutation_rates):
             print(f"  Island {i}      : mutation={mr:.4f}")
@@ -222,27 +240,42 @@ class IslandGeneticAlgorithm:
             if self.best_chromosome.fitness < self._prev_best_fitness:
                 self._prev_best_fitness = self.best_chromosome.fitness
                 self._global_stagnation = 0
+                self._plateau_epochs = 0    # genuine improvement → reset plateau counter
             else:
                 self._global_stagnation += 1
+                self._plateau_epochs += 1   # counts across catastrophic resets
 
             epoch_stat = {
-                'epoch': epoch + 1,
-                'generation': gen_end,
-                'best_fitness': self.best_chromosome.fitness,
-                'best_island': self.best_island_idx,
-                'island_bests': island_bests,
-                'violations': self.best_chromosome.violations,
+                'epoch':             epoch + 1,
+                'generation':        gen_end,
+                'best_fitness':      self.best_chromosome.fitness,
+                'best_island':       self.best_island_idx,
+                'island_bests':      island_bests,
+                'violations':        self.best_chromosome.violations,
                 'global_stagnation': self._global_stagnation,
+                'plateau_epochs':    self._plateau_epochs,
             }
             self.generation_stats.append(epoch_stat)
+
+            if self.progress_callback:
+                self.progress_callback(gen_end, self.max_generations, epoch_stat)
 
             print(f"  [Epoch {epoch + 1:>3d} | Gen {gen_end:>4d}] "
                   f"Global best: {self.best_chromosome.fitness:.0f}  "
                   f"Island bests: {[f'{f:.0f}' for f in island_bests]}  "
-                  f"GStag: {self._global_stagnation}")
+                  f"GStag: {self._global_stagnation}  Plateau: {self._plateau_epochs}/{self.plateau_patience_epochs}")
 
             if self.best_chromosome.fitness == 0:
                 print(f"\n  Perfect solution found at epoch {epoch + 1}!")
+                break
+
+            # Plateau early stop — checked before catastrophic reset
+            if self._plateau_epochs >= self.plateau_patience_epochs:
+                self._stopped_early = True
+                print(f"\n  ⏹  Plateau stop at epoch {epoch + 1} (gen {gen_end}): "
+                      f"no global improvement for {self.plateau_patience_epochs} epochs "
+                      f"({self.plateau_patience_epochs * self.migration_interval} gens), "
+                      f"best fitness = {self.best_chromosome.fitness:.0f}")
                 break
 
             if self._global_stagnation >= self.catastrophic_after:
@@ -304,12 +337,32 @@ class IslandGeneticAlgorithm:
     def get_result_summary(self) -> Dict[str, Any]:
         if not self.best_chromosome:
             return {}
+        best_island = self.islands[self.best_island_idx]
+        unassigned = []
+        for lesson in best_island.lessons:
+            assigned = len(self.best_chromosome.genes.get(lesson.lesson_id, []))
+            expected = best_island._expected_periods[lesson.lesson_id]
+            if assigned < expected:
+                unassigned.append({
+                    'lesson_id':        lesson.lesson_id,
+                    'subject_id':       lesson.subject_id,
+                    'subject_name':     lesson.subject_name,
+                    'teacher_ids':      lesson.teacher_ids,
+                    'student_classes':  lesson.student_classes,
+                    'assigned_periods': assigned,
+                    'expected_periods': expected,
+                    'missing_periods':  expected - assigned,
+                })
         return {
-            'final_fitness':     self.best_chromosome.fitness,
-            'generations_run':   self.max_generations,
-            'solution_found':    self.best_chromosome.fitness == 0,
-            'final_violations':  self.best_chromosome.violations,
-            'lessons_scheduled': len(self.islands[0].lessons),
-            'n_islands':         self.n_islands,
-            'best_island':       self.best_island_idx,
+            'final_fitness':       self.best_chromosome.fitness,
+            'generations_run':     self.max_generations,
+            'solution_found':      self.best_chromosome.fitness == 0,
+            'stopped_early':       self._stopped_early,
+            'plateau_epochs':      self._plateau_epochs,
+            'plateau_patience_epochs': self.plateau_patience_epochs,
+            'final_violations':    self.best_chromosome.violations,
+            'lessons_scheduled':   len(best_island.lessons),
+            'n_islands':           self.n_islands,
+            'best_island':         self.best_island_idx,
+            'unassigned_lessons':  unassigned,
         }

@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /var/home/winsdominoes/Workspace/schedool -name \"*.py\" -path \"*/core/*\" -o -name \"*.py\" -path \"*/utils/*\" 2>/dev/null | head -20)",
+      "Bash(ls -la /var/home/winsdominoes/Workspace/schedool/ | grep -E \"\\\\.py$|^d\")",
+      "Bash(python3 -c \"import sys; sys.path.insert\\(0, '/var/home/winsdominoes/Workspace/schedool'\\); from src.ga.scheduler import run_scheduler_job; print\\('Found scheduler in src.ga'\\)\" 2>&1)",
+      "Bash(wc -l /var/home/winsdominoes/Workspace/schedool/src/ga/*.py | sort -n)",
+      "Bash(pip install:*)",
+      "Bash(find /workspaces -name python* -type f)",
+      "Bash(/home/linuxbrew/.linuxbrew/bin/python3 -m pip install flasgger -q 2>&1 | tail -3; echo \"exit: $?\")",
+      "Bash(/home/linuxbrew/.linuxbrew/bin/python3 -c \"import flasgger; print\\(flasgger.__version__\\)\" 2>/dev/null || echo \"not installed\"; /home/linuxbrew/.linuxbrew/bin/python3 -c \"import flask; print\\(flask.__version__\\)\" 2>/dev/null || echo \"flask not found\")",
+      "Bash(python -m py_compile /var/home/winsdominoes/Workspace/schedool/api/routes.py && echo \"OK\" || echo \"SYNTAX ERROR\")",
+      "Bash(python -m py_compile /var/home/winsdominoes/Workspace/schedool/app.py && echo \"OK\" || echo \"SYNTAX ERROR\")",
+      "Bash(python -m py_compile /var/home/winsdominoes/Workspace/schedool/src/ga/scheduler.py && echo \"OK\"\npython -m py_compile /var/home/winsdominoes/Workspace/schedool/api/routes.py && echo \"OK\")",
+      "Bash(python -m py_compile src/ga/genetic_algorithm.py src/ga/island_ga.py src/ga/scheduler.py && echo \"OK\")"
+    ]
+  }
+}
