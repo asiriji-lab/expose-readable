@@ -15,8 +15,9 @@ Schedool is a REST API that uses an **Island Genetic Algorithm** to automaticall
 7. [Polling for Status](#polling-for-status)
 8. [Response Format](#response-format)
 9. [GA Parameter Tuning](#ga-parameter-tuning)
-10. [Project Structure](#project-structure)
-11. [Swagger UI](#swagger-ui)
+10. [How the Genetic Algorithm Works](#how-the-genetic-algorithm-works)
+11. [Project Structure](#project-structure)
+12. [Swagger UI](#swagger-ui)
 
 ---
 
@@ -424,6 +425,9 @@ Pass `ga_params` as a JSON string in the form upload. The default uses the **Isl
 | `elite_size` | `10` | Top individuals preserved each generation |
 | `stagnation_limit` | `50` | Generations without improvement before island-level restart |
 | `catastrophic_after` | `3` | Epochs of global stagnation before a full island reset |
+| `plateau_patience` | `150` | Generations with no meaningful improvement before early stop |
+| `min_improvement` | `500` | Minimum fitness drop to count as a meaningful improvement |
+| `min_gen_for_check` | `4500` | Generation after which the plateau stop is enabled |
 
 ### Standard GA parameters (when `n_islands=1`)
 
@@ -435,6 +439,165 @@ Pass `ga_params` as a JSON string in the form upload. The default uses the **Isl
 | `crossover_rate` | `0.80` |
 | `tournament_size` | `7` |
 | `elite_size` | `10` |
+
+---
+
+## How the Genetic Algorithm Works
+
+Timetable scheduling is an NP-hard combinatorial problem — the number of possible schedules is astronomically large, so brute-force search is impossible. Schedool uses an **Island Genetic Algorithm (Island GA)** inspired by biological evolution: a population of candidate schedules "evolves" over many generations through selection, crossover, and mutation, gradually improving until a good — or even perfect — timetable is found.
+
+---
+
+### The Big Picture
+
+```
+Start with N random (but plausible) timetables
+        ↓
+Evaluate how good each one is (fitness function)
+        ↓
+Select the best ones as parents
+        ↓
+Combine parents to produce children (crossover)
+        ↓
+Randomly adjust some children (mutation)
+        ↓
+Replace the weakest individuals with the children
+        ↓
+Repeat for thousands of generations, or until stopped
+```
+
+The algorithm runs this loop across **4 independent islands** (sub-populations) in parallel, occasionally sharing their best solutions with each other.
+
+---
+
+### Chromosomes — Representing a Timetable
+
+Each candidate timetable is called a **chromosome**. A chromosome is a dictionary that maps every lesson to the time slot(s) and room it is assigned to:
+
+```
+Chromosome = {
+    lesson_id → [(day, period, room), (day, period, room), ...]
+}
+```
+
+For example, a Physics lesson taught by T001 to class 1/1 with a `2-1` block pattern would have three entries: two consecutive periods on one day, and one single period on another day.
+
+---
+
+### Initialization — Building the First Generation
+
+Rather than starting with purely random timetables, the GA uses **greedy constructive initialization**:
+
+1. Lessons are shuffled randomly.
+2. Each lesson is placed greedily into an available slot, respecting the teacher's and students' free slots from the start.
+3. Multi-period blocks (e.g., 2 consecutive periods) are placed first (largest blocks get priority) so they claim the consecutive slots they need before single-period blocks fill gaps.
+
+This gives the first generation a significant head start over random placement, which dramatically reduces the time needed to find a good solution.
+
+---
+
+### Fitness Function — Measuring Quality
+
+Every chromosome is scored by a **fitness function** that counts the total penalty for all constraint violations. A **lower score is better** — a perfect timetable scores 0.
+
+The fitness score is the sum of all violations multiplied by their weights:
+
+| Violation | Penalty per occurrence |
+|---|---|
+| Teacher double-booked at the same time | 100 |
+| Student class double-booked at the same time | 100 |
+| `SEPERATE_SLOT` group lessons placed at the same time | 100 |
+| `SUB_GROUP` lessons NOT placed at the same time | 100 |
+| Block pattern broken (e.g., double periods not consecutive) | 80 |
+| Room double-booked at the same time | 50 |
+| Wrong number of periods scheduled for a lesson | 20 |
+| Lesson placed in a room it cannot use | 10 |
+
+The GA tracks the best fitness seen so far across the entire run. When `best_fitness == 0`, a perfect, fully-valid timetable has been found.
+
+---
+
+### Selection — Choosing Parents
+
+The GA uses **tournament selection**: to pick one parent, a small random group of chromosomes (default: 9) is drawn from the population, and the one with the lowest fitness (fewest violations) wins. This is repeated for each parent slot.
+
+Tournament selection naturally biases toward better solutions while still giving weaker ones a small chance — preserving diversity and preventing the population from collapsing to a single solution too quickly.
+
+---
+
+### Crossover — Combining Two Parents
+
+When two parent chromosomes are combined to produce children, the GA uses **teacher-grouped crossover**:
+
+1. All lessons are grouped by teacher.
+2. For each teacher group, the child inherits ALL of that teacher's lessons from one parent or the other (not a mix). This prevents a teacher's schedule from being internally inconsistent after crossover.
+3. Within a lesson, a finer **block-level mix** can also occur: each individual period-block within a lesson may be inherited from either parent independently.
+
+This two-level crossover (teacher group → individual block) is more intelligent than a naive random gene swap and tends to produce children that are already partially valid.
+
+---
+
+### Mutation — Random Adjustments
+
+After crossover, each child's lessons are individually mutated with probability `mutation_rate`. When a lesson is selected for mutation, one of four operators is chosen:
+
+| Operator | Weight | What it does |
+|---|---|---|
+| **Targeted block** | 50% | Identifies which specific time slot of this lesson is currently causing a conflict, then moves only that block to a conflict-free slot. Leaves the rest of the lesson untouched. |
+| **Explore** | 20% | Like targeted block, but also considers slots from anywhere in the timetable — helps escape deep local optima. |
+| **Room change** | 20% | Keeps the time slots the same but reassigns the lesson to a different valid room. |
+| **Full re-slot** | 10% | Completely re-assigns all blocks for the lesson to random available slots. A low-probability "nuclear option" to escape stuck configurations. |
+
+Targeted mutation is the key improvement over a basic GA: instead of blindly randomising a lesson, it surgically fixes the broken part while preserving what is already working.
+
+---
+
+### Island GA — Running Multiple Populations in Parallel
+
+Rather than evolving a single population, the Island GA runs **4 independent islands** simultaneously. Each island:
+
+- Has its own population of 125 chromosomes.
+- Uses a **different mutation rate** (spread linearly from 0.5× to 2.0× the base rate), so different islands explore different parts of the solution space — cautious islands refine good solutions, aggressive islands break out of local optima.
+
+Every `migration_interval` generations (default: 50), the best individuals from each island **migrate** to a neighbouring island in a **ring topology** (island 0 → 1 → 2 → 3 → 0). Migrants replace the worst individuals in the receiving island, injecting fresh genetic material without disrupting the whole population.
+
+```
+Island 0  →  Island 1
+   ↑              ↓
+Island 3  ←  Island 2
+```
+
+---
+
+### Stopping Criteria — When Does the Algorithm Stop?
+
+The GA can stop for three reasons, in addition to reaching `max_generations`:
+
+#### 1. Perfect Solution
+If the best fitness ever reaches **0**, all constraints are satisfied and the algorithm stops immediately.
+
+#### 2. Stagnation Restart (Island-level)
+If a single island's best fitness does not improve for `stagnation_limit` generations (default: 50), that island's **bottom half** is discarded and replaced with fresh random chromosomes. The top half (the good solutions) are kept. This prevents an island from getting permanently stuck in a local optimum.
+
+#### 3. Catastrophic Reset (Global)
+If no island makes any global improvement for `catastrophic_after` epochs (default: 3 epochs = 150 generations), the entire island that has been stagnating the longest is **completely rebuilt** from scratch with a fresh random population. This is a more aggressive restart to break out of deeper traps.
+
+#### 4. Plateau Stop (Early Termination)
+This is the primary stopping mechanism for long runs. After `min_gen_for_check` generations (default: **4,500**), the algorithm monitors whether the improvements being made are still meaningful:
+
+- If the global best fitness has **not improved by at least `min_improvement`** (default: **500 penalty points**) within the last `plateau_patience` generations (default: 150), the algorithm concludes that further evolution is unlikely to produce significant gains and **stops early**.
+- This is deliberately only activated after gen 4,500 so the algorithm has enough time to make large early improvements (e.g., going from 15,000 → 4,000) before the threshold applies.
+- Tiny incremental improvements (e.g., 4,900 → 4,899 each generation) do **not** reset this counter — only a drop of 500+ points counts.
+
+**Summary of stopping conditions:**
+
+| Condition | Scope | Behaviour |
+|---|---|---|
+| `fitness == 0` | Global | Immediate stop — perfect timetable found |
+| No improvement for 50 gens | Per island | Reseed bottom half of that island |
+| No global improvement for 3 epochs | Global | Fully rebuild the worst island |
+| Improvement < 500 pts for 150 gens after gen 4,500 | Global | Stop early — plateau reached |
+| Generation limit reached | Global | Stop — return best solution found |
 
 ---
 
