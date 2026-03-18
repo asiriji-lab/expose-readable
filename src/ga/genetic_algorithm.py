@@ -70,6 +70,8 @@ class GeneticAlgorithm:
         tournament_size: int = 3,       # lowered from 5-7 for more diversity
         stagnation_limit: int = 50,
         plateau_patience: int = 150,
+        min_improvement: float = 500,       # min fitness drop to count as "genuine" improvement for plateau stop
+        min_gen_for_check: int = 4500,      # plateau stop only fires after this generation
         block_crossover_rate: float = 0.5,  # probability of block-level mixing per lesson in crossover
         progress_callback: Optional[Callable] = None,
     ):
@@ -82,6 +84,8 @@ class GeneticAlgorithm:
         self.tournament_size = tournament_size
         self.stagnation_limit = stagnation_limit
         self.plateau_patience = plateau_patience
+        self.min_improvement = min_improvement
+        self.min_gen_for_check = min_gen_for_check
         self.block_crossover_rate = block_crossover_rate
         self.progress_callback = progress_callback
 
@@ -923,7 +927,8 @@ class GeneticAlgorithm:
         print(f"  Crossover    : {self.crossover_rate}")
         print(f"  Tournament   : {self.tournament_size}")
         print(f"  Stagnation   : restart after {self.stagnation_limit} gens")
-        print(f"  Plateau stop : after {self.plateau_patience} gens with no global improvement")
+        print(f"  Plateau stop : after {self.plateau_patience} gens with no meaningful improvement "
+              f"(>={self.min_improvement:.0f}), enabled after gen {self.min_gen_for_check}")
         print("=" * 60 + "\n")
 
         self.initialize_population()
@@ -964,23 +969,28 @@ class GeneticAlgorithm:
 
             # Track best & stagnation counter
             gen_best = min(self.population, key=lambda c: c.fitness)
-            if gen_best.fitness < self.best_chromosome.fitness:
+            improvement = self.best_chromosome.fitness - gen_best.fitness
+            if improvement > 0:
                 self.best_chromosome = gen_best.copy()
                 self._gens_without_improvement = 0
-                self._global_stagnation = 0          # genuine improvement → reset plateau counter
             else:
                 self._gens_without_improvement += 1
+
+            # Plateau counter: only resets on *meaningful* improvement (>= min_improvement)
+            if improvement >= self.min_improvement:
+                self._global_stagnation = 0
+            else:
                 self._global_stagnation += 1         # tracks across restarts
 
             # Stagnation restart (improvement 5)
             if self._gens_without_improvement >= self.stagnation_limit:
                 self._restart_bottom_half()
 
-            # Plateau early stop — fires only after genuine global stagnation
-            if self._global_stagnation >= self.plateau_patience:
+            # Plateau early stop — only fires after min_gen_for_check to allow early progress
+            if gen >= self.min_gen_for_check and self._global_stagnation >= self.plateau_patience:
                 self._stopped_early = True
-                print(f"\n  ⏹  Plateau stop at gen {gen}: no global improvement for "
-                      f"{self.plateau_patience} generations "
+                print(f"\n  ⏹  Plateau stop at gen {gen}: no meaningful improvement (>={self.min_improvement:.0f}) "
+                      f"for {self.plateau_patience} generations "
                       f"(best fitness = {self.best_chromosome.fitness:.0f})")
                 break
 

@@ -51,10 +51,13 @@ GA_PARAMS = dict(
     mutation_rate=0.015,
     crossover_rate=0.9,
     tournament_size=9,
-    max_generations=1000,
+    max_generations=10000,
     elite_size=10,
     stagnation_limit=50,
     catastrophic_after=3,
+    plateau_patience=150,   # gens with no meaningful improvement → early stop
+    min_improvement=500,    # fitness must drop by at least this to count as genuine improvement
+    min_gen_for_check=4500, # plateau stop only enabled after this generation
 )
 
 

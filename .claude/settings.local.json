@@ -12,7 +12,9 @@
       "Bash(python -m py_compile /var/home/winsdominoes/Workspace/schedool/api/routes.py && echo \"OK\" || echo \"SYNTAX ERROR\")",
       "Bash(python -m py_compile /var/home/winsdominoes/Workspace/schedool/app.py && echo \"OK\" || echo \"SYNTAX ERROR\")",
       "Bash(python -m py_compile /var/home/winsdominoes/Workspace/schedool/src/ga/scheduler.py && echo \"OK\"\npython -m py_compile /var/home/winsdominoes/Workspace/schedool/api/routes.py && echo \"OK\")",
-      "Bash(python -m py_compile src/ga/genetic_algorithm.py src/ga/island_ga.py src/ga/scheduler.py && echo \"OK\")"
+      "Bash(python -m py_compile src/ga/genetic_algorithm.py src/ga/island_ga.py src/ga/scheduler.py && echo \"OK\")",
+      "Bash(python:*)",
+      "Bash(python3:*)"
     ]
   }
 }

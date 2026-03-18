@@ -50,7 +50,9 @@ class IslandGeneticAlgorithm:
         stagnation_limit: int = 50,
         block_crossover_rate: float = 0.5,
         catastrophic_after: int = 3,   # epochs with no global improvement → full island reset
-        plateau_patience: int = 150,   # generations with no global improvement → early stop
+        plateau_patience: int = 150,   # generations with no meaningful improvement → early stop
+        min_improvement: float = 500,  # min fitness drop to count as "genuine" improvement for plateau stop
+        min_gen_for_check: int = 4500, # plateau stop only fires after this generation
         progress_callback: Optional[Callable] = None,
     ):
         self.schedule_manager = schedule_manager
@@ -69,6 +71,9 @@ class IslandGeneticAlgorithm:
         self.catastrophic_after = catastrophic_after
         # Plateau patience in epochs (convert from generations, min 1)
         self.plateau_patience_epochs = max(1, plateau_patience // migration_interval)
+        self.min_improvement = min_improvement
+        # min_gen_for_check in epochs (convert from generations, min 1)
+        self.min_epoch_for_check = max(1, min_gen_for_check // migration_interval)
         self.progress_callback = progress_callback
 
         self.n_migrants: int = max(1, int(island_population_size * migration_rate))
@@ -204,7 +209,8 @@ class IslandGeneticAlgorithm:
         print(f"  Generations  : {self.max_generations}")
         print(f"  Migrate every: {self.migration_interval} gens  ({self.n_migrants} migrants/island)")
         print(f"  Topology     : {self.topology}")
-        print(f"  Plateau stop : after {self.plateau_patience_epochs} epochs ({self.plateau_patience_epochs * self.migration_interval} gens) with no global improvement")
+        print(f"  Plateau stop : after {self.plateau_patience_epochs} epochs ({self.plateau_patience_epochs * self.migration_interval} gens) "
+              f"with no meaningful improvement (>={self.min_improvement:.0f}), enabled after epoch {self.min_epoch_for_check} (gen {self.min_epoch_for_check * self.migration_interval})")
         mutation_rates = [isl.mutation_rate for isl in self.islands]
         for i, mr in enumerate(mutation_rates):
             print(f"  Island {i}      : mutation={mr:.4f}")
@@ -237,12 +243,17 @@ class IslandGeneticAlgorithm:
 
             self._update_global_best()
 
-            if self.best_chromosome.fitness < self._prev_best_fitness:
+            improvement = self._prev_best_fitness - self.best_chromosome.fitness
+            if improvement > 0:
                 self._prev_best_fitness = self.best_chromosome.fitness
                 self._global_stagnation = 0
-                self._plateau_epochs = 0    # genuine improvement → reset plateau counter
             else:
                 self._global_stagnation += 1
+
+            # Plateau counter: only resets on *meaningful* improvement (>= min_improvement)
+            if improvement >= self.min_improvement:
+                self._plateau_epochs = 0    # genuine improvement → reset plateau counter
+            else:
                 self._plateau_epochs += 1   # counts across catastrophic resets
 
             epoch_stat = {
@@ -269,11 +280,12 @@ class IslandGeneticAlgorithm:
                 print(f"\n  Perfect solution found at epoch {epoch + 1}!")
                 break
 
-            # Plateau early stop — checked before catastrophic reset
-            if self._plateau_epochs >= self.plateau_patience_epochs:
+            # Plateau early stop — only fires after min_epoch_for_check to allow early progress
+            if (epoch + 1) >= self.min_epoch_for_check and self._plateau_epochs >= self.plateau_patience_epochs:
                 self._stopped_early = True
                 print(f"\n  ⏹  Plateau stop at epoch {epoch + 1} (gen {gen_end}): "
-                      f"no global improvement for {self.plateau_patience_epochs} epochs "
+                      f"no meaningful improvement (>={self.min_improvement:.0f}) "
+                      f"for {self.plateau_patience_epochs} epochs "
                       f"({self.plateau_patience_epochs * self.migration_interval} gens), "
                       f"best fitness = {self.best_chromosome.fitness:.0f}")
                 break

@@ -39,6 +39,7 @@ next-env.d.ts
 .devcontainer
 .venv
 __pycache__
+.claude
 
 # schedool solver output
 /output
