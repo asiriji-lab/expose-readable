@@ -1,7 +1,13 @@
 ﻿'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import Papa from 'papaparse';
+import {
+  parseCurriculumRows,
+  buildTeacherNameToCodeMap,
+  resolveWorkloadToTeacherCodes,
+} from '../../../schedule/_utils/parseCurriculum';
+import { TEACHER_META } from '../../../schedule/_utils/dummyData';
 import { SheetData, TabName } from '../../../validators/types';
 import { ALL_TAB_NAMES, extractSheetId, filenameToTabName, parseCSVText, fetchPublicSheetTab } from '../_utils/csvHelpers';
 
@@ -16,6 +22,108 @@ const TAB_META: Record<TabName, { icon: string; label: string }> = {
   elective:   { icon: '📚', label: 'elective' },
   curriculum: { icon: '📖', label: 'curriculum' },
 };
+
+// ── CurriculumSummary ───────────────────────────────────────────────────────
+function CurriculumSummary({ rows }: { rows: string[][] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const nameToCode = useMemo(() => buildTeacherNameToCodeMap(TEACHER_META), []);
+
+  const { parseResult, resolved, unmapped } = useMemo(() => {
+    const parseResult = parseCurriculumRows(rows);
+    const { resolved, unmapped } = resolveWorkloadToTeacherCodes(parseResult.workload, nameToCode);
+    return { parseResult, resolved, unmapped };
+  }, [rows, nameToCode]);
+
+  const teachers = useMemo(() => {
+    return Object.entries(resolved).map(([code, entries]) => {
+      const meta = TEACHER_META[code];
+      const totalPeriods = entries.reduce((sum, e) => sum + e.totalPeriods, 0);
+      const subjectCount = entries.length;
+      const classCount = new Set(entries.flatMap(e => e.assignments.map(a => a.classCode))).size;
+      return { code, name: meta?.firstName ?? code, subjectCount, classCount, totalPeriods };
+    }).sort((a, b) => b.totalPeriods - a.totalPeriods);
+  }, [resolved]);
+
+  const totalPeriods = teachers.reduce((sum, t) => sum + t.totalPeriods, 0);
+  const warningCount = parseResult.warnings.length;
+
+  return (
+    <div className="rounded-lg border border-yellow-300 bg-yellow-50 text-xs">
+      {/* Stats bar — always visible */}
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-yellow-100 transition-colors rounded-lg"
+      >
+        <span className="font-semibold text-yellow-800">
+          📊 Curriculum Summary
+        </span>
+        <span className="text-yellow-700">
+          {teachers.length} ครู · {totalPeriods} คาบ/สัปดาห์
+          {warningCount > 0 && <span className="ml-1 text-orange-600">· ⚠️ {warningCount} warnings</span>}
+          {unmapped.length > 0 && <span className="ml-1 text-red-600">· ❌ {unmapped.length} unmapped</span>}
+          <span className="ml-2 text-yellow-500">{expanded ? '▼' : '▶'}</span>
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="px-3 pb-3 space-y-3 border-t border-yellow-200">
+          {/* Teacher table */}
+          <div className="max-h-60 overflow-y-auto mt-2">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-yellow-700">
+                  <th className="pb-1 pr-2">Code</th>
+                  <th className="pb-1 pr-2">Name</th>
+                  <th className="pb-1 pr-2">Subjects</th>
+                  <th className="pb-1 pr-2">Classes</th>
+                  <th className="pb-1">คาบ/สัปดาห์</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teachers.map(t => (
+                  <tr key={t.code} className="border-t border-yellow-100">
+                    <td className="py-0.5 pr-2 text-yellow-700">{t.code}</td>
+                    <td className="py-0.5 pr-2">{t.name}</td>
+                    <td className="py-0.5 pr-2 text-center">{t.subjectCount}</td>
+                    <td className="py-0.5 pr-2 text-center">{t.classCount}</td>
+                    <td className={`py-0.5 font-medium ${t.totalPeriods > 20 ? 'text-red-600 font-bold' : ''}`}>
+                      {t.totalPeriods}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Warnings */}
+          {warningCount > 0 && (
+            <div>
+              <p className="font-semibold text-orange-700 mb-1">⚠️ Warnings:</p>
+              <ul className="space-y-0.5 text-orange-600">
+                {parseResult.warnings.map((w, i) => (
+                  <li key={i}>- {w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Unmapped teachers */}
+          {unmapped.length > 0 && (
+            <div>
+              <p className="font-semibold text-red-700 mb-1">❌ Unmapped teachers (not in TEACHER_META):</p>
+              <ul className="space-y-0.5 text-red-600">
+                {unmapped.map((name, i) => (
+                  <li key={i}>- &quot;{name}&quot;</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Props ───────────────────────────────────────────────────────────────────
 interface DevTestPanelProps {
@@ -295,6 +403,11 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
                 />
               ))}
             </div>
+          )}
+
+          {/* ── Curriculum summary ── */}
+          {currentData.curriculum && (
+            <CurriculumSummary rows={currentData.curriculum} />
           )}
 
           {/* ── Shared action buttons ── */}

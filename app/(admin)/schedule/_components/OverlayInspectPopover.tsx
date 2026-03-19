@@ -13,10 +13,25 @@ interface OverlayInspectPopoverProps {
     focusedEntity?: EntityType;
 }
 
+// ─── Entity colors ───────────────────────────────────────────────────────────
+
+const ENTITY_DOT_COLOR: Record<EntityType, string> = {
+    teacher: 'bg-emerald-500',
+    class:   'bg-pink-500',
+    room:    'bg-amber-500',
+};
+
+const ENTITY_ACCENT: Record<EntityType, string> = {
+    teacher: 'border-l-emerald-400',
+    class:   'border-l-pink-400',
+    room:    'border-l-amber-400',
+};
+
 // ─── Entity Row ───────────────────────────────────────────────────────────────
 
 interface EntityRowProps {
     label: string;
+    entityType: EntityType;
     item: ScheduleItem | undefined;
     primaryField: string;
     secondaryLabel: string;
@@ -25,12 +40,11 @@ interface EntityRowProps {
     tertiaryValue?: string;
     /** When true, renders at reduced opacity */
     dim?: boolean;
-    /** Tailwind border-l color class when focused */
-    accentBorder?: string;
 }
 
 function EntityRow({
     label,
+    entityType,
     item,
     primaryField,
     secondaryLabel,
@@ -38,26 +52,27 @@ function EntityRow({
     tertiaryLabel,
     tertiaryValue,
     dim = false,
-    accentBorder,
 }: EntityRowProps) {
     const isBusy = !!item;
+    const dotColor = isBusy ? ENTITY_DOT_COLOR[entityType] : 'bg-gray-300';
+    const accentBorder = isBusy ? `border-l-[3px] ${ENTITY_ACCENT[entityType]}` : '';
 
     return (
         <div className={[
             'rounded-lg border px-4 py-3 flex flex-col gap-1.5 transition-opacity duration-150',
             isBusy ? 'border-border bg-surface' : 'border-border bg-surface-alt',
-            accentBorder ? `border-l-[3px] ${accentBorder}` : '',
+            accentBorder,
             dim ? 'opacity-40' : '',
         ].join(' ')}>
             {/* Header row */}
             <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-foreground-muted uppercase tracking-wide">{label}</span>
                 <div className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isBusy ? 'bg-green-500' : 'bg-gray-300'}`} />
-                    <span className={`text-xs font-bold ${isBusy ? 'text-foreground' : 'text-foreground-muted'}`}>
-                        {isBusy ? primaryField : 'Available'}
-                    </span>
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
+                    <span className="text-xs font-semibold text-foreground-muted uppercase tracking-wide">{label}</span>
                 </div>
+                <span className={`text-xs font-bold ${isBusy ? 'text-foreground' : 'text-foreground-muted'}`}>
+                    {isBusy ? primaryField : 'ว่าง'}
+                </span>
             </div>
 
             {/* Detail rows — only when busy */}
@@ -92,12 +107,9 @@ export default function OverlayInspectPopover({
 }: OverlayInspectPopoverProps) {
     if (!isOpen || !data) return null;
 
-    const { conflictCount, allFree, isSynchronized } = data;
+    const { allFree, isSynchronized } = data;
 
-    const headerSubtitle = focusedEntity === 'teacher' ? 'Teacher Detail'
-                         : focusedEntity === 'class'   ? 'Class Detail'
-                         : focusedEntity === 'room'    ? 'Room Detail'
-                         : 'View All — Slot Detail';
+    const busyCount = [!!data.teacher, !!data.class, !!data.room].filter(Boolean).length;
 
     return (
         <div
@@ -113,12 +125,12 @@ export default function OverlayInspectPopover({
                     <div className="flex items-center gap-2.5">
                         <div className="flex flex-col">
                             <span className="text-sm font-bold text-foreground">{day}, Slot {slot}</span>
-                            <span className="text-xs text-foreground-muted">{headerSubtitle}</span>
+                            <span className="text-xs text-foreground-muted">Slot Overview</span>
                         </div>
-                        {/* Only show conflict badge when entities are genuinely in DIFFERENT lessons */}
-                        {conflictCount >= 2 && !isSynchronized && (
-                            <span className="flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-[11px] font-bold">
-                                ⚠ {conflictCount} conflicts
+                        {/* Occupied count — neutral badge */}
+                        {!allFree && !isSynchronized && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-[11px] font-bold">
+                                {busyCount}/3 occupied
                             </span>
                         )}
                         {allFree && (
@@ -146,6 +158,7 @@ export default function OverlayInspectPopover({
                 <div className="p-4 flex flex-col gap-2.5">
                     <EntityRow
                         label="Teacher"
+                        entityType="teacher"
                         item={data.teacher}
                         primaryField={data.teacher?.teacher ?? ''}
                         secondaryLabel="Subject"
@@ -157,10 +170,10 @@ export default function OverlayInspectPopover({
                         tertiaryLabel="Class"
                         tertiaryValue={data.teacher?.classCode}
                         dim={!!focusedEntity && focusedEntity !== 'teacher'}
-                        accentBorder={focusedEntity === 'teacher' ? 'border-l-emerald-400' : undefined}
                     />
                     <EntityRow
                         label="Class"
+                        entityType="class"
                         item={data.class}
                         primaryField={data.class?.classCode ?? ''}
                         secondaryLabel="Subject"
@@ -172,10 +185,10 @@ export default function OverlayInspectPopover({
                         tertiaryLabel="Teacher"
                         tertiaryValue={data.class?.teacherName}
                         dim={!!focusedEntity && focusedEntity !== 'class'}
-                        accentBorder={focusedEntity === 'class' ? 'border-l-pink-400' : undefined}
                     />
                     <EntityRow
                         label="Room"
+                        entityType="room"
                         item={data.room}
                         primaryField={data.room?.room ?? ''}
                         secondaryLabel="Subject"
@@ -187,7 +200,6 @@ export default function OverlayInspectPopover({
                         tertiaryLabel="Teacher"
                         tertiaryValue={data.room?.teacherName}
                         dim={!!focusedEntity && focusedEntity !== 'room'}
-                        accentBorder={focusedEntity === 'room' ? 'border-l-amber-400' : undefined}
                     />
                 </div>
 

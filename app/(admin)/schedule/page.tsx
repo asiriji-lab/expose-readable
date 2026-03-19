@@ -34,6 +34,12 @@ export default function SchedulePage() {
     const [classCode, setClassCode] = useState(CLASS_CODES[0]);
     const [room, setRoom] = useState(ROOM_CODES[0]);
 
+    // ─── Active entity — tracks which filter was last interacted with ────
+    const [activeEntity, setActiveEntity] = useState<EntityType>('teacher');
+    const handleTCodeChange = (val: string) => { setTCode(val); setActiveEntity('teacher'); };
+    const handleClassChange = (val: string) => { setClassCode(val); setActiveEntity('class'); };
+    const handleRoomChange = (val: string) => { setRoom(val); setActiveEntity('room'); };
+
     // ─── Full dataset ──────────────────────────────────────────────────────
     const [dataset, setDataset] = useState<FullDataset | null>(null);
 
@@ -216,20 +222,14 @@ export default function SchedulePage() {
     } | null>(null);
 
     const handleCellClick = (day: string, slot: number) => {
-        if (viewMode === 'all') {
-            const cellData = overlayData?.[day]?.[slot];
-            if (cellData?.allFree) {
-                // All 3 free → open edit to create new lesson
-                setEditingParams({ day, slot });
-                setEditingItem(null);
-                setIsModalOpen(true);
-            }
-            // Non-free cells are handled by band clicks
-            return;
+        if (viewMode !== 'all') return; // individual views are read-only
+        const cellData = overlayData?.[day]?.[slot];
+        if (cellData?.allFree) {
+            setEditingParams({ day, slot });
+            setEditingItem(null);
+            setIsModalOpen(true);
         }
-        setEditingParams({ day, slot });
-        setEditingItem(activeSchedule[day]?.[slot] ?? null);
-        setIsModalOpen(true);
+        // Non-free cells are handled by band clicks
     };
 
     // Called when any colored band in View All is clicked
@@ -306,12 +306,27 @@ export default function SchedulePage() {
                         </div>
                     </div>
 
-                    {/* Right: ViewToggle + Publish + Actions */}
+                    {/* Right: Inline filter (individual views) + ViewToggle + Publish + Actions */}
                     <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* Inline filter for individual views — avoids a separate filter bar row */}
+                        {viewMode === 'teacher' && (
+                            <FilterDropdown label="T. code" value={tCode} options={TEACHER_CODES} onChange={handleTCodeChange} labelClassName="text-primary font-semibold w-14" />
+                        )}
+                        {viewMode === 'class' && (
+                            <FilterDropdown label="Class" value={classCode} options={CLASS_CODES} onChange={handleClassChange} labelClassName="text-primary font-semibold w-14" />
+                        )}
+                        {viewMode === 'room' && (
+                            <FilterDropdown label="Room" value={room} options={ROOM_CODES} onChange={handleRoomChange} labelClassName="text-primary font-semibold w-14" />
+                        )}
+                        {viewMode !== 'all' && <div className="h-5 w-px bg-border hidden sm:block" />}
                         <ViewModeToggle activeMode={viewMode} onChange={setViewMode} />
                         <div className="h-5 w-px bg-border hidden sm:block" />
 
-                        <button className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors">
+                        <button
+                            disabled
+                            title="Complete all lessons before publishing"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-600"
+                        >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
@@ -355,38 +370,34 @@ export default function SchedulePage() {
                 </div>
             </header>
 
-            {/* ── Tier 2: Filter bar ── */}
-            <div className="bg-surface border-b border-border px-4 py-2.5">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                    {(viewMode === 'all' || viewMode === 'teacher') && (
+            {/* ── Tier 2: Filter bar (View All only — individual views use inline filter in header) ── */}
+            {viewMode === 'all' && (
+                <div className="bg-surface border-b border-border px-4 py-2.5">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                         <FilterDropdown
                             label="T. code"
                             value={tCode}
                             options={TEACHER_CODES}
-                            onChange={setTCode}
-                            labelClassName={viewMode === 'teacher' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
+                            onChange={handleTCodeChange}
+                            labelClassName={activeEntity === 'teacher' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
                         />
-                    )}
-                    {(viewMode === 'all' || viewMode === 'class') && (
                         <FilterDropdown
                             label="Class"
                             value={classCode}
                             options={CLASS_CODES}
-                            onChange={setClassCode}
-                            labelClassName={viewMode === 'class' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
+                            onChange={handleClassChange}
+                            labelClassName={activeEntity === 'class' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
                         />
-                    )}
-                    {(viewMode === 'all' || viewMode === 'room') && (
                         <FilterDropdown
                             label="Room"
                             value={room}
                             options={ROOM_CODES}
-                            onChange={setRoom}
-                            labelClassName={viewMode === 'room' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
+                            onChange={handleRoomChange}
+                            labelClassName={activeEntity === 'room' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
                         />
-                    )}
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* ── Main content ── */}
             <main className="flex-1 overflow-auto p-4">
@@ -409,6 +420,7 @@ export default function SchedulePage() {
                                     overlayData={viewMode === 'all' ? overlayData : undefined}
                                     onBandHover={handleBandHover}
                                     onBandHoverEnd={handleBandHoverEnd}
+                                    activeEntity={viewMode === 'all' ? activeEntity : undefined}
                                 />
                             )}
                         </div>
@@ -442,7 +454,7 @@ export default function SchedulePage() {
                 day={bandInspect?.day ?? ''}
                 slot={bandInspect?.slot ?? 1}
                 data={bandInspect?.data ?? null}
-                focusedEntity={bandInspect?.entityType}
+                focusedEntity={bandInspect?.entityType ?? activeEntity}
             />
         </div>
     );
