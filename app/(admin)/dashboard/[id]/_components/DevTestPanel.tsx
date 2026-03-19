@@ -333,7 +333,7 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
               )}
 
               <p className="text-xs text-yellow-600">
-                💡 Sheet ต้องตั้งค่า "Anyone with the link can view"
+                💡 Sheet ต้องตั้งค่า &quot;Anyone with the link can view&quot;
               </p>
             </div>
           )}

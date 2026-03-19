@@ -58,7 +58,7 @@ export default function DataPreview({ rows, errors, warnings }: DataPreviewProps
                   return (
                     <td
                       key={h}
-                      className={`px-3 py-1.5 max-w-[160px] truncate ${
+                      className={`px-3 py-1.5 max-w-40 truncate ${
                         isError ? 'bg-red-100 text-red-700 font-medium' :
                         isWarn ? 'bg-yellow-50 text-yellow-700' :
                         'text-foreground-muted'
