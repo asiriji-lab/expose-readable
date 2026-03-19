@@ -1,9 +1,17 @@
-﻿'use client';
+'use client';
 
+import { Lightbulb, CheckCircle, ExternalLink } from 'lucide-react';
+import {
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
+} from '@/components/ui/sheet';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { StatSummary } from '@/components/ui/stat-summary';
 import { TabName, TabState } from '../../../validators/types';
 import DataPreview from './DataPreview';
 
 interface ErrorPanelProps {
+  open: boolean;
   tabName: TabName;
   state: TabState;
   sheetUrl: string;
@@ -15,69 +23,73 @@ const TAB_THAI_LABEL: Record<TabName, string> = {
   preplace: 'ตรึงคาบ', scout: 'ลูกเสือ', elective: 'วิชาเสรี', curriculum: 'หลักสูตร',
 };
 
-export default function ErrorPanel({ tabName, state, sheetUrl, onClose }: ErrorPanelProps) {
+export default function ErrorPanel({ open, tabName, state, sheetUrl, onClose }: ErrorPanelProps) {
   const result = state.result;
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/30 z-40"
-        onClick={onClose}
-      />
-
-      {/* Panel */}
-      <div className="fixed top-0 right-0 h-full w-full max-w-2xl bg-surface shadow-2xl z-50 flex flex-col overflow-hidden">
+    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <SheetContent side="right" className="w-full max-w-2xl sm:max-w-2xl flex flex-col p-0 gap-0">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">
-              {TAB_THAI_LABEL[tabName]} <span className="text-sm font-normal text-foreground-muted">({tabName})</span>
-            </h2>
-            <p className="text-sm text-foreground-muted">
-              {result?.rowCount ?? 0} แถว ·{' '}
-              {result?.errors.length ?? 0} ข้อผิดพลาด ·{' '}
-              {result?.warnings.length ?? 0} คำเตือน
-            </p>
-          </div>
-          <button onClick={onClose} className="text-foreground-muted hover:text-foreground-muted text-2xl leading-none">✕</button>
-        </div>
+        <SheetHeader className="px-6 py-4 border-b border-border shrink-0">
+          <SheetTitle className="text-base font-semibold text-foreground">
+            {TAB_THAI_LABEL[tabName]}{' '}
+            <span className="text-sm font-normal text-foreground-muted">({tabName})</span>
+          </SheetTitle>
+          <SheetDescription className="sr-only">
+            {TAB_THAI_LABEL[tabName]} validation details
+          </SheetDescription>
+          <StatSummary items={[
+            { value: result?.rowCount ?? 0,        label: 'แถว' },
+            { value: result?.errors.length ?? 0,   label: 'ข้อผิดพลาด', variant: (result?.errors.length ?? 0)  > 0 ? 'danger'  : 'default' },
+            { value: result?.warnings.length ?? 0, label: 'คำเตือน',    variant: (result?.warnings.length ?? 0) > 0 ? 'warning' : 'default' },
+          ]} />
+        </SheetHeader>
 
+        {/* Body */}
         <div className="flex-1 overflow-y-auto">
-          {/* Error list */}
+          {/* Error / warning list */}
           {result && (result.errors.length > 0 || result.warnings.length > 0) ? (
             <div className="px-6 py-4 space-y-2">
-              <h3 className="text-sm font-semibold text-foreground-muted mb-3">
+              <p className="text-xs font-semibold tracking-wide text-foreground-muted uppercase mb-3">
                 รายการข้อผิดพลาด / คำเตือน
-              </h3>
+              </p>
               {[...result.errors, ...result.warnings].map((e, idx) => (
-                <div
+                <Card
                   key={idx}
-                  className={`rounded-lg px-4 py-3 text-sm border ${
-                    e.severity === 'error'
-                      ? 'bg-red-50 border-red-200 text-red-800'
-                      : 'bg-yellow-50 border-yellow-200 text-yellow-800'
-                  }`}
+                  className={e.severity === 'error'
+                    ? 'border-danger-border bg-danger-light'
+                    : 'border-warning-border bg-warning-light'}
                 >
-                  <p className="font-medium">{e.message}</p>
-                  {e.suggestion && (
-                    <p className="mt-1 text-xs opacity-80">
-                      💡 หมายถึง: <span className="font-semibold">{e.suggestion}</span>
-                    </p>
-                  )}
-                </div>
+                  <CardContent className="px-4 py-3">
+                    <div className="flex items-start gap-2">
+                      <Badge variant={e.severity === 'error' ? 'danger' : 'warning'} className="shrink-0 mt-0.5">
+                        {e.severity === 'error' ? 'error' : 'warning'}
+                      </Badge>
+                      <p className="text-sm font-medium text-foreground">{e.message}</p>
+                    </div>
+                    {e.suggestion && (
+                      <p className="mt-1.5 text-xs text-foreground-muted flex items-center gap-1">
+                        <Lightbulb size={12} className="shrink-0" />
+                        หมายถึง: <span className="font-semibold ml-1">{e.suggestion}</span>
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
               ))}
             </div>
           ) : (
-            <div className="px-6 py-4">
-              <p className="text-sm text-green-600 font-medium">✅ ไม่พบข้อผิดพลาด</p>
+            <div className="px-6 py-4 flex items-center gap-2 text-sm text-success font-medium">
+              <CheckCircle size={16} />
+              ไม่พบข้อผิดพลาด
             </div>
           )}
 
           {/* Data preview */}
           {result && result.parsedRows.length > 0 && (
             <div className="px-6 pb-6">
-              <h3 className="text-sm font-semibold text-foreground-muted mb-3">ตัวอย่างข้อมูล</h3>
+              <p className="text-xs font-semibold tracking-wide text-foreground-muted uppercase mb-3">
+                ตัวอย่างข้อมูล
+              </p>
               <DataPreview
                 rows={result.parsedRows}
                 errors={result.errors}
@@ -88,20 +100,24 @@ export default function ErrorPanel({ tabName, state, sheetUrl, onClose }: ErrorP
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border">
-          <p className="text-xs text-foreground-muted mb-3">
-            💡 แก้ไขข้อมูลใน Google Sheet แล้วกด "ดึงข้อมูลและตรวจสอบ" อีกครั้ง
+        <SheetFooter className="px-6 py-4 border-t border-border shrink-0">
+          <p className="text-xs text-foreground-muted flex items-center gap-1.5 mb-2">
+            <Lightbulb size={12} />
+            แก้ไขข้อมูลใน Google Sheet แล้วกด "ดึงข้อมูลและตรวจสอบ" อีกครั้ง
           </p>
-          <a
-            href={sheetUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary font-medium"
-          >
-            🔗 เปิด Google Sheet ↗
-          </a>
-        </div>
-      </div>
-    </>
+          {sheetUrl && (
+            <a
+              href={sheetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-primary hover:text-primary-hover font-medium transition-colors"
+            >
+              <ExternalLink size={14} />
+              เปิด Google Sheet
+            </a>
+          )}
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }

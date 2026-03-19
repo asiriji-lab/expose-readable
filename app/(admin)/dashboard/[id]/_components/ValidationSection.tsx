@@ -1,5 +1,12 @@
-﻿'use client';
+'use client';
 
+import { Play, Loader2, Send, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { SectionHeader } from '@/components/ui/section-header';
+import { StatSummary } from '@/components/ui/stat-summary';
+import { cn } from '@/lib/utils';
 import { TabName, AllTabStates } from '../../../validators/types';
 import TabCard from './TabCard';
 
@@ -33,34 +40,35 @@ export default function ValidationSection({
 
   const hasErrors = [...PHASE_1_TABS, ...PHASE_2_TABS].some((t) => tabStates[t].status === 'errors');
 
-  // Summary counts
-  const totalErrors = Object.values(tabStates).reduce((s, t) => s + (t.result?.errors.length ?? 0), 0);
+  const totalErrors   = Object.values(tabStates).reduce((s, t) => s + (t.result?.errors.length ?? 0), 0);
   const totalWarnings = Object.values(tabStates).reduce((s, t) => s + (t.result?.warnings.length ?? 0), 0);
-  const totalRows = Object.values(tabStates).reduce((s, t) => s + (t.result?.rowCount ?? 0), 0);
+  const totalRows     = Object.values(tabStates).reduce((s, t) => s + (t.result?.rowCount ?? 0), 0);
+
+  const phase1Passed = PHASE_1_TABS.filter((t) => tabStates[t].status !== 'errors').length;
+  const phase2Passed = PHASE_2_TABS.filter((t) => tabStates[t].status !== 'errors' && tabStates[t].status !== 'locked').length;
+  const phase2Done   = phase1Done && PHASE_2_TABS.every((t) => tabStates[t].status !== 'locked');
 
   return (
     <div className="space-y-6">
       {/* Missing tabs warning */}
       {missingTabs.length > 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-sm text-yellow-800">
-          ⚠️ ไม่พบแท็บ: <span className="font-semibold">{missingTabs.join(', ')}</span> — ตรวจสอบชื่อแท็บใน Google Sheet
-        </div>
+        <Card className="border-warning-border bg-warning-light">
+          <CardContent className="py-3 px-4 flex items-center gap-2 text-sm text-warning">
+            <AlertTriangle size={16} className="shrink-0" />
+            ไม่พบแท็บ:{' '}
+            <span className="font-semibold">{missingTabs.join(', ')}</span>
+            {' '}— ตรวจสอบชื่อแท็บใน Google Sheet
+          </CardContent>
+        </Card>
       )}
 
       {/* Phase 1 */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-foreground-muted">Phase 1: ตรวจโครงสร้าง</h3>
-          {phase1Done && (
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-              PHASE_1_TABS.every((t) => tabStates[t].status !== 'errors')
-                ? 'bg-green-100 text-green-700'
-                : 'bg-red-100 text-red-700'
-            }`}>
-              {PHASE_1_TABS.filter((t) => tabStates[t].status !== 'errors').length}/4 ผ่าน
-            </span>
-          )}
-        </div>
+      <div className="space-y-3">
+        <SectionHeader
+          title="PHASE 1 — ตรวจโครงสร้าง"
+          counter={phase1Done ? { current: phase1Passed, total: 4 } : undefined}
+          status={phase1Done && phase1Passed === 4 ? 'success' : phase1Done ? 'danger' : 'neutral'}
+        />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {PHASE_1_TABS.map((tab) => (
             <TabCard key={tab} tabName={tab} state={tabStates[tab]} onClick={onTabClick} />
@@ -69,19 +77,12 @@ export default function ValidationSection({
       </div>
 
       {/* Phase 2 */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-foreground-muted">Phase 2: ตรวจความสัมพันธ์</h3>
-          {phase1Done && PHASE_2_TABS.every((t) => tabStates[t].status !== 'locked') && (
-            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-              PHASE_2_TABS.every((t) => tabStates[t].status !== 'errors')
-                ? 'bg-green-100 text-green-700'
-                : 'bg-red-100 text-red-700'
-            }`}>
-              {PHASE_2_TABS.filter((t) => tabStates[t].status !== 'errors').length}/4 ผ่าน
-            </span>
-          )}
-        </div>
+      <div className="space-y-3">
+        <SectionHeader
+          title="PHASE 2 — ตรวจความสัมพันธ์"
+          counter={phase2Done ? { current: phase2Passed, total: 4 } : undefined}
+          status={phase2Done && phase2Passed === 4 ? 'success' : phase2Done ? 'danger' : 'neutral'}
+        />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {PHASE_2_TABS.map((tab) => (
             <TabCard key={tab} tabName={tab} state={tabStates[tab]} onClick={onTabClick} />
@@ -90,60 +91,57 @@ export default function ValidationSection({
       </div>
 
       {/* Validate button */}
-      <button
+      <Button
         onClick={onValidate}
         disabled={isRunning}
+        size="full"
         data-testid="main-validate-button"
-        className={`
-          w-full py-3 rounded-xl font-semibold text-sm transition-all
-          ${isRunning
-            ? 'bg-primary-light text-foreground-muted cursor-not-allowed'
-            : 'bg-primary hover:bg-primary-hover text-white shadow-sm hover:shadow-md'}
-        `}
       >
-        {isRunning ? '🔄 กำลังตรวจสอบ...' : '▶ ตรวจสอบข้อมูลทั้งหมด'}
-      </button>
+        {isRunning ? (
+          <><Loader2 size={16} className="animate-spin" /> กำลังตรวจสอบ...</>
+        ) : (
+          <><Play size={16} /> ตรวจสอบข้อมูลทั้งหมด</>
+        )}
+      </Button>
 
       {/* Summary + submit */}
       {phase1Done && !isRunning && (
-        <div className={`rounded-xl border p-4 ${hasErrors ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}>
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="text-sm">
-              <span className="font-semibold text-foreground-muted">{totalRows} แถว</span>
-              <span className="mx-2 text-foreground-muted">·</span>
-              <span className={`font-semibold ${totalErrors > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                {totalErrors} ข้อผิดพลาด
-              </span>
-              <span className="mx-2 text-foreground-muted">·</span>
-              <span className={`font-semibold ${totalWarnings > 0 ? 'text-yellow-600' : 'text-foreground-muted'}`}>
-                {totalWarnings} คำเตือน
-              </span>
-            </div>
-            <SubmitButton allPassed={allPassed} hasErrors={hasErrors} totalWarnings={totalWarnings} />
-          </div>
+        <Card className={cn(
+          'border',
+          hasErrors ? 'border-danger-border bg-danger-light' : 'border-success-border bg-success-light',
+        )}>
+          <CardContent className="py-3 px-4 flex items-center justify-between flex-wrap gap-3">
+            <StatSummary items={[
+              { value: totalRows,    label: 'แถว' },
+              { value: totalErrors,   label: 'ข้อผิดพลาด', variant: totalErrors   > 0 ? 'danger'  : 'success' },
+              { value: totalWarnings, label: 'คำเตือน',    variant: totalWarnings > 0 ? 'warning' : 'default' },
+            ]} />
+            <SubmitButton allPassed={allPassed} hasErrors={hasErrors} />
+          </CardContent>
           {totalWarnings > 0 && !hasErrors && (
-            <p className="text-xs text-yellow-700 mt-2">
-              ⚠️ คำเตือนจะไม่บล็อคการส่ง แต่อาจมีผลกับการจัดตาราง
+            <p className="text-xs text-warning px-4 pb-3 flex items-center gap-1.5">
+              <AlertTriangle size={12} />
+              คำเตือนจะไม่บล็อคการส่ง แต่อาจมีผลกับการจัดตาราง
             </p>
           )}
-        </div>
+        </Card>
       )}
     </div>
   );
 }
 
-function SubmitButton({ allPassed, hasErrors, totalWarnings }: { allPassed: boolean; hasErrors: boolean; totalWarnings: number }) {
+function SubmitButton({ allPassed, hasErrors }: { allPassed: boolean; hasErrors: boolean }) {
   if (hasErrors) {
     return (
-      <button disabled className="px-5 py-2 rounded-lg text-sm bg-border text-foreground-muted cursor-not-allowed font-semibold">
-        🚀 ส่งข้อมูล (ปิดใช้งาน)
-      </button>
+      <Button variant="outline" disabled size="sm">
+        <Send size={14} /> ส่งข้อมูล (ปิดใช้งาน)
+      </Button>
     );
   }
   if (!allPassed) return null;
   return (
-    <button className="px-5 py-2 rounded-lg text-sm bg-green-600 hover:bg-green-700 text-white font-semibold shadow-sm transition-all">
-      🚀 ส่งข้อมูลสร้างตาราง
-    </button>
+    <Button variant="success" size="sm">
+      <Send size={14} /> ส่งข้อมูลสร้างตาราง
+    </Button>
   );
 }

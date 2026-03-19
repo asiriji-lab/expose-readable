@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useDroppable, useDraggable } from '@dnd-kit/core';
+import { CheckCircle, ChevronDown } from 'lucide-react';
 import { FullDataset, DragPayload, ScheduleItem } from '../_types/schedule.types';
 import {
     computePaletteData,
@@ -10,6 +11,10 @@ import {
     PaletteClassItem,
 } from '../_utils/paletteUtils';
 import { TEACHER_META, ROOM_CODES, ROOM_META } from '../_utils/dummyData';
+
+// ─── Filter type ──────────────────────────────────────────────────────────────
+
+type FilterMode = 'all' | 'remaining' | 'done';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -28,7 +33,7 @@ function SidebarDropZone() {
             className={[
                 'mx-3 mb-3 p-2.5 border-2 border-dashed rounded-lg text-[10px] text-center transition-colors select-none',
                 isOver
-                    ? 'border-orange-400 bg-orange-50 text-orange-600 font-semibold'
+                    ? 'border-warning bg-warning-light text-warning font-semibold'
                     : 'border-border text-foreground-muted/50',
             ].join(' ')}
         >
@@ -37,7 +42,7 @@ function SidebarDropZone() {
     );
 }
 
-// ─── Class Item Card ──────────────────────────────────────────────────────────
+// ─── Class Item Card (Active — remaining > 0) ────────────────────────────────
 
 function ClassItemCard({
     item,
@@ -56,7 +61,6 @@ function ClassItemCard({
 }) {
     const [selectedRoom, setSelectedRoom] = useState(item.room);
 
-    // Sync when the resolved default room changes (e.g. dataset updates)
     useEffect(() => { setSelectedRoom(item.room); }, [item.room]);
 
     const dragItem: ScheduleItem = {
@@ -104,17 +108,12 @@ function ClassItemCard({
                             <span className="text-[10px] text-foreground-muted/60 truncate">{item.teacherName}</span>
                         )}
                     </div>
-                    <span className={[
-                        'text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0',
-                        item.remaining > 0
-                            ? 'bg-primary/10 text-primary'
-                            : 'bg-emerald-100 text-emerald-700',
-                    ].join(' ')}>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 bg-primary/10 text-primary">
                         {item.placed}/{item.periodsPerWeek}
                     </span>
                 </div>
 
-                {/* Room dropdown — stop pointer events to avoid triggering drag */}
+                {/* Room dropdown */}
                 <select
                     value={selectedRoom}
                     onChange={e => setSelectedRoom(e.target.value)}
@@ -131,10 +130,86 @@ function ClassItemCard({
                 {/* Progress bar */}
                 <div className="w-full h-1 bg-border rounded-full overflow-hidden">
                     <div
-                        className={`h-full rounded-full transition-all duration-300 ${progress >= 100 ? 'bg-emerald-400' : 'bg-primary/60'}`}
+                        className="h-full rounded-full transition-all duration-300 bg-primary/60"
                         style={{ width: `${Math.min(progress, 100)}%` }}
                     />
                 </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Completed Item Card ──────────────────────────────────────────────────────
+
+function CompletedClassCard({
+    item,
+    subjectCode,
+    subject,
+    variant,
+    dragIndex,
+    showTeacher,
+}: {
+    item: PaletteClassItem;
+    subjectCode: string;
+    subject: string;
+    variant: 'red' | 'green';
+    dragIndex: number;
+    showTeacher: boolean;
+}) {
+    const [selectedRoom, setSelectedRoom] = useState(item.room);
+    useEffect(() => { setSelectedRoom(item.room); }, [item.room]);
+
+    const dragItem: ScheduleItem = {
+        teacher: item.teacherCode,
+        teacherName: item.teacherName,
+        classCode: item.classCode,
+        room: selectedRoom,
+        roomName: ROOM_META[selectedRoom]?.name ?? selectedRoom,
+        subjectCode,
+        subject,
+        variant,
+    };
+    const payload: DragPayload = { source: 'SIDEBAR', item: dragItem, index: dragIndex };
+
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+        id: `sidebar-subject-${dragIndex}`,
+        data: payload,
+    });
+
+    return (
+        <div
+            ref={setNodeRef}
+            {...listeners}
+            {...attributes}
+            className={[
+                'relative mx-3 mb-1.5 rounded-lg border overflow-hidden opacity-60',
+                'cursor-grab active:cursor-grabbing select-none transition-opacity hover:opacity-80',
+                isDragging ? 'opacity-30' : '',
+                'bg-success-light border-success-border',
+            ].join(' ')}
+        >
+            {/* Green accent for completed */}
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-success" />
+
+            <div className="pl-3 pr-2 pt-1.5 pb-1.5">
+                {/* Class + done badge */}
+                <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <div className="min-w-0 flex items-center gap-1.5">
+                        <CheckCircle size={11} className="text-success shrink-0" />
+                        <span className="text-xs font-bold text-foreground">{item.classCode}</span>
+                        {showTeacher && (
+                            <span className="text-[10px] text-foreground-muted/60 truncate">{item.teacherName}</span>
+                        )}
+                    </div>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 bg-success-light text-success border border-success-border">
+                        {item.placed}/{item.periodsPerWeek}
+                    </span>
+                </div>
+
+                {/* Placement summary */}
+                {item.placementSummary && (
+                    <p className="text-[9px] text-foreground-muted pl-4 truncate">{item.placementSummary}</p>
+                )}
             </div>
         </div>
     );
@@ -146,15 +221,35 @@ function SubjectGroupAccordion({
     group,
     dragOffset,
     showTeacher,
+    filterMode,
 }: {
     group: PaletteSubjectGroup;
     dragOffset: number;
     showTeacher: boolean;
+    filterMode: FilterMode;
 }) {
-    const [expanded, setExpanded] = useState(true);
-    const visibleClasses = group.classes.filter(c => c.remaining > 0);
+    const allDone = group.totalRemaining === 0;
+    const [expanded, setExpanded] = useState(!allDone);
 
-    if (visibleClasses.length === 0) return null;
+    // Auto-collapse when group completes, auto-expand when items return
+    useEffect(() => {
+        if (allDone && filterMode !== 'done') setExpanded(false);
+        if (!allDone && filterMode !== 'done') setExpanded(true);
+    }, [allDone, filterMode]);
+
+    const activeClasses  = group.classes.filter(c => c.remaining > 0);
+    const doneClasses    = group.classes.filter(c => c.remaining === 0);
+
+    // Apply filter
+    const showActive = filterMode !== 'done';
+    const showDone   = filterMode !== 'remaining';
+
+    const visibleCount = (showActive ? activeClasses.length : 0) + (showDone ? doneClasses.length : 0);
+    if (visibleCount === 0) return null;
+
+    // Completed classes in the group
+    const completedCount = doneClasses.length;
+    const totalClasses = group.classes.length;
 
     return (
         <div className="mb-0.5">
@@ -163,45 +258,86 @@ function SubjectGroupAccordion({
                 className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-surface-alt transition-colors text-left"
             >
                 <div className="flex items-center gap-1.5 min-w-0">
+                    {allDone ? (
+                        <CheckCircle size={10} className="text-success shrink-0" />
+                    ) : (
+                        <span className={[
+                            'w-1.5 h-1.5 rounded-full flex-shrink-0',
+                            group.variant === 'green' ? 'bg-emerald-500' : 'bg-red-400',
+                        ].join(' ')} />
+                    )}
                     <span className={[
-                        'w-1.5 h-1.5 rounded-full flex-shrink-0',
-                        group.variant === 'green' ? 'bg-emerald-500' : 'bg-red-400',
-                    ].join(' ')} />
-                    <span className="text-[11px] font-bold text-foreground truncate">{group.subjectCode}</span>
+                        'text-[11px] font-bold truncate',
+                        allDone ? 'text-foreground-muted' : 'text-foreground',
+                    ].join(' ')}>{group.subjectCode}</span>
                     <span className="text-[9px] text-foreground-muted/60 truncate hidden sm:block">{group.subject}</span>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                    <span className="text-[9px] font-medium text-foreground-muted">
-                        {group.totalPlaced}/{group.totalPeriods}
+                    {/* Progress: "2/3 classes" or completed count */}
+                    <span className={[
+                        'text-[9px] font-medium',
+                        allDone ? 'text-success' : 'text-foreground-muted',
+                    ].join(' ')}>
+                        {completedCount}/{totalClasses}
                     </span>
-                    <svg
-                        className={`w-3 h-3 text-foreground-muted/60 transition-transform ${expanded ? 'rotate-180' : ''}`}
-                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                    >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                    <ChevronDown
+                        size={12}
+                        className={`text-foreground-muted/60 transition-transform ${expanded ? 'rotate-180' : ''}`}
+                    />
                 </div>
             </button>
 
-            {expanded && visibleClasses.map((classItem, i) => (
-                <ClassItemCard
-                    key={`${classItem.teacherCode}-${classItem.classCode}`}
-                    item={classItem}
-                    subjectCode={group.subjectCode}
-                    subject={group.subject}
-                    variant={group.variant}
-                    dragIndex={dragOffset + i}
-                    showTeacher={showTeacher}
-                />
-            ))}
+            {expanded && (
+                <>
+                    {/* Active items first */}
+                    {showActive && activeClasses.map((classItem, i) => (
+                        <ClassItemCard
+                            key={`${classItem.teacherCode}-${classItem.classCode}`}
+                            item={classItem}
+                            subjectCode={group.subjectCode}
+                            subject={group.subject}
+                            variant={group.variant}
+                            dragIndex={dragOffset + i}
+                            showTeacher={showTeacher}
+                        />
+                    ))}
+
+                    {/* Separator between active and done */}
+                    {showActive && showDone && activeClasses.length > 0 && doneClasses.length > 0 && (
+                        <div className="mx-3 my-1 border-t border-dashed border-border" />
+                    )}
+
+                    {/* Completed items at bottom */}
+                    {showDone && doneClasses.map((classItem, i) => (
+                        <CompletedClassCard
+                            key={`done-${classItem.teacherCode}-${classItem.classCode}`}
+                            item={classItem}
+                            subjectCode={group.subjectCode}
+                            subject={group.subject}
+                            variant={group.variant}
+                            dragIndex={dragOffset + activeClasses.length + i}
+                            showTeacher={showTeacher}
+                        />
+                    ))}
+                </>
+            )}
         </div>
     );
 }
+
+// ─── Filter Tabs ──────────────────────────────────────────────────────────────
+
+const FILTER_OPTIONS: { key: FilterMode; label: string }[] = [
+    { key: 'all',       label: 'ทั้งหมด' },
+    { key: 'remaining', label: 'เหลือ' },
+    { key: 'done',      label: 'เสร็จ' },
+];
 
 // ─── Main Sidebar ─────────────────────────────────────────────────────────────
 
 export default function PaletteSidebar({ teacherCode, dataset }: PaletteSidebarProps) {
     const [activeTab, setActiveTab] = useState<'teacher' | 'all'>('teacher');
+    const [filterMode, setFilterMode] = useState<FilterMode>('all');
 
     const teacherData = useMemo(
         () => computePaletteData(teacherCode, dataset),
@@ -215,18 +351,18 @@ export default function PaletteSidebar({ teacherCode, dataset }: PaletteSidebarP
 
     const activeData = activeTab === 'teacher' ? teacherData : globalData;
     const totalRemaining = activeData.reduce((s, g) => s + g.totalRemaining, 0);
-    const totalPeriods = activeData.reduce((s, g) => s + g.totalPeriods, 0);
-    const totalPlaced = activeData.reduce((s, g) => s + g.totalPlaced, 0);
+    const totalPeriods   = activeData.reduce((s, g) => s + g.totalPeriods, 0);
+    const totalPlaced    = activeData.reduce((s, g) => s + g.totalPlaced, 0);
 
     const meta = TEACHER_META[teacherCode];
     const teacherDisplayName = meta ? meta.firstName : teacherCode;
 
-    // Pre-compute cumulative drag offsets so render stays pure (no mutation during JSX)
+    // Pre-compute cumulative drag offsets (includes ALL items, not just active)
     const dragOffsets = useMemo(() => {
         let offset = 0;
         return activeData.map(group => {
             const start = offset;
-            offset += group.classes.filter(c => c.remaining > 0).length;
+            offset += group.classes.length; // all items are draggable now
             return start;
         });
     }, [activeData]);
@@ -240,12 +376,12 @@ export default function PaletteSidebar({ teacherCode, dataset }: PaletteSidebarP
                         {activeTab === 'teacher' ? teacherDisplayName : 'All Teachers'}
                     </span>
                     {totalRemaining > 0 ? (
-                        <span className="bg-orange-500 text-white rounded-full text-[9px] font-bold min-w-[18px] h-[18px] flex items-center justify-center leading-none flex-shrink-0 px-1">
+                        <span className="bg-warning text-white rounded-full text-[9px] font-bold min-w-[18px] h-[18px] flex items-center justify-center leading-none flex-shrink-0 px-1">
                             {totalRemaining}
                         </span>
                     ) : (
-                        <span className="bg-emerald-500 text-white rounded-full text-[9px] font-bold px-1.5 h-[18px] flex items-center justify-center leading-none flex-shrink-0">
-                            ✓
+                        <span className="bg-success text-white rounded-full text-[9px] font-bold px-1.5 h-[18px] flex items-center justify-center leading-none flex-shrink-0">
+                            <CheckCircle size={10} />
                         </span>
                     )}
                 </div>
@@ -256,13 +392,16 @@ export default function PaletteSidebar({ teacherCode, dataset }: PaletteSidebarP
                 </div>
                 <div className="h-1 bg-border rounded-full overflow-hidden mb-2">
                     <div
-                        className="h-full bg-primary/50 rounded-full transition-all duration-300"
+                        className={[
+                            'h-full rounded-full transition-all duration-300',
+                            totalRemaining === 0 ? 'bg-success' : 'bg-primary/50',
+                        ].join(' ')}
                         style={{ width: `${totalPeriods > 0 ? (totalPlaced / totalPeriods) * 100 : 0}%` }}
                     />
                 </div>
 
-                {/* Tab bar */}
-                <div className="flex gap-1 bg-surface-alt rounded-lg p-0.5">
+                {/* Source tab bar (Teacher / All) */}
+                <div className="flex gap-1 bg-surface-alt rounded-lg p-0.5 mb-2">
                     {(['teacher', 'all'] as const).map(tab => (
                         <button
                             key={tab}
@@ -278,15 +417,31 @@ export default function PaletteSidebar({ teacherCode, dataset }: PaletteSidebarP
                         </button>
                     ))}
                 </div>
+
+                {/* Filter tabs (All / Remaining / Done) */}
+                <div className="flex gap-0.5">
+                    {FILTER_OPTIONS.map(opt => (
+                        <button
+                            key={opt.key}
+                            onClick={() => setFilterMode(opt.key)}
+                            className={[
+                                'flex-1 text-[9px] py-0.5 rounded font-medium transition-colors',
+                                filterMode === opt.key
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'text-foreground-muted hover:text-foreground hover:bg-surface-alt',
+                            ].join(' ')}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* Scrollable content */}
-            <div className="flex-1 overflow-y-auto py-1 max-h-[calc(100vh-320px)]">
-                {activeData.filter(g => g.totalRemaining > 0).length === 0 ? (
+            <div className="flex-1 overflow-y-auto py-1 max-h-[calc(100vh-380px)]">
+                {activeData.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-                        <svg className="w-8 h-8 text-emerald-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                        <CheckCircle size={32} className="text-success mb-2" />
                         <span className="text-xs text-foreground-muted">All sessions scheduled!</span>
                     </div>
                 ) : (
@@ -296,6 +451,7 @@ export default function PaletteSidebar({ teacherCode, dataset }: PaletteSidebarP
                             group={group}
                             dragOffset={dragOffsets[i]}
                             showTeacher={activeTab === 'all'}
+                            filterMode={filterMode}
                         />
                     ))
                 )}

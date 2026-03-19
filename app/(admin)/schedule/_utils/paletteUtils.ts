@@ -21,6 +21,8 @@ export interface PaletteClassItem {
     periodsPerWeek: number;
     placed: number;
     remaining: number;
+    /** Short placement summary e.g. "จ.1,2 · อ.4" — only populated when placed > 0 */
+    placementSummary: string;
 }
 
 export interface PaletteSubjectGroup {
@@ -45,23 +47,50 @@ function buildTeacherName(teacherCode: string): string {
     return meta ? `${meta.firstName} ${meta.lastName}` : teacherCode;
 }
 
-function countPlacedForAssignment(
+const DAY_ABBREV: Record<string, string> = {
+    Monday: 'จ.', Tuesday: 'อ.', Wednesday: 'พ.', Thursday: 'พฤ.', Friday: 'ศ.',
+};
+
+interface PlacementInfo {
+    count: number;
+    /** e.g. "จ.1,2 · อ.4" */
+    summary: string;
+}
+
+function getPlacementInfo(
     teacherCode: string,
     subjectCode: string,
     classCode: string,
     dataset: FullDataset,
-): number {
+): PlacementInfo {
     const teacherSchedule = dataset.teachers[teacherCode];
-    if (!teacherSchedule) return 0;
+    if (!teacherSchedule) return { count: 0, summary: '' };
+
+    const daySlots: Record<string, number[]> = {};
     let count = 0;
+
     for (const day of DAYS) {
-        const daySlots = teacherSchedule[day];
-        if (!daySlots) continue;
-        for (const item of Object.values(daySlots)) {
-            if (item.subjectCode === subjectCode && item.classCode === classCode) count++;
+        const slots = teacherSchedule[day];
+        if (!slots) continue;
+        for (const [slotStr, item] of Object.entries(slots)) {
+            if (item.subjectCode === subjectCode && item.classCode === classCode) {
+                count++;
+                (daySlots[day] ??= []).push(Number(slotStr));
+            }
         }
     }
-    return count;
+
+    if (count === 0) return { count: 0, summary: '' };
+
+    const parts: string[] = [];
+    for (const day of DAYS) {
+        const slots = daySlots[day];
+        if (!slots) continue;
+        slots.sort((a, b) => a - b);
+        parts.push(`${DAY_ABBREV[day]}${slots.join(',')}`);
+    }
+
+    return { count, summary: parts.join(' · ') };
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -79,9 +108,9 @@ export function computePaletteData(
 
     return workload.map(entry => {
         const classes: PaletteClassItem[] = entry.assignments.map(a => {
-            const placed = dataset
-                ? countPlacedForAssignment(teacherCode, entry.subjectCode, a.classCode, dataset)
-                : 0;
+            const info = dataset
+                ? getPlacementInfo(teacherCode, entry.subjectCode, a.classCode, dataset)
+                : { count: 0, summary: '' };
             const room = resolveDefaultRoom(entry.subjectCode, a.classCode);
             return {
                 teacherCode,
@@ -90,8 +119,9 @@ export function computePaletteData(
                 room,
                 roomName: ROOM_META[room]?.name ?? room,
                 periodsPerWeek: a.periodsPerWeek,
-                placed,
-                remaining: a.periodsPerWeek - placed,
+                placed: info.count,
+                remaining: a.periodsPerWeek - info.count,
+                placementSummary: info.summary,
             };
         });
 
@@ -140,9 +170,9 @@ export function computeGlobalPaletteData(
             }
 
             for (const a of entry.assignments) {
-                const placed = dataset
-                    ? countPlacedForAssignment(teacherCode, entry.subjectCode, a.classCode, dataset)
-                    : 0;
+                const info = dataset
+                    ? getPlacementInfo(teacherCode, entry.subjectCode, a.classCode, dataset)
+                    : { count: 0, summary: '' };
                 const room = resolveDefaultRoom(entry.subjectCode, a.classCode);
                 group.classes.push({
                     teacherCode,
@@ -151,12 +181,13 @@ export function computeGlobalPaletteData(
                     room,
                     roomName: ROOM_META[room]?.name ?? room,
                     periodsPerWeek: a.periodsPerWeek,
-                    placed,
-                    remaining: a.periodsPerWeek - placed,
+                    placed: info.count,
+                    remaining: a.periodsPerWeek - info.count,
+                    placementSummary: info.summary,
                 });
                 group.totalPeriods += a.periodsPerWeek;
-                group.totalPlaced += placed;
-                group.totalRemaining += a.periodsPerWeek - placed;
+                group.totalPlaced += info.count;
+                group.totalRemaining += a.periodsPerWeek - info.count;
             }
         }
     }

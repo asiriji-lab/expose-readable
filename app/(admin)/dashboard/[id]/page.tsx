@@ -1,8 +1,7 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
 import AdminHeader from '../../_components/AdminHeader';
 import SheetEmbed from './_components/SheetEmbed';
 import ValidationSection from './_components/ValidationSection';
@@ -13,6 +12,8 @@ import { TabName, SheetData } from '../../validators/types';
 import SessionInfoCard, { SessionInfo } from './_components/SessionInfoCard';
 import DevTestPanel from './_components/DevTestPanel';
 import { ALL_TAB_NAMES } from './_utils/csvHelpers';
+import { PageShell } from '@/components/layout/page-shell';
+import { PageHeader } from '@/components/layout/page-header';
 
 export default function SessionDetailPage() {
   const params = useParams();
@@ -45,68 +46,55 @@ export default function SessionDetailPage() {
   >('idle');
 
   return (
-    <div className="min-h-screen bg-background">
-      <AdminHeader />
+    <PageShell header={<AdminHeader />}>
+      <PageHeader
+        title="นำเข้าข้อมูลตารางสอน"
+        description="เชื่อมต่อ Google Sheet ที่มีข้อมูล 8 แท็บ แล้วตรวจสอบก่อนสร้างตาราง"
+        breadcrumb={[
+          { label: 'รายการตารางสอน', href: '/dashboard' },
+          { label: 'นำเข้าข้อมูล' },
+        ]}
+      />
 
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-foreground-muted">
-          <Link href="/dashboard" className="hover:text-primary">
-            ← รายการตารางสอน
-          </Link>
-          <span>/</span>
-          <span className="text-foreground font-medium">นำเข้าข้อมูล</span>
-        </div>
+      {/* Session info */}
+      <SessionInfoCard value={sessionInfo} onChange={setSessionInfo} />
 
-        {/* Page header */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">นำเข้าข้อมูลตารางสอน</h1>
-          <p className="text-sm text-foreground-muted mt-1">
-            เชื่อมต่อ Google Sheet ที่มีข้อมูล 8 แท็บ แล้วตรวจสอบก่อนสร้างตาราง
-          </p>
-        </div>
+      {/* Google Sheet setup (skeleton — coming soon) */}
+      <SheetEmbed />
 
-        {/* Session info */}
-        <SessionInfoCard value={sessionInfo} onChange={setSessionInfo} />
-
-        {/* Google Sheet setup (skeleton — coming soon) */}
-        <SheetEmbed />
-
-        {/* Dev testing panel — only in development */}
-        {process.env.NODE_ENV === 'development' && (
-          <DevTestPanel
-            currentData={sheetData}
-            onDataLoaded={(data) => { setSheetData(data); resetStates(); }}
-            onClear={() => { setSheetData({}); resetStates(); }}
-          />
-        )}
-
-        {/* Validation section */}
-        {generationState === 'idle' && (
-          <ValidationSection
-            tabStates={tabStates}
-            isRunning={isRunning}
-            missingTabs={missingTabs}
-            onValidate={runValidation}
-            onTabClick={setOpenTab}
-          />
-        )}
-
-        {/* Generation status */}
-        {generationState !== 'idle' && (
-          <GenerationStatus state={generationState} sessionId={id} />
-        )}
-      </main>
-
-      {/* Error panel slide-over */}
-      {openTab && (
-        <ErrorPanel
-          tabName={openTab}
-          state={tabStates[openTab]}
-          sheetUrl=""
-          onClose={() => setOpenTab(null)}
+      {/* Dev testing panel — only in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <DevTestPanel
+          currentData={sheetData}
+          onDataLoaded={(data) => { setSheetData(data); resetStates(); }}
+          onClear={() => { setSheetData({}); resetStates(); }}
         />
       )}
-    </div>
+
+      {/* Validation section */}
+      {generationState === 'idle' && (
+        <ValidationSection
+          tabStates={tabStates}
+          isRunning={isRunning}
+          missingTabs={missingTabs}
+          onValidate={runValidation}
+          onTabClick={setOpenTab}
+        />
+      )}
+
+      {/* Generation status */}
+      {generationState !== 'idle' && (
+        <GenerationStatus state={generationState} sessionId={id} />
+      )}
+
+      {/* Error panel slide-over (Sheet: always rendered, controlled via open) */}
+      <ErrorPanel
+        open={openTab !== null}
+        tabName={openTab ?? 'period'}
+        state={openTab ? tabStates[openTab] : tabStates['period']}
+        sheetUrl=""
+        onClose={() => setOpenTab(null)}
+      />
+    </PageShell>
   );
 }
