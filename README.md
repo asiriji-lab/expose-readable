@@ -425,9 +425,8 @@ Pass `ga_params` as a JSON string in the form upload. The default uses the **Isl
 | `elite_size` | `10` | Top individuals preserved each generation |
 | `stagnation_limit` | `50` | Generations without improvement before island-level restart |
 | `catastrophic_after` | `3` | Epochs of global stagnation before a full island reset |
-| `plateau_patience` | `150` | Generations with no meaningful improvement before early stop |
-| `min_improvement` | `500` | Minimum fitness drop to count as a meaningful improvement |
-| `min_gen_for_check` | `4500` | Generation after which the plateau stop is enabled |
+| `min_improvement` | `500` | Minimum total fitness drop over the look-back window required to keep running |
+| `window_size` | `1000` | Look-back window (in generations) for the sliding-window stop |
 
 ### Standard GA parameters (when `n_islands=1`)
 
@@ -582,12 +581,13 @@ If a single island's best fitness does not improve for `stagnation_limit` genera
 #### 3. Catastrophic Reset (Global)
 If no island makes any global improvement for `catastrophic_after` epochs (default: 3 epochs = 150 generations), the entire island that has been stagnating the longest is **completely rebuilt** from scratch with a fresh random population. This is a more aggressive restart to break out of deeper traps.
 
-#### 4. Plateau Stop (Early Termination)
-This is the primary stopping mechanism for long runs. After `min_gen_for_check` generations (default: **4,500**), the algorithm monitors whether the improvements being made are still meaningful:
+#### 4. Sliding-Window Stop (Early Termination)
+This is the primary stopping mechanism for long runs. The algorithm keeps a rolling history of the best fitness over the last `window_size` generations (default: **1,000**) and checks whether the solution is still meaningfully improving:
 
-- If the global best fitness has **not improved by at least `min_improvement`** (default: **500 penalty points**) within the last `plateau_patience` generations (default: 150), the algorithm concludes that further evolution is unlikely to produce significant gains and **stops early**.
-- This is deliberately only activated after gen 4,500 so the algorithm has enough time to make large early improvements (e.g., going from 15,000 → 4,000) before the threshold applies.
-- Tiny incremental improvements (e.g., 4,900 → 4,899 each generation) do **not** reset this counter — only a drop of 500+ points counts.
+- At every generation (or epoch for the Island GA), the algorithm compares the fitness **1,000 generations ago** against the **current best fitness**.
+- If the total improvement over that window is **less than `min_improvement`** (default: **500 penalty points**), the algorithm concludes the search has converged and **stops early**.
+- Unlike the old counter-based approach there is no mandatory warmup period — the window simply fills naturally, so the check cannot fire before generation 1,000.
+- Small cumulative gains (e.g., 5,100 → 4,650 over 1,000 gens, a drop of 450) will trigger the stop because the schedule is no longer improving fast enough to justify continued computation.
 
 **Summary of stopping conditions:**
 
@@ -596,7 +596,7 @@ This is the primary stopping mechanism for long runs. After `min_gen_for_check` 
 | `fitness == 0` | Global | Immediate stop — perfect timetable found |
 | No improvement for 50 gens | Per island | Reseed bottom half of that island |
 | No global improvement for 3 epochs | Global | Fully rebuild the worst island |
-| Improvement < 500 pts for 150 gens after gen 4,500 | Global | Stop early — plateau reached |
+| Total improvement over last 1,000 gens < 500 pts | Global | Stop early — search has converged |
 | Generation limit reached | Global | Stop — return best solution found |
 
 ---

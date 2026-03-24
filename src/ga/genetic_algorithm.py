@@ -7,7 +7,7 @@ Handles the execution of the main evolutionary process.
 """
 
 import random
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Dict, List, Tuple, Set, Optional, Any, Callable
 
 from src.preschedule.scheduleManager import ScheduleManager
@@ -69,9 +69,8 @@ class GeneticAlgorithm:
         elite_size: int = 5,
         tournament_size: int = 3,       # lowered from 5-7 for more diversity
         stagnation_limit: int = 50,
-        plateau_patience: int = 150,
-        min_improvement: float = 500,       # min fitness drop to count as "genuine" improvement for plateau stop
-        min_gen_for_check: int = 4500,      # plateau stop only fires after this generation
+        min_improvement: float = 500,       # min total fitness drop over the window to keep running
+        window_size: int = 1000,            # generations to look back for the sliding-window stop
         block_crossover_rate: float = 0.5,  # probability of block-level mixing per lesson in crossover
         progress_callback: Optional[Callable] = None,
     ):
@@ -83,9 +82,8 @@ class GeneticAlgorithm:
         self.elite_size = elite_size
         self.tournament_size = tournament_size
         self.stagnation_limit = stagnation_limit
-        self.plateau_patience = plateau_patience
         self.min_improvement = min_improvement
-        self.min_gen_for_check = min_gen_for_check
+        self.window_size = window_size
         self.block_crossover_rate = block_crossover_rate
         self.progress_callback = progress_callback
 
@@ -161,7 +159,7 @@ class GeneticAlgorithm:
         self.best_chromosome: Optional[Chromosome] = None
         self.generation_stats: List[Dict] = []
         self._gens_without_improvement: int = 0   # resets on restart
-        self._global_stagnation: int = 0           # never resets on restart; drives plateau stop
+        self._fitness_window: deque = deque(maxlen=window_size)  # sliding window for stop check
         self._stopped_early: bool = False
         self._current_generation: int = 0
 
@@ -927,8 +925,7 @@ class GeneticAlgorithm:
         print(f"  Crossover    : {self.crossover_rate}")
         print(f"  Tournament   : {self.tournament_size}")
         print(f"  Stagnation   : restart after {self.stagnation_limit} gens")
-        print(f"  Plateau stop : after {self.plateau_patience} gens with no meaningful improvement "
-              f"(>={self.min_improvement:.0f}), enabled after gen {self.min_gen_for_check}")
+        print(f"  Window stop  : stop when improvement over last {self.window_size} gens < {self.min_improvement:.0f}")
         print("=" * 60 + "\n")
 
         self.initialize_population()
@@ -976,22 +973,19 @@ class GeneticAlgorithm:
             else:
                 self._gens_without_improvement += 1
 
-            # Plateau counter: only resets on *meaningful* improvement (>= min_improvement)
-            if improvement >= self.min_improvement:
-                self._global_stagnation = 0
-            else:
-                self._global_stagnation += 1         # tracks across restarts
-
-            # Stagnation restart (improvement 5)
+            # Stagnation restart
             if self._gens_without_improvement >= self.stagnation_limit:
                 self._restart_bottom_half()
 
-            # Plateau early stop — only fires after min_gen_for_check to allow early progress
-            if gen >= self.min_gen_for_check and self._global_stagnation >= self.plateau_patience:
+            # Sliding-window stop: stop when total improvement over the last
+            # window_size generations is less than min_improvement.
+            self._fitness_window.append(self.best_chromosome.fitness)
+            if (len(self._fitness_window) == self.window_size and
+                    self._fitness_window[0] - self.best_chromosome.fitness < self.min_improvement):
                 self._stopped_early = True
-                print(f"\n  ⏹  Plateau stop at gen {gen}: no meaningful improvement (>={self.min_improvement:.0f}) "
-                      f"for {self.plateau_patience} generations "
-                      f"(best fitness = {self.best_chromosome.fitness:.0f})")
+                print(f"\n  ⏹  Window stop at gen {gen}: improvement over last {self.window_size} gens "
+                      f"({self._fitness_window[0]:.0f} → {self.best_chromosome.fitness:.0f}) "
+                      f"< {self.min_improvement:.0f}")
                 break
 
             # Stats

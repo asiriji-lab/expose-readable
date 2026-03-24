@@ -14,6 +14,7 @@ Benefits:
 ================================================================================
 """
 
+from collections import deque
 from typing import Any, Dict, List, Optional, Callable
 
 from src.preschedule.scheduleManager import ScheduleManager
@@ -50,9 +51,8 @@ class IslandGeneticAlgorithm:
         stagnation_limit: int = 50,
         block_crossover_rate: float = 0.5,
         catastrophic_after: int = 3,   # epochs with no global improvement → full island reset
-        plateau_patience: int = 150,   # generations with no meaningful improvement → early stop
-        min_improvement: float = 500,  # min fitness drop to count as "genuine" improvement for plateau stop
-        min_gen_for_check: int = 4500, # plateau stop only fires after this generation
+        min_improvement: float = 500,  # min total fitness drop over the window to keep running
+        window_size: int = 1000,       # generations to look back for the sliding-window stop
         progress_callback: Optional[Callable] = None,
     ):
         self.schedule_manager = schedule_manager
@@ -69,11 +69,10 @@ class IslandGeneticAlgorithm:
         self.stagnation_limit = stagnation_limit
         self.block_crossover_rate = block_crossover_rate
         self.catastrophic_after = catastrophic_after
-        # Plateau patience in epochs (convert from generations, min 1)
-        self.plateau_patience_epochs = max(1, plateau_patience // migration_interval)
         self.min_improvement = min_improvement
-        # min_gen_for_check in epochs (convert from generations, min 1)
-        self.min_epoch_for_check = max(1, min_gen_for_check // migration_interval)
+        self.window_size = window_size
+        # Convert generation-based window to epochs (min 1)
+        self.window_epochs = max(1, window_size // migration_interval)
         self.progress_callback = progress_callback
 
         self.n_migrants: int = max(1, int(island_population_size * migration_rate))
@@ -87,8 +86,8 @@ class IslandGeneticAlgorithm:
         self._global_stagnation: int = 0
         self._prev_best_fitness: float = float('inf')
 
-        # Plateau tracking (for early stop — never resets on catastrophic reset)
-        self._plateau_epochs: int = 0       # epochs since last genuine global improvement
+        # Sliding-window tracking (for early stop — never resets on catastrophic reset)
+        self._fitness_window: deque = deque(maxlen=self.window_epochs)
         self._stopped_early: bool = False
 
         # Build islands — individual islands do NOT get the progress_callback;
@@ -209,8 +208,7 @@ class IslandGeneticAlgorithm:
         print(f"  Generations  : {self.max_generations}")
         print(f"  Migrate every: {self.migration_interval} gens  ({self.n_migrants} migrants/island)")
         print(f"  Topology     : {self.topology}")
-        print(f"  Plateau stop : after {self.plateau_patience_epochs} epochs ({self.plateau_patience_epochs * self.migration_interval} gens) "
-              f"with no meaningful improvement (>={self.min_improvement:.0f}), enabled after epoch {self.min_epoch_for_check} (gen {self.min_epoch_for_check * self.migration_interval})")
+        print(f"  Window stop  : stop when improvement over last {self.window_epochs} epochs ({self.window_size} gens) < {self.min_improvement:.0f}")
         mutation_rates = [isl.mutation_rate for isl in self.islands]
         for i, mr in enumerate(mutation_rates):
             print(f"  Island {i}      : mutation={mr:.4f}")
@@ -250,44 +248,46 @@ class IslandGeneticAlgorithm:
             else:
                 self._global_stagnation += 1
 
-            # Plateau counter: only resets on *meaningful* improvement (>= min_improvement)
-            if improvement >= self.min_improvement:
-                self._plateau_epochs = 0    # genuine improvement → reset plateau counter
-            else:
-                self._plateau_epochs += 1   # counts across catastrophic resets
+            # Sliding-window stop: record this epoch's best and check the window.
+            self._fitness_window.append(self.best_chromosome.fitness)
+            window_improvement = (
+                self._fitness_window[0] - self.best_chromosome.fitness
+                if len(self._fitness_window) == self.window_epochs else None
+            )
 
             epoch_stat = {
-                'epoch':             epoch + 1,
-                'generation':        gen_end,
-                'best_fitness':      self.best_chromosome.fitness,
-                'best_island':       self.best_island_idx,
-                'island_bests':      island_bests,
-                'violations':        self.best_chromosome.violations,
-                'global_stagnation': self._global_stagnation,
-                'plateau_epochs':    self._plateau_epochs,
+                'epoch':              epoch + 1,
+                'generation':         gen_end,
+                'best_fitness':       self.best_chromosome.fitness,
+                'best_island':        self.best_island_idx,
+                'island_bests':       island_bests,
+                'violations':         self.best_chromosome.violations,
+                'global_stagnation':  self._global_stagnation,
+                'window_improvement': window_improvement,
             }
             self.generation_stats.append(epoch_stat)
 
             if self.progress_callback:
                 self.progress_callback(gen_end, self.max_generations, epoch_stat)
 
+            win_str = f"{window_improvement:.0f}" if window_improvement is not None else "—"
             print(f"  [Epoch {epoch + 1:>3d} | Gen {gen_end:>4d}] "
                   f"Global best: {self.best_chromosome.fitness:.0f}  "
                   f"Island bests: {[f'{f:.0f}' for f in island_bests]}  "
-                  f"GStag: {self._global_stagnation}  Plateau: {self._plateau_epochs}/{self.plateau_patience_epochs}")
+                  f"GStag: {self._global_stagnation}  WinImprove: {win_str}/{self.min_improvement:.0f}")
 
             if self.best_chromosome.fitness == 0:
                 print(f"\n  Perfect solution found at epoch {epoch + 1}!")
                 break
 
-            # Plateau early stop — only fires after min_epoch_for_check to allow early progress
-            if (epoch + 1) >= self.min_epoch_for_check and self._plateau_epochs >= self.plateau_patience_epochs:
+            # Sliding-window early stop: fires as soon as the window is full and
+            # the total improvement over the last window_size generations < min_improvement.
+            if (window_improvement is not None and window_improvement < self.min_improvement):
                 self._stopped_early = True
-                print(f"\n  ⏹  Plateau stop at epoch {epoch + 1} (gen {gen_end}): "
-                      f"no meaningful improvement (>={self.min_improvement:.0f}) "
-                      f"for {self.plateau_patience_epochs} epochs "
-                      f"({self.plateau_patience_epochs * self.migration_interval} gens), "
-                      f"best fitness = {self.best_chromosome.fitness:.0f}")
+                print(f"\n  ⏹  Window stop at epoch {epoch + 1} (gen {gen_end}): "
+                      f"improvement over last {self.window_size} gens "
+                      f"({self._fitness_window[0]:.0f} → {self.best_chromosome.fitness:.0f}) "
+                      f"= {window_improvement:.0f} < {self.min_improvement:.0f}")
                 break
 
             if self._global_stagnation >= self.catastrophic_after:
@@ -370,8 +370,11 @@ class IslandGeneticAlgorithm:
             'generations_run':     self.max_generations,
             'solution_found':      self.best_chromosome.fitness == 0,
             'stopped_early':       self._stopped_early,
-            'plateau_epochs':      self._plateau_epochs,
-            'plateau_patience_epochs': self.plateau_patience_epochs,
+            'window_improvement':  (
+                self._fitness_window[0] - self.best_chromosome.fitness
+                if len(self._fitness_window) == self.window_epochs else None
+            ),
+            'window_epochs':       self.window_epochs,
             'final_violations':    self.best_chromosome.violations,
             'lessons_scheduled':   len(best_island.lessons),
             'n_islands':           self.n_islands,

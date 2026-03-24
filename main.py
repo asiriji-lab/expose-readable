@@ -55,9 +55,8 @@ GA_PARAMS = dict(
     elite_size=10,
     stagnation_limit=50,
     catastrophic_after=3,
-    plateau_patience=150,   # gens with no meaningful improvement → early stop
-    min_improvement=500,    # fitness must drop by at least this to count as genuine improvement
-    min_gen_for_check=4500, # plateau stop only enabled after this generation
+    min_improvement=500,    # min total fitness drop over the window to keep running
+    window_size=1000,       # look-back window in generations for the sliding-window stop
 )
 
 

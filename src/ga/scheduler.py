@@ -51,13 +51,12 @@ _ISLAND_GA_DEFAULTS = dict(
     mutation_rate=0.015,
     crossover_rate=0.9,
     tournament_size=9,
-    max_generations=100000,
+    max_generations=5000,
     elite_size=10,
     stagnation_limit=50,
     catastrophic_after=3,
-    plateau_patience=150,
     min_improvement=500,
-    min_gen_for_check=4500,
+    window_size=1000,
 )
 
 
@@ -162,9 +161,8 @@ def run_scheduler_job(job_id: str,
             elite_size=ga_kwargs['elite_size'],
             stagnation_limit=ga_kwargs['stagnation_limit'],
             catastrophic_after=ga_kwargs['catastrophic_after'],
-            plateau_patience=ga_kwargs['plateau_patience'],
             min_improvement=ga_kwargs['min_improvement'],
-            min_gen_for_check=ga_kwargs['min_gen_for_check'],
+            window_size=ga_kwargs['window_size'],
             progress_callback=ga_progress,
         )
     else:
@@ -176,9 +174,8 @@ def run_scheduler_job(job_id: str,
             crossover_rate=params.get('crossover_rate', 0.80),
             elite_size=params.get('elite_size', 10),
             tournament_size=params.get('tournament_size', 7),
-            plateau_patience=params.get('plateau_patience', 150),
             min_improvement=params.get('min_improvement', 500),
-            min_gen_for_check=params.get('min_gen_for_check', 4500),
+            window_size=params.get('window_size', 1000),
             progress_callback=ga_progress,
         )
 
