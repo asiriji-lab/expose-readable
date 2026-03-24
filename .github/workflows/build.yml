@@ -1,4 +1,4 @@
-name: build_solver
+name: build_ga_docker
 on:
   schedule:
     - cron:
@@ -21,10 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     steps: 
       - uses: actions/checkout@v3
-      - name: Build Solver CI
+      - name: Build GA Docker Container
         env:
-          ACTION_TOKEN: ${{ secrets.ACTION_TOKEN }}
+          SCHEDOOL_ACTION_TOKEN: ${{ secrets.SCHEDOOL_ACTION_TOKEN }}
         run: |
-          docker login --username winsdominoes --password ${{ secrets.ACTION_TOKEN }} ghcr.io
-          docker buildx build -t ghcr.io/schedool/solver:latest .
-          docker push ghcr.io/schedool/solver:latest
+          docker login --username winsdominoes --password ${{ secrets.SCHEDOOL_ACTION_TOKEN }} ghcr.io
+          docker buildx build -t ghcr.io/schedool/backend:latest .
+          docker push ghcr.io/schedool/backend:latest
