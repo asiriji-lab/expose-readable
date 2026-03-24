@@ -1,10 +1,11 @@
 version: '3'
+
 services:
-  solver:
-    image: ghcr.io/schedool/solver:latest
-    container_name: solver
-    hostname: solver
+  backend:
+    image: ghcr.io/schedool/backend:latest
+    container_name: backend
+    hostname: backend
     ports:
         - '5000:5000'
     volumes:
-        - './data:/solver/data'
+        - './data:/backend/data'
