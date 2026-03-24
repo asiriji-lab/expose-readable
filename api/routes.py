@@ -418,9 +418,10 @@ def get_job_result(job_id):
         schema:
           type: object
           properties:
-            success: {type: boolean}
-            job_id:  {type: string}
-            result:  {type: object}
+            success:  {type: boolean}
+            job_id:   {type: string}
+            result:   {type: object, description: "Job metadata (stats, GA result, paths)"}
+            schedule: {type: object, description: "Full schedule JSON (config, teachers, students, rooms, unfilled_slots)"}
       400:
         description: Job not yet completed
       404:
@@ -441,10 +442,18 @@ def get_job_result(job_id):
             "error": f"Result not available. Current status: {job['status']}"
         }), 400
 
+    result = job.get('result') or {}
+    schedule = None
+    json_path = result.get('json_path')
+    if json_path and os.path.exists(json_path):
+        with open(json_path, 'r', encoding='utf-8') as f:
+            schedule = json.load(f)
+
     return jsonify({
-        "success": True,
-        "job_id":  job['job_id'],
-        "result":  job.get('result'),
+        "success":  True,
+        "job_id":   job['job_id'],
+        "result":   result,
+        "schedule": schedule,
     })
 
 
