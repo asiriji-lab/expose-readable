@@ -4,7 +4,7 @@
 FROM python:3.14.0-slim-trixie
 
 # create working directory and install pip dependencies
-WORKDIR /solver
+WORKDIR /backend
 COPY requirements.txt requirements.txt
 RUN pip3 install -r requirements.txt
 
@@ -12,10 +12,10 @@ RUN pip3 install -r requirements.txt
 COPY . .
 
 # switch dir
-RUN cd /solver
+RUN cd /backend
 
 # run the flask server  
-CMD [ "python3", "/solver/app.py" ]
+CMD [ "python3", "/backend/app.py" ]
 
 # export port
 EXPOSE 5000/tcp
