@@ -143,6 +143,7 @@ def submit_schedule():
             job_name:     {type: string}
             message:      {type: string}
             status_url:   {type: string}
+            result_url:   {type: string}
             download_url: {type: string}
       400:
         description: Missing required file or unreadable CSV
@@ -222,6 +223,7 @@ def submit_schedule():
         "job_name":     job_name,
         "message":      "Job queued and running. Poll the status endpoint for updates.",
         "status_url":   f"/api/v1/schedule/{job_id}",
+        "result_url":   f"/api/v1/schedule/{job_id}/result",
         "download_url": f"/api/v1/schedule/{job_id}/download",
     }), 202
 
@@ -347,7 +349,7 @@ def create_schedule():
 @api_bp.route('/schedule/<job_id>', methods=['GET'])
 def get_job_status(job_id):
     """
-    Get the status and result of a scheduling job.
+    Get the status and progress of a scheduling job.
     ---
     tags:
       - Scheduling
@@ -359,38 +361,90 @@ def get_job_status(job_id):
         description: Job UUID returned by POST /api/v1/schedule
     responses:
       200:
-        description: Job object with status, progress, and result when completed
+        description: Job status and progress (no result payload — use GET /api/v1/schedule/{job_id}/result for that)
         schema:
           type: object
           properties:
             success: {type: boolean}
-            job:
-              type: object
-              properties:
-                job_id:           {type: string}
-                job_name:         {type: string}
-                status:           {type: string, enum: [created, loading_data, running_ga, exporting, completed, failed]}
-                progress:         {type: number, description: "0–100"}
-                progress_details: {type: object}
-                result:           {type: object}
-                error:            {type: string}
-                created_at:       {type: string}
-                updated_at:       {type: string}
+            job_id:           {type: string}
+            job_name:         {type: string}
+            status:           {type: string, enum: [created, loading_data, running_ga, exporting, completed, failed]}
+            progress:         {type: number, description: "0–100"}
+            progress_details: {type: object}
+            error:            {type: string}
+            created_at:       {type: string}
+            updated_at:       {type: string}
       404:
         description: Job not found
     """
     job_manager = JobManager(current_app.config['JOBS_FOLDER'])
     job = job_manager.get_job(job_id)
-    
+
     if not job:
         return jsonify({
             "success": False,
             "error": "Job not found"
         }), 404
-    
+
+    return jsonify({
+        "success":          True,
+        "job_id":           job['job_id'],
+        "job_name":         job['job_name'],
+        "status":           job['status'],
+        "progress":         job['progress'],
+        "progress_details": job['progress_details'],
+        "error":            job.get('error'),
+        "created_at":       job['created_at'],
+        "updated_at":       job['updated_at'],
+    })
+
+
+@api_bp.route('/schedule/<job_id>/result', methods=['GET'])
+def get_job_result(job_id):
+    """
+    Get the result JSON of a completed scheduling job.
+    ---
+    tags:
+      - Scheduling
+    parameters:
+      - name: job_id
+        in: path
+        type: string
+        required: true
+        description: Job UUID returned by POST /api/v1/schedule
+    responses:
+      200:
+        description: Full schedule result JSON
+        schema:
+          type: object
+          properties:
+            success: {type: boolean}
+            job_id:  {type: string}
+            result:  {type: object}
+      400:
+        description: Job not yet completed
+      404:
+        description: Job not found
+    """
+    job_manager = JobManager(current_app.config['JOBS_FOLDER'])
+    job = job_manager.get_job(job_id)
+
+    if not job:
+        return jsonify({
+            "success": False,
+            "error": "Job not found"
+        }), 404
+
+    if job['status'] != 'completed':
+        return jsonify({
+            "success": False,
+            "error": f"Result not available. Current status: {job['status']}"
+        }), 400
+
     return jsonify({
         "success": True,
-        "job": job
+        "job_id":  job['job_id'],
+        "result":  job.get('result'),
     })
 
 
