@@ -14,9 +14,28 @@ Main scheduler orchestration — mirrors the pipeline in main.py:
 """
 
 import os
+import sys
 import json
 import pandas as pd
 from typing import Dict, Optional, Callable
+
+
+class _Tee:
+    """Write to both a file and the original stdout simultaneously."""
+    def __init__(self, file, original):
+        self._file = file
+        self._original = original
+
+    def write(self, data):
+        self._file.write(data)
+        self._original.write(data)
+
+    def flush(self):
+        self._file.flush()
+        self._original.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._original, name)
 
 from src.data_cleaning.data_cleaning import clean_input_data
 from src.preschedule.scheduleManager import ScheduleManager
@@ -96,6 +115,36 @@ def run_scheduler_job(job_id: str,
     outputs_folder = os.path.join(job_folder, 'outputs')
     os.makedirs(outputs_folder, exist_ok=True)
 
+    log_path = os.path.join(outputs_folder, 'ga.log')
+    _log_file = open(log_path, 'w', encoding='utf-8')
+    _original_stdout = sys.stdout
+    sys.stdout = _Tee(_log_file, _original_stdout)
+
+    try:
+        result = _run_scheduler_job_inner(
+            job_id=job_id,
+            uploads_folder=uploads_folder,
+            outputs_folder=outputs_folder,
+            log_path=log_path,
+            params=params,
+            job_manager=job_manager,
+            progress_callback=progress_callback,
+            academic_year=academic_year,
+            semester=semester,
+        )
+    finally:
+        sys.stdout = _original_stdout
+        _log_file.close()
+
+    if job_manager:
+        job_manager.add_file_to_job(job_id, 'output_log', log_path)
+
+    return result
+
+
+def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
+                              params, job_manager, progress_callback,
+                              academic_year, semester):
     # ── Step 1: Load raw CSVs ─────────────────────────────────────────────────
     if job_manager:
         job_manager.update_job_status(job_id, 'loading_data')
@@ -228,6 +277,7 @@ def run_scheduler_job(job_id: str,
         'export_result':  export_result,
         'outputs_folder': outputs_folder,
         'json_path':      json_path,
+        'log_path':       log_path,
         'success':        True,
     }
 
