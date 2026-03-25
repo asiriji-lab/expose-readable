@@ -25,12 +25,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "local_idea/large_design_task.md",
+                "file": "how do i can deploy appscript in google sheet.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "large_design_task"
+              "title": "how do i can deploy appscript in google sheet"
             }
           }
         ],
@@ -198,18 +198,25 @@
   },
   "active": "cc664ba8a00bb4de",
   "lastOpenFiles": [
-    "node_modules/wsl-utils/package.json",
-    "node_modules/wsl-utils/license",
-    "node_modules/wsl-utils/utilities.js",
+    "moonlit-poetry-491311-r2-a6a75a6f3b78.json",
+    "app/api/sheets/copy/route.ts",
+    "app/api/sheets/copy",
+    "tsconfig.tsbuildinfo",
+    "node_modules/googleapis/build/src/apis/vault/v1.d.ts",
+    "node_modules/google-auth-library/package.json",
+    "node_modules/extend/README.md",
+    "node_modules/extend/LICENSE",
+    "node_modules/googleapis-common/build/src/util.d.ts",
+    "node_modules/googleapis-common/build/src/util.js",
+    "node_modules/googleapis-common/build/src/schema.js",
+    "node_modules/googleapis-common/build/src/schema.d.ts",
+    "node_modules/url-template/uritemplate-test/README.md",
+    "node_modules/base64-js/README.md",
+    "appscript/SETUP.md",
+    "session_summary.md",
+    "how do i can deploy appscript in google sheet.md",
+    "local_idea/large_design_task.md",
     "node_modules/wsl-utils/readme.md",
-    "node_modules/wsl-utils/index.js",
-    "node_modules/wsl-utils/index.d.ts",
-    "node_modules/wsl-utils",
-    "node_modules/wrap-ansi/node_modules/strip-ansi/index.d.ts",
-    "node_modules/wrap-ansi/node_modules/string-width/index.d.ts",
-    "node_modules/wrap-ansi/node_modules/emoji-regex/index.d.ts",
-    "node_modules/web-streams-polyfill/dist/types/ts3.6/polyfill.d.ts",
-    "node_modules/web-streams-polyfill/dist/types/ts3.6/ponyfill.d.ts",
     "node_modules/web-streams-polyfill/README.md",
     "node_modules/until-async/README.md",
     "node_modules/unicorn-magic/readme.md",
@@ -227,13 +234,6 @@
     "node_modules/restore-cursor/readme.md",
     "node_modules/reselect/README.md",
     "node_modules/raw-body/README.md",
-    "node_modules/pretty-ms/readme.md",
-    "node_modules/powershell-utils/readme.md",
-    "node_modules/postcss-selector-parser/README.md",
-    "node_modules/postcss-selector-parser/CHANGELOG.md",
-    "node_modules/postcss-selector-parser/API.md",
-    "node_modules/pkce-challenge/README.md",
-    "node_modules/pkce-challenge/CHANGELOG.md",
     "public/owl-logo.svg"
   ]
 }

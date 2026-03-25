@@ -1,90 +1,100 @@
-﻿'use client';
+'use client';
 
-/**
- * TODO: Google Sheets Integration
- *
- * Prerequisites before enabling this component:
- *  1. Create a Google Cloud Project
- *  2. Enable Google Sheets API + Google Drive API
- *  3. Create a Service Account → download JSON key
- *  4. Add key to .env.local as GOOGLE_SERVICE_ACCOUNT_KEY
- *  5. Create a Master Template Sheet with 8 tabs:
- *     period, room, teacher, student, preplace, scout, elective, curriculum
- *  6. Implement POST /api/sessions → clone template, return new spreadsheetId
- *  7. Implement GET /api/sheets?id=... → return parsed tab data
- *  8. Wire useGoogleSheet() hook in page.tsx
- *  9. Save google_sheet_id per session in Supabase
- */
+import { useState } from 'react';
+import { ExternalLink, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { type FetchStatus } from '../_hooks/useGoogleSheet';
 
 interface SheetEmbedProps {
-  /** Spreadsheet ID — stored per session in Supabase (future) */
-  spreadsheetId?: string;
+  fetchStatus: FetchStatus;
+  fetchError: string | null;
+  onFetch: (spreadsheetId: string) => void;
 }
 
-export default function SheetEmbed({ spreadsheetId }: SheetEmbedProps) {
-  const sheetUrl = spreadsheetId
-    ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`
-    : null;
+function extractSheetId(url: string): string | null {
+  // Handles full URLs: https://docs.google.com/spreadsheets/d/SHEET_ID/edit
+  const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  if (match) return match[1];
+  // Also accept a bare ID (no slashes)
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(url.trim())) return url.trim();
+  return null;
+}
+
+export default function SheetEmbed({ fetchStatus, fetchError, onFetch }: SheetEmbedProps) {
+  const [inputUrl, setInputUrl] = useState('');
+
+  const sheetId = extractSheetId(inputUrl);
+  const isFetching = fetchStatus === 'fetching';
+  const isSuccess = fetchStatus === 'success';
+
+  function handleConnect() {
+    if (!sheetId) return;
+    onFetch(sheetId);
+  }
 
   return (
-    <div className="rounded-xl border-2 border-dashed border-border bg-background p-6 space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <span className="text-lg">📊</span>
-        <h2 className="font-semibold text-foreground-muted">Google Sheet</h2>
-        <span className="ml-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 border border-yellow-200">
-          🚧 Coming Soon
-        </span>
-      </div>
+    <Card>
+      <CardContent className="p-4 space-y-3">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-foreground">Google Sheet</p>
+          {isSuccess && (
+            <span className="flex items-center gap-1 text-xs text-success font-medium">
+              <CheckCircle size={13} /> เชื่อมต่อแล้ว
+            </span>
+          )}
+        </div>
 
-      <p className="text-sm text-foreground-muted">
-        เมื่อระบบพร้อม ผู้ดูแลจะสร้าง Google Sheet อัตโนมัติต่อ Session
-        และวางลิงก์ที่นี่เพื่อดึงข้อมูลทั้ง 8 แท็บโดยอัตโนมัติ
-      </p>
-
-      {/* URL Input skeleton */}
-      <div className="flex gap-2">
-        <input
-          type="text"
-          disabled
-          placeholder="https://docs.google.com/spreadsheets/d/..."
-          defaultValue={sheetUrl ?? ''}
-          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground-muted placeholder:text-foreground-muted/40 cursor-not-allowed"
-        />
-        <button
-          disabled
-          className="rounded-lg bg-border px-4 py-2 text-sm font-semibold text-foreground-muted cursor-not-allowed whitespace-nowrap"
-        >
-          เชื่อมต่อ
-        </button>
-      </div>
-
-      {/* Developer checklist */}
-      <div className="rounded-lg bg-surface border border-border p-4">
-        <p className="text-xs font-semibold text-foreground-muted uppercase tracking-wide mb-3">
-          Developer Checklist
+        <p className="text-xs text-foreground-muted">
+          วางลิงก์ Google Sheet ที่มีข้อมูล 8 แท็บ แล้วกด "เชื่อมต่อ"
         </p>
-        <ol className="space-y-2 text-sm text-foreground-muted list-none">
-          {[
-            'สร้าง Google Cloud Project + เปิดใช้ Sheets API & Drive API',
-            'สร้าง Service Account → เพิ่ม GOOGLE_SERVICE_ACCOUNT_KEY ใน .env.local',
-            'สร้าง Master Template Sheet (8 แท็บ)',
-            'Implement POST /api/sessions → clone template, return spreadsheetId',
-            'Implement GET /api/sheets?id=... → return parsed tab data',
-            'บันทึก google_sheet_id ต่อ session ใน Supabase',
-            'Wire useGoogleSheet() + fetchSheet() ใน page.tsx',
-          ].map((step, i) => (
-            <li key={i} className="flex items-start gap-2">
-              <span className="mt-0.5 text-foreground-muted/40 font-mono text-xs">{i + 1}.</span>
-              {step}
-            </li>
-          ))}
-        </ol>
-      </div>
 
-      <p className="text-xs text-foreground-muted">
-        💡 ระหว่างรอ: Validate ผ่าน manual CSV upload ด้านล่างได้เลย
-      </p>
-    </div>
+        {/* URL input + button */}
+        <div className="flex gap-2">
+          <Input
+            type="text"
+            placeholder="https://docs.google.com/spreadsheets/d/..."
+            value={inputUrl}
+            onChange={(e) => setInputUrl(e.target.value)}
+            disabled={isFetching}
+            className="flex-1 text-sm"
+          />
+          <Button
+            onClick={handleConnect}
+            disabled={!sheetId || isFetching}
+            size="sm"
+          >
+            {isFetching ? (
+              <><Loader2 size={14} className="animate-spin" /> กำลังดึง...</>
+            ) : (
+              'เชื่อมต่อ'
+            )}
+          </Button>
+        </div>
+
+        {/* Error */}
+        {fetchError && (
+          <p className="flex items-center gap-1.5 text-xs text-danger">
+            <AlertTriangle size={13} className="shrink-0" />
+            {fetchError}
+          </p>
+        )}
+
+        {/* Open sheet link */}
+        {isSuccess && sheetId && (
+          <a
+            href={`https://docs.google.com/spreadsheets/d/${sheetId}/edit`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-hover font-medium"
+          >
+            <ExternalLink size={12} /> เปิด Google Sheet
+          </a>
+        )}
+      </CardContent>
+
+    </Card>
   );
 }

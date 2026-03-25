@@ -1,6 +1,6 @@
 'use client';
 
-import { Lightbulb, CheckCircle, ExternalLink } from 'lucide-react';
+import { Lightbulb, CheckCircle, ExternalLink, Play, Loader2 } from 'lucide-react';
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter,
 } from '@/components/ui/sheet';
@@ -16,6 +16,9 @@ interface ErrorPanelProps {
   state: TabState;
   sheetUrl: string;
   onClose: () => void;
+  onCellChange?: (rowIndex: number, key: string, value: string) => void;
+  onRevalidate?: () => void;
+  isRunning?: boolean;
 }
 
 const TAB_THAI_LABEL: Record<TabName, string> = {
@@ -23,7 +26,7 @@ const TAB_THAI_LABEL: Record<TabName, string> = {
   preplace: 'ตรึงคาบ', scout: 'ลูกเสือ', elective: 'วิชาเสรี', curriculum: 'หลักสูตร',
 };
 
-export default function ErrorPanel({ open, tabName, state, sheetUrl, onClose }: ErrorPanelProps) {
+export default function ErrorPanel({ open, tabName, state, sheetUrl, onClose, onCellChange, onRevalidate, isRunning }: ErrorPanelProps) {
   const result = state.result;
 
   return (
@@ -94,6 +97,7 @@ export default function ErrorPanel({ open, tabName, state, sheetUrl, onClose }: 
                 rows={result.parsedRows}
                 errors={result.errors}
                 warnings={result.warnings}
+                onCellChange={onCellChange}
               />
             </div>
           )}

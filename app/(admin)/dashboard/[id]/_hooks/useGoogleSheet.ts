@@ -12,13 +12,11 @@ export interface UseGoogleSheetReturn {
   fetchError: string | null;
   missingTabs: TabName[];
   fetchSheet: (spreadsheetId: string) => Promise<void>;
+  loadData: (data: SheetData) => void;
   clearSheet: () => void;
+  updateTabRow: (tabName: TabName, rowIndex: number, key: string, value: string) => void;
 }
 
-/**
- * Stub hook — replace `fetchTabData` with real Google Sheets API call
- * when the service account integration is ready.
- */
 export function useGoogleSheet(): UseGoogleSheetReturn {
   const [sheetData, setSheetData] = useState<SheetData>({});
   const [fetchStatus, setFetchStatus] = useState<FetchStatus>('idle');
@@ -30,19 +28,6 @@ export function useGoogleSheet(): UseGoogleSheetReturn {
     setFetchError(null);
 
     try {
-      /**
-       * TODO: Replace this stub with actual Google Sheets API call.
-       *
-       * Expected API call:
-       *   GET /api/sheets?id={spreadsheetId}
-       *
-       * Expected response shape:
-       *   {
-       *     tabs: {
-       *       [tabTitle: string]: string[][]   // raw rows × cols
-       *     }
-       *   }
-       */
       const res = await fetch(`/api/sheets?id=${spreadsheetId}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -58,7 +43,6 @@ export function useGoogleSheet(): UseGoogleSheetReturn {
         if (key) result[key] = rows;
       }
 
-      // Detect missing tabs
       const missing = ALL_TAB_NAMES.filter((t) => !result[t]);
       setMissingTabs(missing);
       setSheetData(result);
@@ -69,6 +53,14 @@ export function useGoogleSheet(): UseGoogleSheetReturn {
     }
   }, []);
 
+  const loadData = useCallback((data: SheetData) => {
+    const missing = ALL_TAB_NAMES.filter((t) => !data[t]);
+    setMissingTabs(missing);
+    setSheetData(data);
+    setFetchStatus('success');
+    setFetchError(null);
+  }, []);
+
   const clearSheet = useCallback(() => {
     setSheetData({});
     setFetchStatus('idle');
@@ -76,5 +68,26 @@ export function useGoogleSheet(): UseGoogleSheetReturn {
     setMissingTabs([]);
   }, []);
 
-  return { sheetData, fetchStatus, fetchError, missingTabs, fetchSheet, clearSheet };
+  /**
+   * Edit a single cell in the in-memory sheet data.
+   * rowIndex is 0-based into parsedRows (i.e. raw row index + 1 to skip header).
+   */
+  const updateTabRow = useCallback((tabName: TabName, rowIndex: number, key: string, value: string) => {
+    setSheetData((prev) => {
+      const tab = prev[tabName];
+      if (!tab) return prev;
+      const headers = tab[0];
+      const colIdx = headers.indexOf(key);
+      if (colIdx === -1) return prev;
+      const newTab = tab.map((r, ri) => {
+        if (ri !== rowIndex + 1) return r; // +1 to skip header row
+        const newRow = [...r];
+        newRow[colIdx] = value;
+        return newRow;
+      });
+      return { ...prev, [tabName]: newTab };
+    });
+  }, []);
+
+  return { sheetData, fetchStatus, fetchError, missingTabs, fetchSheet, loadData, clearSheet, updateTabRow };
 }

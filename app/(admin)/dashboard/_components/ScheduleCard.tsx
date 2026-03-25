@@ -1,4 +1,7 @@
 import Link from 'next/link';
+import { Clock, CheckCircle, Loader2, Calendar, XCircle, ArrowRight } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { type LucideIcon } from 'lucide-react';
 
 export type SessionStatus =
   | 'awaiting_data'
@@ -15,12 +18,14 @@ export interface Session {
   status: SessionStatus;
 }
 
-const STATUS_BADGE: Record<SessionStatus, { label: string; className: string }> = {
-  awaiting_data: { label: '⏳ รอข้อมูล',         className: 'bg-surface-alt text-foreground-muted' },
-  validated:     { label: '✅ ข้อมูลพร้อม',      className: 'bg-green-100 text-green-700' },
-  generating:    { label: '🔄 กำลังสร้างตาราง', className: 'bg-primary-light text-primary animate-pulse' },
-  completed:     { label: '📅 สร้างตารางแล้ว',  className: 'bg-purple-100 text-purple-700' },
-  failed:        { label: '❌ สร้างไม่สำเร็จ',   className: 'bg-red-100 text-red-700' },
+type BadgeVariant = 'neutral' | 'success' | 'info' | 'purple' | 'danger';
+
+const STATUS_BADGE: Record<SessionStatus, { label: string; variant: BadgeVariant; icon: LucideIcon; spin?: boolean }> = {
+  awaiting_data: { label: 'รอข้อมูล',         variant: 'neutral',  icon: Clock },
+  validated:     { label: 'ข้อมูลพร้อม',      variant: 'success',  icon: CheckCircle },
+  generating:    { label: 'กำลังสร้างตาราง', variant: 'info',     icon: Loader2, spin: true },
+  completed:     { label: 'สร้างตารางแล้ว',  variant: 'purple',   icon: Calendar },
+  failed:        { label: 'สร้างไม่สำเร็จ',   variant: 'danger',   icon: XCircle },
 };
 
 interface ScheduleCardProps {
@@ -28,7 +33,7 @@ interface ScheduleCardProps {
 }
 
 export default function ScheduleCard({ schedule }: ScheduleCardProps) {
-  const badge = STATUS_BADGE[schedule.status];
+  const { label, variant, icon: Icon, spin } = STATUS_BADGE[schedule.status];
   return (
     <tr className="hover:bg-background transition-colors">
       {/* Schedule Name */}
@@ -48,9 +53,10 @@ export default function ScheduleCard({ schedule }: ScheduleCardProps) {
 
       {/* Status */}
       <td className="px-6 py-4 whitespace-nowrap">
-        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${badge.className}`}>
-          {badge.label}
-        </span>
+        <Badge variant={variant}>
+          <Icon size={12} className={spin ? 'animate-spin' : undefined} />
+          {label}
+        </Badge>
       </td>
 
       {/* Actions */}
@@ -59,7 +65,7 @@ export default function ScheduleCard({ schedule }: ScheduleCardProps) {
           href={`/dashboard/${schedule.id}`}
           className="text-primary hover:text-primary-hover inline-flex items-center gap-1 font-medium"
         >
-          เปิด →
+          เปิด <ArrowRight size={14} />
         </Link>
       </td>
     </tr>

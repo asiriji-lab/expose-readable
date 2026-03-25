@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { ValidationError } from '../../../validators/types';
 
@@ -8,9 +8,11 @@ interface DataPreviewProps {
   /** List of errors/warnings for highlight */
   errors: ValidationError[];
   warnings: ValidationError[];
+  /** Called when user edits a cell (rowIndex is 0-based into parsedRows) */
+  onCellChange?: (rowIndex: number, key: string, value: string) => void;
 }
 
-export default function DataPreview({ rows, errors, warnings }: DataPreviewProps) {
+export default function DataPreview({ rows, errors, warnings, onCellChange }: DataPreviewProps) {
   if (rows.length === 0) {
     return <p className="text-sm text-foreground-muted italic">ไม่มีข้อมูล</p>;
   }
@@ -58,14 +60,23 @@ export default function DataPreview({ rows, errors, warnings }: DataPreviewProps
                   return (
                     <td
                       key={h}
-                      className={`px-3 py-1.5 max-w-40 truncate ${
-                        isError ? 'bg-red-100 text-red-700 font-medium' :
-                        isWarn ? 'bg-yellow-50 text-yellow-700' :
-                        'text-foreground-muted'
+                      className={`px-3 py-1.5 max-w-40 ${
+                        isError ? 'bg-red-100' :
+                        isWarn ? 'bg-yellow-50' :
+                        ''
                       }`}
-                      title={value}
                     >
-                      {value || <span className="text-foreground-muted/40 italic">ว่าง</span>}
+                      <input
+                        key={value}
+                        defaultValue={value}
+                        onBlur={(e) => onCellChange?.(i, h, e.target.value)}
+                        placeholder="ว่าง"
+                        className={`w-full bg-transparent outline-none text-xs truncate placeholder:text-foreground-muted/40 placeholder:italic ${
+                          isError ? 'text-red-700 font-medium' :
+                          isWarn ? 'text-yellow-700' :
+                          'text-foreground-muted'
+                        }`}
+                      />
                     </td>
                   );
                 })}
