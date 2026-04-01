@@ -53,3 +53,6 @@ cleaned_input/scout_cleaned.csv
 cleaned_input/student_cleaned.csv
 cleaned_input/teacher_cleaned.csv
 /data
+data/*
+schedool/
+logs/
