@@ -26,14 +26,14 @@ This guide is for frontend developers who want to integrate with the Schedool ba
 The backend runs on:
 
 ```
-http://localhost:5000/api/v1
+https://dev.winscloud.net/api/v1
 ```
 
 Set this as an environment variable to make switching between dev and production easy.
 
 **`.env.local` (Next.js) or `.env` (Vite/CRA):**
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
+NEXT_PUBLIC_API_URL=https://dev.winscloud.net/api/v1
 ```
 
 Then reference it in your code:
@@ -747,4 +747,4 @@ export default function SchedulePage() {
 | Health check | `GET` | `/health` |
 | Swagger UI | — | `/apidocs` |
 
-> **Tip:** The interactive Swagger UI at `http://localhost:5000/apidocs` lets you test every endpoint directly in the browser without writing any code.
+> **Tip:** The interactive Swagger UI at `https://dev.winscloud.net/apidocs` lets you test every endpoint directly in the browser without writing any code.
