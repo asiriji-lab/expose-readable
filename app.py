@@ -26,13 +26,16 @@ API Endpoints:
 """
 
 import os
-from flask import Flask
+import time
+from flask import Flask, g, request
 from flask_cors import CORS
 from flasgger import Swagger
 
 from api.routes import api_bp
 from api.errors import register_error_handlers
 from config import Config
+from src.logger import init_api_logger
+from src.db import database
 
 
 SWAGGER_CONFIG = {
@@ -71,34 +74,67 @@ SWAGGER_TEMPLATE = {
 
 def create_app(config_class=Config):
     """Application factory for creating Flask app instances."""
-    
+
     app = Flask(__name__)
     app.config.from_object(config_class)
-    
+
     # Enable CORS for API access
     CORS(app, resources={r"/api/*": {"origins": "*"}})
-    
-    # Create required directories
+
+    # ── Directories ───────────────────────────────────────────────────────────
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
     os.makedirs(app.config['JOBS_FOLDER'], exist_ok=True)
-    
-    # Register blueprints
-    app.register_blueprint(api_bp)
+    os.makedirs(app.config['LOGS_DIR'], exist_ok=True)
 
-    # Register error handlers
+    # ── API request logger ────────────────────────────────────────────────────
+    api_logger = init_api_logger(app.config['LOGS_DIR'])
+
+    @app.before_request
+    def _before():
+        g.req_start = time.perf_counter()
+
+    @app.after_request
+    def _after(response):
+        duration = time.perf_counter() - getattr(g, 'req_start', time.perf_counter())
+        job_id = request.view_args.get('job_id', '') if request.view_args else ''
+        extra = f" job_id={job_id}" if job_id else ""
+        api_logger.info(
+            "%s %s → %d  %.3fs%s",
+            request.method,
+            request.path,
+            response.status_code,
+            duration,
+            extra,
+        )
+        return response
+
+    # ── Database (optional) ───────────────────────────────────────────────────
+    # db_url = app.config.get('DATABASE_URL', '')
+
+    # Check for empty DB environment variables
+    MANDATORY_DB_ENV_VARS = {'POSTGRES_HOST', 'POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PASSWORD'}
+    if missing_vars := MANDATORY_DB_ENV_VARS.difference(os.environ):
+        raise EnvironmentError(f"The following variables were not set: {missing_vars}")
+    else:
+        db_url = "postgresql://" + os.getenv('POSTGRES_USER', '') + ":" + os.getenv('POSTGRES_PASSWORD', '') + "@" + os.getenv('POSTGRES_HOST', '') + "/" + os.getenv('POSTGRES_DB', '')
+        database.init_db(db_url)
+
+    # ── Blueprints & error handlers ───────────────────────────────────────────
+    app.register_blueprint(api_bp)
     register_error_handlers(app)
 
-    # Swagger / OpenAPI UI
+    # ── Swagger / OpenAPI UI ──────────────────────────────────────────────────
     Swagger(app, config=SWAGGER_CONFIG, template=SWAGGER_TEMPLATE)
-    
-    # Root endpoint - API documentation
+
+    # ── Root endpoint ─────────────────────────────────────────────────────────
     @app.route('/')
     def index():
         return {
             "name": "GA Scheduler API",
             "version": "1.0.0",
             "description": "Genetic Algorithm School Timetable Completion System",
+            "database": "connected" if database.is_available() else "not configured",
             "endpoints": {
                 "GET /": "API documentation",
                 "GET /health": "Health check",
@@ -107,18 +143,26 @@ def create_app(config_class=Config):
                 "GET /api/v1/schedule/<job_id>/download": "Download results as ZIP",
                 "DELETE /api/v1/schedule/<job_id>": "Delete job",
                 "GET /api/v1/jobs": "List all jobs",
+                "POST /api/v1/organizations": "Create an organization",
+                "GET /api/v1/organizations": "List organizations",
+                "POST /api/v1/users": "Create a user",
+                "GET /api/v1/users": "List users",
                 "POST /api/v1/schedule/create": "(legacy) Create scheduling job",
                 "POST /api/v1/curriculum/upload": "(legacy) Upload curriculum CSV",
                 "POST /api/v1/rooms/upload": "(legacy) Upload rooms CSV",
-                "POST /api/v1/timetables/upload": "(legacy) Upload timetable CSVs"
+                "POST /api/v1/timetables/upload": "(legacy) Upload timetable CSVs",
             },
-            "documentation": "/api/v1/docs"
+            "documentation": "/apidocs",
         }
-    
+
     @app.route('/health')
     def health():
-        return {"status": "healthy", "service": "ga-scheduler-api"}
-    
+        return {
+            "status": "healthy",
+            "service": "ga-scheduler-api",
+            "database": "connected" if database.is_available() else "not configured",
+        }
+
     return app
 
 

@@ -16,27 +16,12 @@ Main scheduler orchestration — mirrors the pipeline in main.py:
 import os
 import sys
 import json
+import logging
 import pandas as pd
+from datetime import datetime
 from typing import Dict, Optional, Callable
 
-
-class _Tee:
-    """Write to both a file and the original stdout simultaneously."""
-    def __init__(self, file, original):
-        self._file = file
-        self._original = original
-
-    def write(self, data):
-        self._file.write(data)
-        self._original.write(data)
-
-    def flush(self):
-        self._file.flush()
-        self._original.flush()
-
-    def __getattr__(self, name):
-        return getattr(self._original, name)
-
+from src.logger import create_job_logger
 from src.data_cleaning.data_cleaning import clean_input_data
 from src.preschedule.scheduleManager import ScheduleManager
 from src.preschedule.prescheduleProcessor import PrescheduleProcessor
@@ -89,6 +74,25 @@ def _load_raw_data(uploads_folder: str) -> Dict[str, pd.DataFrame]:
     return raw_data
 
 
+class _Tee:
+    """Write to both a file and the original stdout simultaneously."""
+
+    def __init__(self, file, original):
+        self._file = file
+        self._original = original
+
+    def write(self, data):
+        self._file.write(data)
+        self._original.write(data)
+
+    def flush(self):
+        self._file.flush()
+        self._original.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._original, name)
+
+
 def run_scheduler_job(job_id: str,
                       job_folder: str,
                       params: Dict,
@@ -115,10 +119,22 @@ def run_scheduler_job(job_id: str,
     outputs_folder = os.path.join(job_folder, 'outputs')
     os.makedirs(outputs_folder, exist_ok=True)
 
-    log_path = os.path.join(outputs_folder, 'ga.log')
-    _log_file = open(log_path, 'w', encoding='utf-8')
+    # ── Job logger (structured) ────────────────────────────────────────────
+    # Writes to data/jobs/<job_id>/outputs/logs/ga_YYYY-MM-DD_HH-MM-SS.log
+    job_logger, log_path = create_job_logger(job_id, outputs_folder)
+
+    # ── stdout Tee: raw GA print() output captured alongside logger ────────
+    # The Tee file lives in the same logs/ subdirectory.
+    tee_path = log_path  # share the same file so all output is in one place
+    _tee_file = open(tee_path, 'a', encoding='utf-8')
     _original_stdout = sys.stdout
-    sys.stdout = _Tee(_log_file, _original_stdout)
+    sys.stdout = _Tee(_tee_file, _original_stdout)
+
+    job_logger.info("=" * 72)
+    job_logger.info("JOB START  job_id=%s", job_id)
+    job_logger.info("  academic_year=%s  semester=%s", academic_year, semester)
+    job_logger.info("  params=%s", json.dumps(params, default=str))
+    job_logger.info("=" * 72)
 
     try:
         result = _run_scheduler_job_inner(
@@ -131,10 +147,16 @@ def run_scheduler_job(job_id: str,
             progress_callback=progress_callback,
             academic_year=academic_year,
             semester=semester,
+            job_logger=job_logger,
         )
+    except Exception as exc:
+        job_logger.exception("Unhandled exception during job execution: %s", exc)
+        raise
     finally:
         sys.stdout = _original_stdout
-        _log_file.close()
+        _tee_file.close()
+
+    job_logger.info("JOB END  job_id=%s  success=%s", job_id, result.get('success'))
 
     if job_manager:
         job_manager.add_file_to_job(job_id, 'output_log', log_path)
@@ -144,8 +166,11 @@ def run_scheduler_job(job_id: str,
 
 def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
                               params, job_manager, progress_callback,
-                              academic_year, semester):
+                              academic_year, semester, job_logger=None):
+    log = job_logger or logging.getLogger(__name__)
+
     # ── Step 1: Load raw CSVs ─────────────────────────────────────────────────
+    log.info("[STEP 1/5] Loading raw CSV files from uploads folder …")
     if job_manager:
         job_manager.update_job_status(job_id, 'loading_data')
 
@@ -153,6 +178,7 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
         raw_data = _load_raw_data(uploads_folder)
         if not raw_data:
             raise ValueError("No input files found in uploads folder")
+        log.info("  Loaded %d input file(s): %s", len(raw_data), list(raw_data.keys()))
 
         cleaned_data = clean_input_data(raw_data)
 
@@ -162,21 +188,29 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
             'curriculum_rows': len(curriculum_df) if curriculum_df is not None else 0,
             'rooms_rows':      len(room_df)       if room_df       is not None else 0,
         }
+        log.info("  curriculum_rows=%d  rooms_rows=%d",
+                 data_stats['curriculum_rows'], data_stats['rooms_rows'])
     except Exception as e:
+        log.error("  Failed during data loading: %s", e)
         if job_manager:
             job_manager.update_job_status(job_id, 'failed', result={'error': str(e)})
         return {'success': False, 'error': str(e)}
 
     # ── Step 2: Preschedule (all 5 tasks) ────────────────────────────────────
+    log.info("[STEP 2/5] Running preschedule processor (5 tasks) …")
     schedule_manager = ScheduleManager()
     processor = PrescheduleProcessor(schedule_manager)
     processor.run_all_tasks(cleaned_data)
+    log.info("  Preschedule tasks complete.")
 
     # ── Step 3: Feasibility check ─────────────────────────────────────────────
+    log.info("[STEP 3/5] Running feasibility check …")
     checker = FeasibilityChecker(schedule_manager)
     feasibility_report = checker.check()
+    log.info("  Feasibility: is_feasible=%s", feasibility_report.is_feasible)
 
     # ── Step 4: GA ────────────────────────────────────────────────────────────
+    log.info("[STEP 4/5] Starting Genetic Algorithm …")
     if job_manager:
         job_manager.update_job_progress(job_id, 'running_ga', 0, data_stats)
 
@@ -230,8 +264,11 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
 
     best_solution = ga.evolve()
     ga_result     = ga.get_result_summary()
+    log.info("  GA complete — best_fitness=%s  violations=%s",
+             ga_result.get('best_fitness'), ga_result.get('violations'))
 
     # ── Step 5: Export ────────────────────────────────────────────────────────
+    log.info("[STEP 5/5] Exporting schedule …")
     if job_manager:
         job_manager.update_job_status(job_id, 'exporting')
 
@@ -266,6 +303,7 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
         if job_manager:
             job_manager.add_file_to_job(job_id, 'output_json', json_path)
     else:
+        log.warning("  No solution found — GA returned None.")
         export_result = {'error': 'No solution found'}
 
     # Slim result stored in jobs.json — no schedule content, just metadata + paths
@@ -283,5 +321,6 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
 
     if job_manager:
         job_manager.update_job_status(job_id, 'completed', result=stored_result)
+    log.info("  Export complete — outputs saved to %s", outputs_folder)
 
     return {**stored_result, 'schedule_json': schedule_json}

@@ -12,21 +12,24 @@ from datetime import timedelta
 
 class Config:
     """Base configuration class."""
-    
+
     # Flask settings
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
     DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
-    
+
     # File storage paths
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'data', 'uploads')
     OUTPUT_FOLDER = os.path.join(BASE_DIR, 'data', 'outputs')
     JOBS_FOLDER = os.path.join(BASE_DIR, 'data', 'jobs')
-    
+
+    # Logging
+    LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+
     # File upload settings
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB max file size
     ALLOWED_EXTENSIONS = {'csv'}
-    
+
     # GA Default Parameters
     GA_POPULATION_SIZE = int(os.getenv('GA_POPULATION_SIZE', 150))
     GA_MAX_GENERATIONS = int(os.getenv('GA_MAX_GENERATIONS', 500))
@@ -34,10 +37,14 @@ class Config:
     GA_CROSSOVER_RATE = float(os.getenv('GA_CROSSOVER_RATE', 0.80))
     GA_ELITE_SIZE = int(os.getenv('GA_ELITE_SIZE', 10))
     GA_TOURNAMENT_SIZE = int(os.getenv('GA_TOURNAMENT_SIZE', 7))
-    
+
     # Job settings
     JOB_TIMEOUT = int(os.getenv('JOB_TIMEOUT', 600))  # 10 minutes
     JOB_CLEANUP_DAYS = int(os.getenv('JOB_CLEANUP_DAYS', 7))
+
+    # PostgreSQL (optional — app runs without it if not set)
+    DATABASE_URL = "postgresql://" + os.getenv('POSTGRES_USER', '') + ":" + os.getenv('POSTGRES_PASSWORD', '') + "@" + os.getenv('POSTGRES_HOST', '') + "/" + os.getenv('POSTGRES_DB', '')
+    ### os.getenv('DATABASE_URL', '')
 
 
 class DevelopmentConfig(Config):

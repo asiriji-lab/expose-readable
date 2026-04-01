@@ -19,6 +19,7 @@ from src.ga.scheduler import run_scheduler_job
 from src.ga.job_manager import JobManager
 from src.utils.validators import validate_curriculum, validate_rooms, validate_timetable
 from src.utils.file_helpers import allowed_file, get_job_folder, create_zip_archive
+from src.db import database, models
 
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
@@ -33,7 +34,7 @@ def _run_job_background(app, job_id, job_folder, params, academic_year, semester
     with app.app_context():
         job_manager = JobManager(app.config['JOBS_FOLDER'])
         try:
-            run_scheduler_job(
+            result = run_scheduler_job(
                 job_id=job_id,
                 job_folder=job_folder,
                 params=params,
@@ -41,8 +42,18 @@ def _run_job_background(app, job_id, job_folder, params, academic_year, semester
                 academic_year=academic_year,
                 semester=semester,
             )
+            # Persist completed schedule to the database when available
+            if database.is_available():
+                schedule_json = result.get('schedule_json')
+                if result.get('success') and schedule_json:
+                    models.complete_schedule(job_id, schedule_json)
+                else:
+                    err = result.get('error', 'Unknown error')
+                    models.fail_schedule(job_id, err)
         except Exception as e:
             job_manager.update_job_status(job_id, 'failed', error=str(e))
+            if database.is_available():
+                models.fail_schedule(job_id, str(e))
 
 
 # =============================================================================
@@ -132,6 +143,16 @@ def submit_schedule():
           migration_interval, migration_rate, topology, mutation_rate,
           crossover_rate, tournament_size, elite_size, stagnation_limit,
           catastrophic_after. Set n_islands=1 to use the standard GA instead.
+      - name: org_id
+        in: formData
+        type: string
+        required: false
+        description: Organization UUID to associate this schedule with (optional, DB only)
+      - name: user_id
+        in: formData
+        type: string
+        required: false
+        description: User UUID of the submitter (optional, DB only)
     responses:
       202:
         description: Job accepted and running in background
@@ -157,6 +178,8 @@ def submit_schedule():
     # ── Parse form parameters ─────────────────────────────────────────────────
     job_name      = request.form.get('job_name', '').strip()
     academic_year = request.form.get('academic_year', '')
+    org_id        = request.form.get('org_id', '').strip() or None
+    user_id       = request.form.get('user_id', '').strip() or None
     try:
         semester = int(request.form.get('semester', 1))
     except (ValueError, TypeError):
@@ -181,6 +204,18 @@ def submit_schedule():
 
     job_manager = JobManager(current_app.config['JOBS_FOLDER'])
     job_manager.create_job(job_id, job_name, params)
+
+    # ── Persist to database (if available) ───────────────────────────────────
+    if database.is_available():
+        models.create_schedule(
+            schedule_id=job_id,
+            job_name=job_name,
+            academic_year=academic_year,
+            semester=semester,
+            ga_params=ga_params,
+            org_id=org_id,
+            user_id=user_id,
+        )
 
     # ── Save all uploaded files with canonical names ───────────────────────────
     # The canonical names match input_dataset/ so the cleaning pipeline can find them.
@@ -655,6 +690,215 @@ def delete_job(job_id):
         "success": True,
         "message": f"Job {job_id} deleted successfully"
     })
+
+
+# =============================================================================
+# ORGANIZATION ENDPOINTS
+# =============================================================================
+
+@api_bp.route('/organizations', methods=['POST'])
+def create_organization():
+    """
+    Create a new organization.
+    ---
+    tags:
+      - Organizations
+    consumes:
+      - application/json
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [name]
+          properties:
+            name: {type: string, example: "Springfield High School"}
+    responses:
+      201:
+        description: Organization created
+        schema:
+          type: object
+          properties:
+            success: {type: boolean}
+            organization: {type: object}
+      400:
+        description: Missing name or DB unavailable
+      409:
+        description: Organization name already exists
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({"success": False, "error": "'name' is required"}), 400
+
+    org = models.create_organization(name)
+    if org is None:
+        return jsonify({"success": False,
+                        "error": "Could not create organization (name may already exist)"}), 409
+
+    return jsonify({"success": True, "organization": org}), 201
+
+
+@api_bp.route('/organizations', methods=['GET'])
+def list_organizations():
+    """
+    List all organizations.
+    ---
+    tags:
+      - Organizations
+    responses:
+      200:
+        description: Array of organizations
+      400:
+        description: Database not configured
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    orgs = models.list_organizations() or []
+    return jsonify({"success": True, "count": len(orgs), "organizations": orgs})
+
+
+@api_bp.route('/organizations/<org_id>', methods=['GET'])
+def get_organization(org_id):
+    """
+    Get a single organization by ID.
+    ---
+    tags:
+      - Organizations
+    parameters:
+      - name: org_id
+        in: path
+        type: string
+        required: true
+    responses:
+      200:
+        description: Organization record
+      404:
+        description: Not found
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    org = models.get_organization(org_id)
+    if not org:
+        return jsonify({"success": False, "error": "Organization not found"}), 404
+
+    return jsonify({"success": True, "organization": org})
+
+
+# =============================================================================
+# USER ENDPOINTS
+# =============================================================================
+
+@api_bp.route('/users', methods=['POST'])
+def create_user():
+    """
+    Create a new user.
+    ---
+    tags:
+      - Users
+    consumes:
+      - application/json
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [email]
+          properties:
+            email:  {type: string, example: "jane@example.com"}
+            name:   {type: string, example: "Jane Smith"}
+            org_id: {type: string, example: "<org UUID>"}
+    responses:
+      201:
+        description: User created
+        schema:
+          type: object
+          properties:
+            success: {type: boolean}
+            user: {type: object}
+      400:
+        description: Missing email or DB unavailable
+      409:
+        description: Email already registered
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    data   = request.get_json() or {}
+    email  = (data.get('email') or '').strip()
+    name   = (data.get('name') or '').strip() or None
+    org_id = (data.get('org_id') or '').strip() or None
+
+    if not email:
+        return jsonify({"success": False, "error": "'email' is required"}), 400
+
+    user = models.create_user(email=email, name=name, org_id=org_id)
+    if user is None:
+        return jsonify({"success": False,
+                        "error": "Could not create user (email may already exist)"}), 409
+
+    return jsonify({"success": True, "user": user}), 201
+
+
+@api_bp.route('/users', methods=['GET'])
+def list_users():
+    """
+    List all users (optionally filtered by org_id).
+    ---
+    tags:
+      - Users
+    parameters:
+      - name: org_id
+        in: query
+        type: string
+        required: false
+    responses:
+      200:
+        description: Array of users
+      400:
+        description: Database not configured
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    org_id = request.args.get('org_id') or None
+    users = models.list_users(org_id=org_id) or []
+    return jsonify({"success": True, "count": len(users), "users": users})
+
+
+@api_bp.route('/users/<user_id>', methods=['GET'])
+def get_user(user_id):
+    """
+    Get a single user by ID.
+    ---
+    tags:
+      - Users
+    parameters:
+      - name: user_id
+        in: path
+        type: string
+        required: true
+    responses:
+      200:
+        description: User record
+      404:
+        description: Not found
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    user = models.get_user(user_id)
+    if not user:
+        return jsonify({"success": False, "error": "User not found"}), 404
+
+    return jsonify({"success": True, "user": user})
 
 
 # =============================================================================

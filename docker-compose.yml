@@ -1,11 +1,33 @@
-version: '3'
+version: '3.8'
 
 services:
   backend:
     image: ghcr.io/schedool/backend:latest
-    container_name: backend
-    hostname: backend
+    container_name: schedool-backend
+    hostname: schedool-backend
     ports:
-        - '5000:5000'
+      - '5000:5000'
     volumes:
-        - './data:/backend/data'
+      - ./schedool/data:/backend/data
+      - ./schedool/logs:/backend/logs
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    
+  postgres:
+    image: postgres:16-alpine
+    container_name: schedool-postgres
+    hostname: schedool-postgres
+    env_file: .env
+    ports:
+      - '5432:5432'
+    volumes:
+      - ./schedool/db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U schedool -d schedool"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
