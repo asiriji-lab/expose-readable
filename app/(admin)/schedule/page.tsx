@@ -293,7 +293,7 @@ export default function SchedulePage() {
                     <div className="flex items-center gap-3 min-w-0">
                         <button
                             onClick={() => router.back()}
-                            className="flex items-center gap-1 text-foreground-muted hover:text-foreground transition-colors flex-shrink-0"
+                            className="flex items-center gap-1 text-foreground-muted hover:text-foreground transition-colors shrink-0"
                         >
                             <ChevronLeft className="w-4 h-4" />
                             <span className="text-sm font-medium hidden sm:inline">Back</span>
@@ -301,13 +301,13 @@ export default function SchedulePage() {
                         <div className="h-5 w-px bg-border hidden sm:block" />
                         <div className="flex items-center gap-2 min-w-0">
                             <h2 className="text-sm font-bold text-foreground truncate">Main Schedule 1/2025</h2>
-                            <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs font-semibold flex-shrink-0">Draft</span>
-                            <span className="text-xs text-foreground-muted hidden md:inline flex-shrink-0">Semester 1/2025</span>
+                            <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs font-semibold shrink-0">Draft</span>
+                            <span className="text-xs text-foreground-muted hidden md:inline shrink-0">Semester 1/2025</span>
                         </div>
                     </div>
 
                     {/* Right: Inline filter (individual views) + ViewToggle + Publish + Actions */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                         {/* Inline filter for individual views — avoids a separate filter bar row */}
                         {viewMode === 'teacher' && (
                             <FilterDropdown label="T. code" value={tCode} options={TEACHER_CODES} onChange={handleTCodeChange} labelClassName="text-primary font-semibold w-14" />

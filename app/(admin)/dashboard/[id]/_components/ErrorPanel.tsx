@@ -50,6 +50,14 @@ export default function ErrorPanel({ open, tabName, state, sheetUrl, onClose, on
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
+          {/* Recommendation banner */}
+          <div className="px-6 py-3 bg-primary-light border-b border-primary-border">
+            <p className="text-xs text-primary font-medium flex items-center gap-1.5">
+              <Lightbulb size={12} />
+              แนะนำให้แก้ไขใน Google Sheet โดยตรง แล้วกดตรวจสอบอีกครั้ง
+            </p>
+          </div>
+
           {/* Error / warning list */}
           {result && (result.errors.length > 0 || result.warnings.length > 0) ? (
             <div className="px-6 py-4 space-y-2">

@@ -15,23 +15,21 @@ import { google } from 'googleapis';
  */
 
 const TAB_DEFS = [
-  { name: 'period',      headers: ['period_label', 'period_time'] },
-  { name: 'room',        headers: ['room_id', 'note', 'tag'] },
-  { name: 'teacher',     headers: ['teacher_id', 'teacher_name', 'available_slots', 'unavailable_slots', 'constraint'] },
-  { name: 'student',     headers: ['class_id', 'grade', 'section', 'default_room', 'curriculum'] },
-  { name: 'preplace',    headers: ['slot_name', 'periods', 'apply_to'] },
+  { name: 'period',      headers: ['คาบ', 'เวลา'] },
+  { name: 'room',        headers: ['ห้องทั้งหมด', 'หมายเหตุ', 'ประเภท'] },
+  { name: 'teacher',     headers: ['teacher_id', 'ตำแหน่ง', 'ชื่อ', 'กลุ่มสาระ', 'available_slots', 'unavailable_slots', 'หมายเหตุ'] },
+  { name: 'student',     headers: ['ชั้นเรียน', 'ชั้น', 'ห้อง', 'ห้องประจำ', 'หลักสูตร'] },
+  { name: 'preplace',    headers: ['ชื่อ', 'คาบ', 'apply_to'] },
   { name: 'scout',       headers: ['ลูกเสือม.1', 'ลูกเสือม.2', 'ลูกเสือม.3'] },
-  { name: 'elective',    headers: ['subject_id', 'subject_name', 'teacher', 'room'] },
-  { name: 'curriculum',  headers: ['subject_id', 'subject_name', 'periods_per_week', 'teacher', 'block_pattern', 'student_class', 'constraint', 'room', 'fixed_period'] },
-  { name: 'constraints', headers: ['slot_name', 'periods', 'apply_to'] },
+  { name: 'elective',    headers: ['รหัสวิชา', 'ชื่อวิชา (เสรี)', 'ครูผู้สอน', 'ห้องเรียน', 'เสรีม.ต้น1', 'เสรีม.ต้น2', 'เสรีม.ปลาย1', 'เสรีม.ปลาย2', 'เสรีม.ปลาย3', 'เสรีม.ปลาย4', 'เสรีม.ปลาย5', 'เสรีม.ปลาย6'] },
+  { name: 'curriculum',  headers: ['รหัสวิชา', 'ชื่อวิชา', 'คาบ/สัปดาห์', 'จำนวนห้อง', 'รวมคาบ', 'ครู', 'การแบ่งคาบสอน', 'ห้อง (ชั้นเรียน) ที่สอน', 'หมายเหตุ', 'ห้องเรียน', 'คาบเรียน'] },
+  { name: 'constraints', headers: ['id', 'Name', 'Type', 'description', 'Note', 'parameters (example)', 'Example Constraints'] },
 ];
 
 export async function POST(req: NextRequest) {
   const { adminEmail, title } = await req.json();
 
-  if (!adminEmail) {
-    return NextResponse.json({ error: 'Missing adminEmail' }, { status: 400 });
-  }
+  // adminEmail is optional — if missing, sheet is created but not shared with anyone
 
   const serviceEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
@@ -44,37 +42,60 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const auth = new google.auth.JWT({
-      email: serviceEmail,
-      key: privateKey.replace(/\\n/g, '\n'),
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: serviceEmail,
+        private_key: privateKey.replace(/\\n/g, '\n'),
+      },
       scopes: [
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive',
       ],
     });
 
-    const sheets = google.sheets({ version: 'v4', auth });
-    const drive = google.drive({ version: 'v3', auth });
+    const sheets = google.sheets({ version: 'v4', auth: auth as any });
+    const drive = google.drive({ version: 'v3', auth: auth as any });
     const sheetTitle = title || `Schooldoo Schedule — ${new Date().toLocaleDateString('en-GB')}`;
 
-    // 1. Create a new spreadsheet with all 9 tabs
-    const createRes = await sheets.spreadsheets.create({
+    // 1. Create blank spreadsheet via Drive API
+    const driveCreate = await drive.files.create({
       requestBody: {
-        properties: { title: sheetTitle },
-        sheets: TAB_DEFS.map((tab, i) => ({
-          properties: {
-            sheetId: i,
-            title: tab.name,
-            gridProperties: { frozenRowCount: 1 },
-          },
-        })),
+        name: sheetTitle,
+        mimeType: 'application/vnd.google-apps.spreadsheet',
       },
+      fields: 'id',
     });
 
-    const spreadsheetId = createRes.data.spreadsheetId;
+    const spreadsheetId = driveCreate.data.id;
     if (!spreadsheetId) {
       throw new Error('Failed to create spreadsheet.');
     }
+
+    // 1b. Add tabs and set frozen headers
+    const addTabRequests = TAB_DEFS.map((tab) => ({
+      addSheet: {
+        properties: {
+          title: tab.name,
+          gridProperties: { frozenRowCount: 1 },
+        },
+      },
+    }));
+    // Delete the default "Sheet1"
+    const meta = await sheets.spreadsheets.get({ spreadsheetId });
+    const defaultSheetId = meta.data.sheets?.[0]?.properties?.sheetId;
+
+    const batchReply = await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          ...addTabRequests,
+          ...(defaultSheetId !== undefined ? [{ deleteSheet: { sheetId: defaultSheetId } }] : []),
+        ],
+      },
+    });
+
+    // Capture the sheetId of the first tab (period) so we can deep-link to it
+    const periodGid = batchReply.data.replies?.[0]?.addSheet?.properties?.sheetId;
 
     // 2. Write headers to all tabs and format them
     const headerData = TAB_DEFS.map((tab) => ({
@@ -115,31 +136,47 @@ export async function POST(req: NextRequest) {
       requestBody: { requests: formatRequests },
     });
 
-    // 4. Share with admin as Editor
-    await drive.permissions.create({
-      fileId: spreadsheetId,
-      requestBody: {
-        type: 'user',
-        role: 'writer',
-        emailAddress: adminEmail,
-      },
-      sendNotificationEmail: false,
-    });
+    // 4. Share with admin and transfer ownership so file doesn't use service account quota
+    if (adminEmail) {
+      const perm = await drive.permissions.create({
+        fileId: spreadsheetId,
+        requestBody: {
+          type: 'user',
+          role: 'writer',
+          emailAddress: adminEmail,
+        },
+        sendNotificationEmail: false,
+        fields: 'id',
+      });
+
+      // Transfer ownership to admin — file will count against admin's quota, not service account's
+      try {
+        await drive.permissions.update({
+          fileId: spreadsheetId,
+          permissionId: perm.data.id!,
+          transferOwnership: true,
+          requestBody: { role: 'owner' },
+        });
+      } catch {
+        // Transfer may fail for non-Workspace accounts — admin still has writer access
+      }
+    }
 
     // 5. Make viewable by anyone with link (so React app can read it)
-    await drive.permissions.create({
-      fileId: spreadsheetId,
-      requestBody: {
-        type: 'anyone',
-        role: 'reader',
-      },
-    });
+    try {
+      await drive.permissions.create({
+        fileId: spreadsheetId,
+        requestBody: { type: 'anyone', role: 'reader' },
+      });
+    } catch {
+      // Drive sharing failed — sheet still usable if admin has access
+    }
 
-    const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`;
+    const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit${periodGid != null ? `#gid=${periodGid}` : ''}`;
 
     return NextResponse.json({ spreadsheetId, spreadsheetUrl });
-  } catch (err) {
-    console.error('[/api/sheets/copy]', err);
+  } catch (err: any) {
+    console.error('[/api/sheets/copy] Full error:', JSON.stringify(err?.response?.data || err?.errors || err?.message, null, 2));
     const message = err instanceof Error ? err.message : 'Failed to create spreadsheet.';
     return NextResponse.json({ error: message }, { status: 500 });
   }
