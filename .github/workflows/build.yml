@@ -2,8 +2,8 @@ name: build_ga_docker
 on:
   schedule:
     - cron:
-        "00 06 * * *" # build at 06:00 UTC every day
-        # (20 minutes after last ublue images start building)
+        "00 05 * * *" # build at 05:00 UTC every day
+
   push:
     paths-ignore: # don't rebuild if only documentation has changed
       - "**.md"
