@@ -15,8 +15,11 @@ Interactive docs (Swagger UI) are available at `http://localhost:5000/apidocs`.
 5. [Download ZIP — GET /schedule/:job_id/download](#5-download-zip)
 6. [Delete a Job — DELETE /schedule/:job_id](#6-delete-a-job)
 7. [List All Jobs — GET /jobs](#7-list-all-jobs)
-8. [Legacy Endpoints](#8-legacy-endpoints)
-9. [Error Responses](#9-error-responses)
+8. [Schedule Records (DB)](#8-schedule-records-db)
+9. [Organizations](#9-organizations)
+10. [Users](#10-users)
+11. [Authentication](#11-authentication)
+12. [Error Responses](#12-error-responses)
 
 ---
 
@@ -302,68 +305,295 @@ Returns a list of all jobs (any status).
 
 ---
 
-## 8. Legacy Endpoints
+## 8. Schedule Records (DB)
 
-These endpoints are kept for workflows that need more fine-grained control (create job, then upload files separately, then start). For new integrations, prefer **`POST /api/v1/schedule`**.
+These endpoints expose the `schedules` table directly. Unlike the job-management endpoints above (which read from the JSON file registry), these require the database to be configured.
 
-### `POST /api/v1/schedule/create`
+### `GET /api/v1/schedules`
 
-Create a job record without any files. Returns a `job_id` you can use to upload files next.
+List schedule records with optional filters.
 
-**Request body (JSON):**
+| Query param | Type | Description |
+|---|---|---|
+| `org_id` | string | Filter by organization UUID |
+| `user_id` | string | Filter by user UUID |
+| `status` | string | Filter by status (`created`, `running_ga`, `completed`, `failed`, …) |
+
+**Example:**
+
+```bash
+# All completed schedules for an org
+curl "http://localhost:5000/api/v1/schedules?org_id=550e8400-...&status=completed"
+```
+
+**Response — 200 OK:**
+
 ```json
 {
-  "job_name": "My Schedule",
-  "academic_year": "2026",
-  "semester": 1,
-  "ga_params": {
-    "max_generations": 1000
+  "success": true,
+  "count": 2,
+  "schedules": [
+    {
+      "schedule_id": "550e8400-...",
+      "org_id": "...",
+      "user_id": "...",
+      "job_name": "Term 1 2026",
+      "academic_year": "2026",
+      "semester": 1,
+      "status": "completed",
+      "progress": 100,
+      "ga_params": { "max_generations": 2000 },
+      "error": null,
+      "created_at": "2026-04-06T09:00:00+00:00",
+      "updated_at": "2026-04-06T09:20:00+00:00"
+    }
+  ]
+}
+```
+
+The `data` column (full schedule JSON) is excluded from list responses for efficiency. Use `GET /schedules/:id` to retrieve it.
+
+---
+
+### `GET /api/v1/schedules/:schedule_id`
+
+Get a single schedule record by ID, including the full `data` JSONB column.
+
+> `schedule_id` is the same UUID as the API `job_id`.
+
+**Response — 200 OK:**
+
+```json
+{
+  "success": true,
+  "schedule": {
+    "schedule_id": "550e8400-...",
+    "status": "completed",
+    "data": { ... },
+    ...
   }
 }
 ```
 
 ---
 
-### `POST /api/v1/curriculum/upload`
+## 9. Organizations
 
-Upload a curriculum CSV to an existing job.
+These endpoints require the database to be configured.
 
-| Field | Type | Description |
+| Method | Endpoint | Description |
 |---|---|---|
-| `job_id` | form field | Job UUID from `/schedule/create` |
-| `file` | file | `curriculum.csv` |
+| POST | `/api/v1/organizations` | Create an organization |
+| GET | `/api/v1/organizations` | List all organizations |
+| GET | `/api/v1/organizations/:org_id` | Get a single organization |
+| GET | `/api/v1/organizations/:org_id/users` | List all users in an organization |
+| GET | `/api/v1/organizations/:org_id/schedules` | List all schedules for an organization |
+
+### `GET /api/v1/organizations/:org_id/users`
+
+Returns all user accounts belonging to the given organization.
+
+```bash
+curl http://localhost:5000/api/v1/organizations/550e8400-.../users
+```
+
+**Response — 200 OK:**
+
+```json
+{
+  "success": true,
+  "count": 3,
+  "users": [
+    { "user_id": "...", "email": "jane@school.edu", "name": "Jane Smith", ... }
+  ]
+}
+```
+
+### `GET /api/v1/organizations/:org_id/schedules`
+
+Returns all scheduling jobs submitted under this organization.
+
+```bash
+curl http://localhost:5000/api/v1/organizations/550e8400-.../schedules
+```
+
+**Response — 200 OK:**
+
+```json
+{
+  "success": true,
+  "count": 5,
+  "schedules": [ { "schedule_id": "...", "status": "completed", ... } ]
+}
+```
 
 ---
 
-### `POST /api/v1/rooms/upload`
+## 10. Users
 
-Upload a rooms CSV to an existing job.
-
-| Field | Type | Description |
+| Method | Endpoint | Description |
 |---|---|---|
-| `job_id` | form field | Job UUID |
-| `file` | file | `room.csv` |
+| POST | `/api/v1/users` | Create a user (API-only, no password) |
+| GET | `/api/v1/users` | List all users (`?org_id=` filter supported) |
+| GET | `/api/v1/users/:user_id` | Get a single user |
+| GET | `/api/v1/users/:user_id/schedules` | List all schedules submitted by this user |
+
+### `GET /api/v1/users/:user_id/schedules`
+
+Returns all scheduling jobs submitted by the given user.
+
+```bash
+curl http://localhost:5000/api/v1/users/6ba7b810-.../schedules
+```
+
+**Response — 200 OK:**
+
+```json
+{
+  "success": true,
+  "count": 2,
+  "schedules": [
+    { "schedule_id": "...", "job_name": "Term 1 2026", "status": "completed", ... }
+  ]
+}
+```
 
 ---
 
-### `POST /api/v1/timetables/upload`
+## 11. Authentication
 
-Upload existing timetable CSVs (pre-filled grids). Accepts multiple files. File type (teacher/student/room) is auto-detected from the filename.
+Schedool uses **JWT (JSON Web Tokens)** for user authentication. Include the token in the `Authorization` header as `Bearer <token>`.
 
-| Field | Type | Description |
-|---|---|---|
-| `job_id` | form field | Job UUID |
-| `files` | file(s) | One or more timetable CSV files |
+> Auth requires the database to be configured. Accounts created here can also be used to associate scheduling jobs with a user via the `user_id` field on `POST /api/v1/schedule`.
+
+### `POST /api/v1/auth/register`
+
+Create a new user account with a password and receive an access token.
+
+**Request body (JSON):**
+
+```json
+{
+  "email": "jane@springfieldhs.edu",
+  "password": "s3cur3p@ss",
+  "name": "Jane Smith",
+  "org_id": "550e8400-..."
+}
+```
+
+`email` and `password` (≥ 8 characters) are required. `name` and `org_id` are optional.
+
+**Response — 201 Created:**
+
+```json
+{
+  "success": true,
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": {
+    "user_id": "6ba7b810-...",
+    "email": "jane@springfieldhs.edu",
+    "name": "Jane Smith",
+    "org_id": "550e8400-...",
+    "created_at": "2026-04-06T09:00:00+00:00"
+  }
+}
+```
+
+**Response — 409 Conflict:** Email already registered.
 
 ---
 
-### `POST /api/v1/schedule/:job_id/start`
+### `POST /api/v1/auth/login`
 
-Start a previously created job. This call **blocks** until the GA finishes and returns the full result in the response body. For anything non-trivial, prefer the async workflow via `POST /api/v1/schedule`.
+Login with email and password.
+
+**Request body (JSON):**
+
+```json
+{
+  "email": "jane@springfieldhs.edu",
+  "password": "s3cur3p@ss"
+}
+```
+
+**Response — 200 OK:**
+
+```json
+{
+  "success": true,
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "user": { "user_id": "...", "email": "jane@springfieldhs.edu", ... }
+}
+```
+
+**Response — 401 Unauthorized:** Invalid credentials.
 
 ---
 
-## 9. Error Responses
+### `GET /api/v1/auth/me`
+
+Return the authenticated user's profile. Requires a valid token.
+
+**Request header:**
+
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+```
+
+**Response — 200 OK:**
+
+```json
+{
+  "success": true,
+  "user": { "user_id": "...", "email": "jane@springfieldhs.edu", ... }
+}
+```
+
+---
+
+### `POST /api/v1/auth/logout`
+
+Signal a logout to the server. The client must discard the token. Requires a valid token.
+
+**Response — 200 OK:**
+
+```json
+{
+  "success": true,
+  "message": "Logged out successfully. Discard your token."
+}
+```
+
+> Tokens are stateless JWTs — server-side revocation requires a token blocklist (see [ORM Guide](ORM.md#auth-integration)).
+
+---
+
+### Full auth example
+
+```bash
+# Register
+TOKEN=$(curl -s -X POST http://localhost:5000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"jane@school.edu","password":"s3cur3p@ss","name":"Jane"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# Use the token
+curl http://localhost:5000/api/v1/auth/me -H "Authorization: Bearer $TOKEN"
+
+# Submit a schedule as this user
+curl -X POST http://localhost:5000/api/v1/schedule \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "curriculum=@curriculum.csv" \
+  -F "room=@room.csv" \
+  -F "user_id=6ba7b810-..."
+
+# Logout
+curl -X POST http://localhost:5000/api/v1/auth/logout -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## 12. Error Responses
 
 All error responses follow the same shape:
 

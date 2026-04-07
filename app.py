@@ -29,6 +29,7 @@ import os
 import time
 from flask import Flask, g, request
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager
 from flasgger import Swagger
 
 from api.routes import api_bp
@@ -66,8 +67,11 @@ SWAGGER_TEMPLATE = {
     "basePath": "/",
     "schemes": ["http", "https"],
     "tags": [
-        {"name": "Scheduling", "description": "Submit and manage scheduling jobs"},
-        {"name": "Files",      "description": "Legacy per-file upload endpoints"},
+        {"name": "Scheduling",    "description": "Submit and manage scheduling jobs"},
+        {"name": "Schedules",     "description": "Query schedule metadata"},
+        {"name": "Organizations", "description": "Manage organizations"},
+        {"name": "Users",         "description": "Manage users"},
+        {"name": "Auth",          "description": "Register, login, and token management"},
     ],
 }
 
@@ -109,16 +113,16 @@ def create_app(config_class=Config):
         )
         return response
 
-    # ── Database (optional) ───────────────────────────────────────────────────
-    # db_url = app.config.get('DATABASE_URL', '')
+    # ── JWT ───────────────────────────────────────────────────────────────────
+    JWTManager(app)
 
+    # ── Database (optional) ───────────────────────────────────────────────────
     # Check for empty DB environment variables
     MANDATORY_DB_ENV_VARS = {'POSTGRES_HOST', 'POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PASSWORD'}
     if missing_vars := MANDATORY_DB_ENV_VARS.difference(os.environ):
         raise EnvironmentError(f"The following variables were not set: {missing_vars}")
     else:
-        db_url = "postgresql://" + os.getenv('POSTGRES_USER', '') + ":" + os.getenv('POSTGRES_PASSWORD', '') + "@" + os.getenv('POSTGRES_HOST', '') + "/" + os.getenv('POSTGRES_DB', '')
-        database.init_db(db_url)
+        database.init_db(app)
 
     # ── Blueprints & error handlers ───────────────────────────────────────────
     app.register_blueprint(api_bp)
@@ -143,14 +147,21 @@ def create_app(config_class=Config):
                 "GET /api/v1/schedule/<job_id>/download": "Download results as ZIP",
                 "DELETE /api/v1/schedule/<job_id>": "Delete job",
                 "GET /api/v1/jobs": "List all jobs",
+                "GET /api/v1/schedules": "List schedule records (filters: org_id, user_id, status)",
+                "GET /api/v1/schedules/<schedule_id>": "Get a single schedule record",
                 "POST /api/v1/organizations": "Create an organization",
                 "GET /api/v1/organizations": "List organizations",
+                "GET /api/v1/organizations/<org_id>": "Get an organization",
+                "GET /api/v1/organizations/<org_id>/users": "Users in an organization",
+                "GET /api/v1/organizations/<org_id>/schedules": "Schedules for an organization",
                 "POST /api/v1/users": "Create a user",
                 "GET /api/v1/users": "List users",
-                "POST /api/v1/schedule/create": "(legacy) Create scheduling job",
-                "POST /api/v1/curriculum/upload": "(legacy) Upload curriculum CSV",
-                "POST /api/v1/rooms/upload": "(legacy) Upload rooms CSV",
-                "POST /api/v1/timetables/upload": "(legacy) Upload timetable CSVs",
+                "GET /api/v1/users/<user_id>": "Get a user",
+                "GET /api/v1/users/<user_id>/schedules": "Schedules for a user",
+                "POST /api/v1/auth/register": "Register a new user account",
+                "POST /api/v1/auth/login": "Login and receive a JWT access token",
+                "GET /api/v1/auth/me": "Get the authenticated user's profile",
+                "POST /api/v1/auth/logout": "Logout (client-side token invalidation)",
             },
             "documentation": "/apidocs",
         }

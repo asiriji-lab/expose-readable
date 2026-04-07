@@ -1,6 +1,8 @@
 # Database
 
-Schedool uses **PostgreSQL** for persistent data storage. The database is optional — the API runs in file-only mode if no `DATABASE_URL` is configured, falling back to the existing JSON-based job registry.
+Schedool uses **PostgreSQL** for persistent data storage via the **SQLAlchemy ORM** (Flask-SQLAlchemy). The database is optional — the API runs in file-only mode if no database is configured, falling back to the existing JSON-based job registry.
+
+For a complete guide on the ORM layer, model definitions, and how to extend the schema, see **[ORM.md](ORM.md)**.
 
 ---
 
@@ -142,57 +144,42 @@ When `DATABASE_URL` is empty or the database is unreachable at startup, the app 
 
 ## API endpoints
 
+For the full API reference including request/response examples, see **[API.md](API.md)**.
+
 ### Organizations
 
-| Method | Endpoint                          | Description              |
-|--------|-----------------------------------|--------------------------|
-| POST   | `/api/v1/organizations`           | Create an organization   |
-| GET    | `/api/v1/organizations`           | List all organizations   |
-| GET    | `/api/v1/organizations/<org_id>`  | Get a single organization |
-
-**Create organization — request body:**
-
-```json
-{ "name": "Springfield High School" }
-```
-
-**Response (201):**
-
-```json
-{
-  "success": true,
-  "organization": {
-    "org_id": "550e8400-e29b-41d4-a716-446655440000",
-    "name": "Springfield High School",
-    "created_at": "2026-04-01T09:00:00+00:00",
-    "updated_at": "2026-04-01T09:00:00+00:00"
-  }
-}
-```
-
----
+| Method | Endpoint                                     | Description                               |
+|--------|----------------------------------------------|-------------------------------------------|
+| POST   | `/api/v1/organizations`                      | Create an organization                    |
+| GET    | `/api/v1/organizations`                      | List all organizations                    |
+| GET    | `/api/v1/organizations/<org_id>`             | Get a single organization                 |
+| GET    | `/api/v1/organizations/<org_id>/users`       | List all users in an organization         |
+| GET    | `/api/v1/organizations/<org_id>/schedules`   | List all schedules for an organization    |
 
 ### Users
 
-| Method | Endpoint                    | Description                                  |
-|--------|-----------------------------|----------------------------------------------|
-| POST   | `/api/v1/users`             | Create a user                                |
-| GET    | `/api/v1/users`             | List all users (filter via `?org_id=<uuid>`) |
-| GET    | `/api/v1/users/<user_id>`   | Get a single user                            |
+| Method | Endpoint                            | Description                                  |
+|--------|-------------------------------------|----------------------------------------------|
+| POST   | `/api/v1/users`                     | Create a user (API-only, no password)        |
+| GET    | `/api/v1/users`                     | List all users (filter via `?org_id=<uuid>`) |
+| GET    | `/api/v1/users/<user_id>`           | Get a single user                            |
+| GET    | `/api/v1/users/<user_id>/schedules` | List all schedules submitted by a user       |
 
-**Create user — request body:**
+### Schedule Records
 
-```json
-{
-  "email": "jane@springfieldhs.edu",
-  "name": "Jane Smith",
-  "org_id": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
+| Method | Endpoint                         | Description                                     |
+|--------|----------------------------------|-------------------------------------------------|
+| GET    | `/api/v1/schedules`              | List schedules (filters: org_id, user_id, status) |
+| GET    | `/api/v1/schedules/<schedule_id>`| Get a single schedule record (includes data)    |
 
-Only `email` is required; `name` and `org_id` are optional.
+### Authentication
 
----
+| Method | Endpoint                  | Description                                  |
+|--------|---------------------------|----------------------------------------------|
+| POST   | `/api/v1/auth/register`   | Register; returns JWT access token           |
+| POST   | `/api/v1/auth/login`      | Login; returns JWT access token              |
+| GET    | `/api/v1/auth/me`         | Get authenticated user profile               |
+| POST   | `/api/v1/auth/logout`     | Logout (client-side token discard)           |
 
 ### Schedules (via the main scheduling API)
 
@@ -235,7 +222,10 @@ Job status is mirrored in both the JSON file (`data/jobs/jobs.json`) and the `sc
 
 ## Development notes
 
-- The schema lives in `src/db/schema.sql` and is applied on every startup via `database._apply_schema()`.
+- **ORM:** The database layer now uses **SQLAlchemy / Flask-SQLAlchemy** instead of raw psycopg2. Model definitions live in `src/db/orm_models.py`; CRUD helpers are in `src/db/models.py`.
+- **Schema bootstrap:** `db.create_all()` is called on every startup (inside `database.init_db(app)`). This is idempotent for existing tables; new tables are created automatically. `src/db/schema.sql` is kept as a reference but is no longer executed at startup.
+- **Schema migrations:** For adding columns to existing tables use **Alembic** (`flask-migrate`). See [ORM.md — Migrations](ORM.md#migrations).
 - All CRUD functions in `src/db/models.py` are decorated with `@_guard`, which silently returns `None` / `[]` if the DB is not available. This keeps all callers free of try/except boilerplate.
-- For production, change the PostgreSQL password via the `POSTGRES_PASSWORD` environment variable in `docker-compose.yml` and update `DATABASE_URL` accordingly.
+- For production, change the PostgreSQL password via the `POSTGRES_PASSWORD` environment variable in `docker-compose.yml`.
 - The `data` column stores the complete `schedule.json` content as JSONB, which can be several MB for large schools. Ensure adequate storage and consider archiving old rows if disk space is a concern.
+- **Auth:** The `users` table now includes a `password_hash` column used by the `/auth/register` and `/auth/login` endpoints. Existing user rows that were created without a password (via `POST /api/v1/users`) have `password_hash = NULL` and cannot log in — add a password via the register endpoint or a direct DB update.

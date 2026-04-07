@@ -2,11 +2,13 @@ version: '3.8'
 
 services:
   backend:
-    image: ghcr.io/schedool/backend:latest
+#    image: ghcr.io/schedool/backend:latest
+    build: .
     container_name: schedool-backend
     hostname: schedool-backend
     ports:
-      - '5000:5000'
+      - '5080:5000'
+    user: 1000:1000
     volumes:
       - ./schedool/data:/backend/data
       - ./schedool/logs:/backend/logs

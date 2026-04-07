@@ -13,11 +13,13 @@ import shutil
 import threading
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app, send_file
-from werkzeug.utils import secure_filename
+from flask_jwt_extended import (
+    create_access_token, jwt_required, get_jwt_identity,
+)
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from src.ga.scheduler import run_scheduler_job
 from src.ga.job_manager import JobManager
-from src.utils.validators import validate_curriculum, validate_rooms, validate_timetable
 from src.utils.file_helpers import allowed_file, get_job_folder, create_zip_archive
 from src.db import database, models
 
@@ -294,93 +296,6 @@ def list_jobs():
     })
 
 
-@api_bp.route('/schedule/create', methods=['POST'])
-def create_schedule():
-    """
-    (Legacy) Create a scheduling job without files.
-    ---
-    tags:
-      - Scheduling
-    summary: "(Legacy) Create job — then upload files and call /start separately"
-    description: >
-      Prefer **POST /api/v1/schedule** for a single-request workflow.
-      This endpoint only creates the job record; you must separately upload
-      files and call POST /api/v1/schedule/{job_id}/start.
-    consumes:
-      - application/json
-    parameters:
-      - in: body
-        name: body
-        schema:
-          type: object
-          properties:
-            job_name:      {type: string,  example: "My Schedule"}
-            academic_year: {type: string,  example: "2026"}
-            semester:      {type: integer, example: 1}
-            ga_params:
-              type: object
-              properties:
-                population_size: {type: integer, example: 150}
-                max_generations: {type: integer, example: 500}
-                mutation_rate:   {type: number,  example: 0.20}
-                crossover_rate:  {type: number,  example: 0.80}
-                elite_size:      {type: integer, example: 10}
-                tournament_size: {type: integer, example: 7}
-    responses:
-      201:
-        description: Job created
-        schema:
-          type: object
-          properties:
-            success:  {type: boolean}
-            job_id:   {type: string}
-            job_name: {type: string}
-            message:  {type: string}
-    """
-    # Generate job ID
-    job_id = str(uuid.uuid4())
-    
-    # Get job parameters from request
-    data = request.get_json() or {}
-    job_name = data.get('job_name', f'Schedule Job {job_id[:8]}')
-    
-    # GA parameters (use defaults if not provided)
-    ga_params = data.get('ga_params', {})
-    params = {
-        'population_size': ga_params.get('population_size', current_app.config['GA_POPULATION_SIZE']),
-        'max_generations': ga_params.get('max_generations', current_app.config['GA_MAX_GENERATIONS']),
-        'mutation_rate': ga_params.get('mutation_rate', current_app.config['GA_MUTATION_RATE']),
-        'crossover_rate': ga_params.get('crossover_rate', current_app.config['GA_CROSSOVER_RATE']),
-        'elite_size': ga_params.get('elite_size', current_app.config['GA_ELITE_SIZE']),
-        'tournament_size': ga_params.get('tournament_size', current_app.config['GA_TOURNAMENT_SIZE']),
-        'academic_year': str(data.get('academic_year', '')),
-        'semester': int(data.get('semester', 1)),
-    }
-    
-    # Create job folder
-    job_folder = get_job_folder(current_app.config['JOBS_FOLDER'], job_id)
-    os.makedirs(job_folder, exist_ok=True)
-    os.makedirs(os.path.join(job_folder, 'uploads'), exist_ok=True)
-    os.makedirs(os.path.join(job_folder, 'outputs'), exist_ok=True)
-    
-    # Initialize job manager and create job record
-    job_manager = JobManager(current_app.config['JOBS_FOLDER'])
-    job_manager.create_job(job_id, job_name, params)
-    
-    return jsonify({
-        "success": True,
-        "job_id": job_id,
-        "job_name": job_name,
-        "message": "Job created successfully. Upload files and then start the job.",
-        "next_steps": {
-            "1": "POST /api/v1/curriculum/upload with curriculum CSV",
-            "2": "POST /api/v1/rooms/upload with rooms CSV",
-            "3": "POST /api/v1/timetables/upload with existing timetable CSVs (optional)",
-            "4": "POST /api/v1/schedule/<job_id>/start to begin scheduling"
-        }
-    }), 201
-
-
 @api_bp.route('/schedule/<job_id>', methods=['GET'])
 def get_job_status(job_id):
     """
@@ -490,108 +405,6 @@ def get_job_result(job_id):
         "result":   result,
         "schedule": schedule,
     })
-
-
-@api_bp.route('/schedule/<job_id>/start', methods=['POST'])
-def start_job(job_id):
-    """
-    (Legacy) Start a previously created job synchronously.
-    ---
-    tags:
-      - Scheduling
-    summary: "(Legacy) Start job — blocks until scheduling completes"
-    description: >
-      Prefer **POST /api/v1/schedule** which runs asynchronously.
-      This endpoint blocks the HTTP connection for the full duration of the GA.
-    parameters:
-      - name: job_id
-        in: path
-        type: string
-        required: true
-    responses:
-      200:
-        description: Scheduling completed; full schedule JSON returned in response
-        schema:
-          type: object
-          properties:
-            success:  {type: boolean}
-            message:  {type: string}
-            result:   {type: object}
-            schedule: {type: object, description: "Full schedule JSON"}
-      400:
-        description: Missing files or invalid job state
-      404:
-        description: Job not found
-      500:
-        description: Scheduling failed
-    """
-    job_manager = JobManager(current_app.config['JOBS_FOLDER'])
-    job = job_manager.get_job(job_id)
-    
-    if not job:
-        return jsonify({
-            "success": False,
-            "error": "Job not found"
-        }), 404
-    
-    if job['status'] not in ['created', 'failed']:
-        return jsonify({
-            "success": False,
-            "error": f"Job cannot be started. Current status: {job['status']}"
-        }), 400
-    
-    # Check required files
-    job_folder = get_job_folder(current_app.config['JOBS_FOLDER'], job_id)
-    uploads_folder = os.path.join(job_folder, 'uploads')
-    
-    curriculum_file = os.path.join(uploads_folder, 'curriculum.csv')
-    rooms_file = os.path.join(uploads_folder, 'rooms.csv')
-    
-    if not os.path.exists(curriculum_file):
-        return jsonify({
-            "success": False,
-            "error": "Curriculum file not uploaded. POST to /api/v1/curriculum/upload first."
-        }), 400
-    
-    if not os.path.exists(rooms_file):
-        return jsonify({
-            "success": False,
-            "error": "Rooms file not uploaded. POST to /api/v1/rooms/upload first."
-        }), 400
-    
-    # Update job status
-    job_manager.update_job_status(job_id, 'running')
-    
-    # Run scheduler (in a real production app, this would be async/background task)
-    try:
-        result = run_scheduler_job(
-            job_id=job_id,
-            job_folder=job_folder,
-            params=job['params'],
-            job_manager=job_manager,
-            academic_year=job['params'].get('academic_year', ''),
-            semester=job['params'].get('semester', 1),
-        )
-
-        response = {
-            "success": True,
-            "message": "Scheduling completed",
-            "result": {
-                "job_id":        result.get('job_id'),
-                "data_stats":    result.get('data_stats'),
-                "ga_result":     result.get('ga_result'),
-                "export_result": result.get('export_result'),
-            },
-            "schedule": result.get('schedule_json'),
-        }
-        return jsonify(response)
-        
-    except Exception as e:
-        job_manager.update_job_status(job_id, 'failed', error=str(e))
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
 
 
 @api_bp.route('/schedule/<job_id>/download', methods=['GET'])
@@ -902,321 +715,389 @@ def get_user(user_id):
 
 
 # =============================================================================
-# FILE UPLOAD ENDPOINTS
+# SCHEDULE METADATA ENDPOINTS
 # =============================================================================
 
-@api_bp.route('/curriculum/upload', methods=['POST'])
-def upload_curriculum():
+@api_bp.route('/schedules', methods=['GET'])
+def list_schedule_records():
     """
-    (Legacy) Upload curriculum CSV to an existing job.
+    List schedule records stored in the database.
     ---
     tags:
-      - Files
-    summary: "(Legacy) Upload curriculum CSV"
-    consumes:
-      - multipart/form-data
+      - Schedules
+    summary: List schedule records (with optional filters)
     parameters:
-      - name: job_id
-        in: formData
+      - name: org_id
+        in: query
         type: string
-        required: true
-        description: Job UUID from POST /api/v1/schedule/create
-      - name: file
-        in: formData
-        type: file
-        required: true
-        description: "Curriculum CSV (required cols: subject_id, periods_per_week, teacher, student_class)"
+        required: false
+        description: Filter by organization UUID
+      - name: user_id
+        in: query
+        type: string
+        required: false
+        description: Filter by user UUID
+      - name: status
+        in: query
+        type: string
+        required: false
+        enum: [created, loading_data, running_ga, exporting, completed, failed]
+        description: Filter by job status
     responses:
       200:
-        description: File uploaded and validated
+        description: Array of schedule records (data column excluded for efficiency)
         schema:
           type: object
           properties:
-            success:       {type: boolean}
-            lessons_count: {type: integer}
-            grades:        {type: array, items: {type: string}}
+            success: {type: boolean}
+            count:   {type: integer}
+            schedules: {type: array, items: {type: object}}
       400:
-        description: Validation error or missing fields
-      404:
-        description: Job not found
+        description: Database not configured
     """
-    if 'file' not in request.files:
-        return jsonify({
-            "success": False,
-            "error": "No file provided"
-        }), 400
-    
-    file = request.files['file']
-    job_id = request.form.get('job_id')
-    
-    if not job_id:
-        return jsonify({
-            "success": False,
-            "error": "job_id is required"
-        }), 400
-    
-    if file.filename == '':
-        return jsonify({
-            "success": False,
-            "error": "No file selected"
-        }), 400
-    
-    if not allowed_file(file.filename, current_app.config['ALLOWED_EXTENSIONS']):
-        return jsonify({
-            "success": False,
-            "error": "Invalid file type. Only CSV files are allowed."
-        }), 400
-    
-    # Validate job exists
-    job_manager = JobManager(current_app.config['JOBS_FOLDER'])
-    if not job_manager.get_job(job_id):
-        return jsonify({
-            "success": False,
-            "error": "Job not found"
-        }), 404
-    
-    # Save file
-    job_folder = get_job_folder(current_app.config['JOBS_FOLDER'], job_id)
-    uploads_folder = os.path.join(job_folder, 'uploads')
-    filepath = os.path.join(uploads_folder, 'curriculum.csv')
-    file.save(filepath)
-    
-    # Validate curriculum format
-    validation = validate_curriculum(filepath)
-    if not validation['valid']:
-        os.remove(filepath)
-        return jsonify({
-            "success": False,
-            "error": validation['error']
-        }), 400
-    
-    # Update job record
-    job_manager.add_file_to_job(job_id, 'curriculum', filepath)
-    
-    return jsonify({
-        "success": True,
-        "message": "Curriculum file uploaded successfully",
-        "lessons_count": validation['lessons_count'],
-        "grades": validation['grades']
-    })
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    org_id  = request.args.get('org_id')  or None
+    user_id = request.args.get('user_id') or None
+    status  = request.args.get('status')  or None
+
+    schedules = models.list_schedules(org_id=org_id, user_id=user_id, status=status) or []
+    return jsonify({"success": True, "count": len(schedules), "schedules": schedules})
 
 
-@api_bp.route('/rooms/upload', methods=['POST'])
-def upload_rooms():
+@api_bp.route('/schedules/<schedule_id>', methods=['GET'])
+def get_schedule_record(schedule_id):
     """
-    (Legacy) Upload rooms CSV to an existing job.
+    Get a single schedule record by ID (includes full data column).
     ---
     tags:
-      - Files
-    summary: "(Legacy) Upload rooms CSV"
-    consumes:
-      - multipart/form-data
+      - Schedules
     parameters:
-      - name: job_id
-        in: formData
+      - name: schedule_id
+        in: path
         type: string
         required: true
-      - name: file
-        in: formData
-        type: file
-        required: true
-        description: "Rooms CSV (required column: room_id)"
+        description: Schedule UUID (same as the API job_id)
     responses:
       200:
-        description: File uploaded and validated
+        description: Full schedule record including the data JSONB column
+      404:
+        description: Schedule not found
+      400:
+        description: Database not configured
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    sched = models.get_schedule(schedule_id)
+    if not sched:
+        return jsonify({"success": False, "error": "Schedule not found"}), 404
+
+    return jsonify({"success": True, "schedule": sched})
+
+
+# =============================================================================
+# ORGANIZATION ↔ USER / SCHEDULE RELATIONSHIP ENDPOINTS
+# =============================================================================
+
+@api_bp.route('/organizations/<org_id>/users', methods=['GET'])
+def list_org_users(org_id):
+    """
+    List all users belonging to a specific organization.
+    ---
+    tags:
+      - Organizations
+    parameters:
+      - name: org_id
+        in: path
+        type: string
+        required: true
+        description: Organization UUID
+    responses:
+      200:
+        description: Array of user records
         schema:
           type: object
           properties:
-            success:     {type: boolean}
-            rooms_count: {type: integer}
+            success: {type: boolean}
+            count:   {type: integer}
+            users:   {type: array, items: {type: object}}
       400:
-        description: Validation error or missing fields
+        description: Database not configured
       404:
-        description: Job not found
+        description: Organization not found
     """
-    if 'file' not in request.files:
-        return jsonify({
-            "success": False,
-            "error": "No file provided"
-        }), 400
-    
-    file = request.files['file']
-    job_id = request.form.get('job_id')
-    
-    if not job_id:
-        return jsonify({
-            "success": False,
-            "error": "job_id is required"
-        }), 400
-    
-    if file.filename == '':
-        return jsonify({
-            "success": False,
-            "error": "No file selected"
-        }), 400
-    
-    if not allowed_file(file.filename, current_app.config['ALLOWED_EXTENSIONS']):
-        return jsonify({
-            "success": False,
-            "error": "Invalid file type. Only CSV files are allowed."
-        }), 400
-    
-    # Validate job exists
-    job_manager = JobManager(current_app.config['JOBS_FOLDER'])
-    if not job_manager.get_job(job_id):
-        return jsonify({
-            "success": False,
-            "error": "Job not found"
-        }), 404
-    
-    # Save file
-    job_folder = get_job_folder(current_app.config['JOBS_FOLDER'], job_id)
-    uploads_folder = os.path.join(job_folder, 'uploads')
-    filepath = os.path.join(uploads_folder, 'rooms.csv')
-    file.save(filepath)
-    
-    # Validate rooms format
-    validation = validate_rooms(filepath)
-    if not validation['valid']:
-        os.remove(filepath)
-        return jsonify({
-            "success": False,
-            "error": validation['error']
-        }), 400
-    
-    # Update job record
-    job_manager.add_file_to_job(job_id, 'rooms', filepath)
-    
-    return jsonify({
-        "success": True,
-        "message": "Rooms file uploaded successfully",
-        "rooms_count": validation['rooms_count']
-    })
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    org = models.get_organization(org_id)
+    if not org:
+        return jsonify({"success": False, "error": "Organization not found"}), 404
+
+    users = models.list_users(org_id=org_id) or []
+    return jsonify({"success": True, "count": len(users), "users": users})
 
 
-@api_bp.route('/timetables/upload', methods=['POST'])
-def upload_timetables():
+@api_bp.route('/organizations/<org_id>/schedules', methods=['GET'])
+def list_org_schedules(org_id):
     """
-    (Legacy) Upload existing timetable CSVs to an existing job.
+    List all schedule records belonging to a specific organization.
     ---
     tags:
-      - Files
-    summary: "(Legacy) Upload existing timetable CSVs"
+      - Organizations
+    parameters:
+      - name: org_id
+        in: path
+        type: string
+        required: true
+        description: Organization UUID
+    responses:
+      200:
+        description: Array of schedule records (data column excluded)
+        schema:
+          type: object
+          properties:
+            success:   {type: boolean}
+            count:     {type: integer}
+            schedules: {type: array, items: {type: object}}
+      400:
+        description: Database not configured
+      404:
+        description: Organization not found
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    org = models.get_organization(org_id)
+    if not org:
+        return jsonify({"success": False, "error": "Organization not found"}), 404
+
+    schedules = models.get_org_schedules(org_id) or []
+    return jsonify({"success": True, "count": len(schedules), "schedules": schedules})
+
+
+# =============================================================================
+# USER ↔ SCHEDULE RELATIONSHIP ENDPOINTS
+# =============================================================================
+
+@api_bp.route('/users/<user_id>/schedules', methods=['GET'])
+def list_user_schedules(user_id):
+    """
+    List all schedule records submitted by a specific user.
+    ---
+    tags:
+      - Users
+    parameters:
+      - name: user_id
+        in: path
+        type: string
+        required: true
+        description: User UUID
+    responses:
+      200:
+        description: Array of schedule records (data column excluded)
+        schema:
+          type: object
+          properties:
+            success:   {type: boolean}
+            count:     {type: integer}
+            schedules: {type: array, items: {type: object}}
+      400:
+        description: Database not configured
+      404:
+        description: User not found
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    user = models.get_user(user_id)
+    if not user:
+        return jsonify({"success": False, "error": "User not found"}), 404
+
+    schedules = models.get_user_schedules(user_id) or []
+    return jsonify({"success": True, "count": len(schedules), "schedules": schedules})
+
+
+# =============================================================================
+# AUTHENTICATION ENDPOINTS
+# =============================================================================
+
+@api_bp.route('/auth/register', methods=['POST'])
+def auth_register():
+    """
+    Register a new user account.
+    ---
+    tags:
+      - Auth
+    summary: Register and receive a JWT access token
+    consumes:
+      - application/json
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [email, password]
+          properties:
+            email:    {type: string, example: "jane@springfieldhs.edu"}
+            password: {type: string, example: "s3cur3p@ss"}
+            name:     {type: string, example: "Jane Smith"}
+            org_id:   {type: string, example: "<org UUID>"}
+    responses:
+      201:
+        description: Account created — JWT token returned
+        schema:
+          type: object
+          properties:
+            success:      {type: boolean}
+            access_token: {type: string}
+            user:         {type: object}
+      400:
+        description: Missing fields, invalid input, or DB unavailable
+      409:
+        description: Email already registered
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    data     = request.get_json() or {}
+    email    = (data.get('email')    or '').strip()
+    password = (data.get('password') or '').strip()
+    name     = (data.get('name')     or '').strip() or None
+    org_id   = (data.get('org_id')   or '').strip() or None
+
+    if not email:
+        return jsonify({"success": False, "error": "'email' is required"}), 400
+    if not password:
+        return jsonify({"success": False, "error": "'password' is required"}), 400
+    if len(password) < 8:
+        return jsonify({"success": False, "error": "Password must be at least 8 characters"}), 400
+
+    # Check for existing account
+    if models.get_user_by_email(email):
+        return jsonify({"success": False, "error": "Email already registered"}), 409
+
+    hashed = generate_password_hash(password)
+    user = models.create_user(email=email, name=name, org_id=org_id, password_hash=hashed)
+    if not user:
+        return jsonify({"success": False, "error": "Could not create account"}), 500
+
+    token = create_access_token(identity=user['user_id'])
+    return jsonify({"success": True, "access_token": token, "user": user}), 201
+
+
+@api_bp.route('/auth/login', methods=['POST'])
+def auth_login():
+    """
+    Login with email and password — returns a JWT access token.
+    ---
+    tags:
+      - Auth
+    consumes:
+      - application/json
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [email, password]
+          properties:
+            email:    {type: string, example: "jane@springfieldhs.edu"}
+            password: {type: string, example: "s3cur3p@ss"}
+    responses:
+      200:
+        description: Login successful
+        schema:
+          type: object
+          properties:
+            success:      {type: boolean}
+            access_token: {type: string}
+            user:         {type: object}
+      400:
+        description: Missing fields or DB unavailable
+      401:
+        description: Invalid credentials
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    data     = request.get_json() or {}
+    email    = (data.get('email')    or '').strip()
+    password = (data.get('password') or '').strip()
+
+    if not email or not password:
+        return jsonify({"success": False, "error": "'email' and 'password' are required"}), 400
+
+    user_orm = models.get_user_orm(email)
+    if not user_orm or not user_orm.password_hash:
+        return jsonify({"success": False, "error": "Invalid email or password"}), 401
+    if not check_password_hash(user_orm.password_hash, password):
+        return jsonify({"success": False, "error": "Invalid email or password"}), 401
+
+    token = create_access_token(identity=str(user_orm.user_id))
+    return jsonify({"success": True, "access_token": token, "user": user_orm.to_dict()})
+
+
+@api_bp.route('/auth/me', methods=['GET'])
+@jwt_required()
+def auth_me():
+    """
+    Return the currently authenticated user's profile.
+    ---
+    tags:
+      - Auth
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Authenticated user record
+        schema:
+          type: object
+          properties:
+            success: {type: boolean}
+            user:    {type: object}
+      401:
+        description: Missing or invalid JWT token
+      400:
+        description: Database not configured
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    user_id = get_jwt_identity()
+    user    = models.get_user(user_id)
+    if not user:
+        return jsonify({"success": False, "error": "User not found"}), 404
+
+    return jsonify({"success": True, "user": user})
+
+
+@api_bp.route('/auth/logout', methods=['POST'])
+@jwt_required()
+def auth_logout():
+    """
+    Logout the current user.
+    ---
+    tags:
+      - Auth
     description: >
-      Accepts multiple files under any of these keys: files, file, timetables, timetable.
-      Type (student/teacher/room) is auto-detected from the filename
-      (e.g. student_1_1.csv, teacher_T001.csv, room_A101.csv).
-    consumes:
-      - multipart/form-data
-    parameters:
-      - name: job_id
-        in: formData
-        type: string
-        required: true
-      - name: files
-        in: formData
-        type: file
-        required: true
-        description: One or more timetable CSV files (repeatable)
+      JWT tokens are stateless — this endpoint signals a successful logout to
+      the client. The client is responsible for discarding the token.
+      For server-side revocation, implement a token blocklist (see docs/ORM.md).
+    security:
+      - Bearer: []
     responses:
       200:
-        description: Upload summary
+        description: Logout acknowledged
         schema:
           type: object
           properties:
-            success:        {type: boolean}
-            uploaded_count: {type: integer}
-            error_count:    {type: integer}
-            uploaded:
-              type: array
-              items:
-                type: object
-                properties:
-                  filename:  {type: string}
-                  type:      {type: string}
-                  entity_id: {type: string}
-            errors: {type: array, items: {type: string}}
-      400:
-        description: No files provided or missing job_id
-      404:
-        description: Job not found
+            success: {type: boolean}
+            message: {type: string}
+      401:
+        description: Missing or invalid JWT token
     """
-    # Accept files under multiple possible key names
-    files = []
-    for key in ['files', 'file', 'timetables', 'timetable']:
-        if key in request.files:
-            # getlist returns all files uploaded under this key
-            files.extend(request.files.getlist(key))
-    
-    if not files:
-        return jsonify({
-            "success": False,
-            "error": "No files provided. Upload files using key: 'files', 'file', 'timetables', or 'timetable'"
-        }), 400
-    
-    job_id = request.form.get('job_id')
-    timetable_type = request.form.get('type', 'auto')  # auto-detect from filename
-    
-    if not job_id:
-        return jsonify({
-            "success": False,
-            "error": "job_id is required"
-        }), 400
-    
-    # Validate job exists
-    job_manager = JobManager(current_app.config['JOBS_FOLDER'])
-    if not job_manager.get_job(job_id):
-        return jsonify({
-            "success": False,
-            "error": "Job not found"
-        }), 404
-    
-    job_folder = get_job_folder(current_app.config['JOBS_FOLDER'], job_id)
-    uploads_folder = os.path.join(job_folder, 'uploads')
-    
-    uploaded_files = []
-    errors = []
-    
-    for file in files:
-        # Skip empty file entries
-        if not file or file.filename == '':
-            continue
-            
-        if not allowed_file(file.filename, current_app.config['ALLOWED_EXTENSIONS']):
-            errors.append(f"{file.filename}: Invalid file type. Only CSV files are allowed.")
-            continue
-        
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(uploads_folder, filename)
-        file.save(filepath)
-        
-        # Validate timetable format
-        validation = validate_timetable(filepath)
-        if not validation['valid']:
-            os.remove(filepath)
-            errors.append(f"{filename}: {validation['error']}")
-            continue
-        
-        uploaded_files.append({
-            "filename": filename,
-            "type": validation['type'],
-            "entity_id": validation['entity_id']
-        })
-        
-        # Update job record
-        job_manager.add_file_to_job(job_id, f"timetable_{validation['type']}", filepath)
-    
-    # Determine overall success
-    total_attempted = len([f for f in files if f and f.filename])
-    all_successful = len(errors) == 0 and len(uploaded_files) > 0
-    
-    return jsonify({
-        "success": all_successful,
-        "uploaded": uploaded_files,
-        "uploaded_count": len(uploaded_files),
-        "errors": errors if errors else None,
-        "error_count": len(errors),
-        "message": f"Uploaded {len(uploaded_files)} of {total_attempted} timetable(s)"
-    })
-
-
+    return jsonify({"success": True, "message": "Logged out successfully. Discard your token."})

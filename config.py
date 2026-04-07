@@ -17,6 +17,10 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
     DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
+    # JWT settings (Flask-JWT-Extended)
+    JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=int(os.getenv('JWT_EXPIRY_HOURS', 24)))
+
     # File storage paths
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'data', 'uploads')
@@ -42,9 +46,16 @@ class Config:
     JOB_TIMEOUT = int(os.getenv('JOB_TIMEOUT', 600))  # 10 minutes
     JOB_CLEANUP_DAYS = int(os.getenv('JOB_CLEANUP_DAYS', 7))
 
-    # PostgreSQL (optional — app runs without it if not set)
-    DATABASE_URL = "postgresql://" + os.getenv('POSTGRES_USER', '') + ":" + os.getenv('POSTGRES_PASSWORD', '') + "@" + os.getenv('POSTGRES_HOST', '') + "/" + os.getenv('POSTGRES_DB', '')
-    ### os.getenv('DATABASE_URL', '')
+    # PostgreSQL — consumed by Flask-SQLAlchemy
+    DATABASE_URL = (
+        "postgresql://"
+        + os.getenv('POSTGRES_USER', '') + ":"
+        + os.getenv('POSTGRES_PASSWORD', '') + "@"
+        + os.getenv('POSTGRES_HOST', '') + "/"
+        + os.getenv('POSTGRES_DB', '')
+    )
+    SQLALCHEMY_DATABASE_URI = DATABASE_URL
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 
 class DevelopmentConfig(Config):

@@ -1,28 +1,33 @@
 """
 ================================================================================
-SCHEDOOL - Database CRUD Operations
+SCHEDOOL - Database CRUD Operations (SQLAlchemy ORM)
 ================================================================================
 
-Thin data-access layer over the three core tables:
-  organizations, users, schedules.
+Thin data-access layer over the three ORM models:
+    Organization, User, Schedule  (defined in orm_models.py)
 
 Every public function returns plain dicts (or lists of dicts) so callers
-never handle psycopg2 row objects directly.  datetime / UUID values are
-serialised to strings automatically.
+never handle ORM objects directly.
 
 All functions are no-ops (return None / []) when the database is not
-available, so the rest of the application degrades gracefully.
+available — the ``@_guard`` decorator handles this transparently, keeping all
+callers free of try/except boilerplate.
+
+New helpers added for auth and richer metadata queries:
+    get_user_by_email()      — look up a user by e-mail address
+    get_user_orm()           — return the raw ORM User object (for password check)
+    get_user_schedules()     — schedules submitted by a specific user
+    get_org_schedules()      — schedules belonging to an organisation
 ================================================================================
 """
 
-import json
 import logging
 import uuid
-from contextlib import contextmanager
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from functools import wraps
+from typing import Dict, List, Optional
 
-from . import database
+from .database import db, is_available
+from .orm_models import Organization, User, Schedule
 
 logger = logging.getLogger(__name__)
 
@@ -31,56 +36,34 @@ logger = logging.getLogger(__name__)
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _serialize(value: Any) -> Any:
-    """Convert psycopg2-specific types to JSON-safe Python primitives."""
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if isinstance(value, uuid.UUID):
-        return str(value)
-    return value
-
-
-def _row_to_dict(description, row) -> Dict:
-    cols = [col.name for col in description]
-    return {col: _serialize(val) for col, val in zip(cols, row)}
-
-
-@contextmanager
-def _conn():
-    """
-    Context manager that acquires a connection, commits on exit, and
-    rolls back + releases on exception.
-    """
-    conn = database.get_conn()
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        database.put_conn(conn)
-
-
 def _guard(func):
     """
     Decorator that short-circuits the function and returns None when the
     database is not available, logging a debug message instead of raising.
+    Also rolls back any in-flight transaction on unexpected errors.
     """
-    import functools
-
-    @functools.wraps(func)
+    @wraps(func)
     def wrapper(*args, **kwargs):
-        if not database.is_available():
+        if not is_available():
             logger.debug("DB not available — skipping %s()", func.__name__)
             return None
         try:
             return func(*args, **kwargs)
         except Exception as exc:
             logger.error("DB error in %s(): %s", func.__name__, exc)
+            db.session.rollback()
             return None
-
     return wrapper
+
+
+def _parse_uuid(value: Optional[str]) -> Optional[uuid.UUID]:
+    """Convert a UUID string to a uuid.UUID, returning None if falsy or invalid."""
+    if not value:
+        return None
+    try:
+        return uuid.UUID(str(value))
+    except (ValueError, AttributeError):
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -98,33 +81,24 @@ def create_organization(name: str) -> Optional[Dict]:
     Returns:
         The newly created row as a dict, or None on error.
     """
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO organizations (name) VALUES (%s) RETURNING *",
-                (name,),
-            )
-            return _row_to_dict(cur.description, cur.fetchone())
+    org = Organization(name=name)
+    db.session.add(org)
+    db.session.commit()
+    return org.to_dict()
 
 
 @_guard
 def get_organization(org_id: str) -> Optional[Dict]:
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT * FROM organizations WHERE org_id = %s", (org_id,)
-            )
-            row = cur.fetchone()
-            return _row_to_dict(cur.description, row) if row else None
+    """Return a single organization by UUID, or None if not found."""
+    org = db.session.get(Organization, _parse_uuid(org_id))
+    return org.to_dict() if org else None
 
 
 @_guard
 def list_organizations() -> List[Dict]:
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT * FROM organizations ORDER BY created_at DESC")
-            desc = cur.description
-            return [_row_to_dict(desc, row) for row in cur.fetchall()]
+    """Return all organizations ordered newest-first."""
+    orgs = Organization.query.order_by(Organization.created_at.desc()).all()
+    return [o.to_dict() for o in orgs]
 
 
 # ---------------------------------------------------------------------------
@@ -136,53 +110,73 @@ def create_user(
     email: str,
     name: Optional[str] = None,
     org_id: Optional[str] = None,
+    password_hash: Optional[str] = None,
 ) -> Optional[Dict]:
     """
     Insert a new user.
 
     Args:
-        email:  Unique e-mail address.
-        name:   Display name (optional).
-        org_id: UUID of the user's organization (optional).
+        email:         Unique e-mail address.
+        name:          Display name (optional).
+        org_id:        UUID of the user's organization (optional).
+        password_hash: Pre-hashed password string for auth (optional).
+                       Pass None for API-only accounts with no login.
 
     Returns:
-        The newly created row as a dict, or None on error.
+        The newly created row as a dict (password_hash excluded), or None on error.
     """
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO users (email, name, org_id)
-                VALUES (%s, %s, %s)
-                RETURNING *
-                """,
-                (email, name, org_id or None),
-            )
-            return _row_to_dict(cur.description, cur.fetchone())
+    user = User(
+        email=email,
+        name=name or None,
+        org_id=_parse_uuid(org_id),
+        password_hash=password_hash,
+    )
+    db.session.add(user)
+    db.session.commit()
+    return user.to_dict()
 
 
 @_guard
 def get_user(user_id: str) -> Optional[Dict]:
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
-            row = cur.fetchone()
-            return _row_to_dict(cur.description, row) if row else None
+    """Return a single user by UUID, or None if not found."""
+    user = db.session.get(User, _parse_uuid(user_id))
+    return user.to_dict() if user else None
+
+
+@_guard
+def get_user_by_email(email: str) -> Optional[Dict]:
+    """Return a single user by e-mail address, or None if not found."""
+    user = User.query.filter_by(email=email).first()
+    return user.to_dict() if user else None
+
+
+@_guard
+def get_user_orm(email: str) -> Optional[User]:
+    """
+    Return the raw ORM User object for the given e-mail.
+
+    Unlike other functions this returns the ORM instance (not a dict) so the
+    caller can access ``user.password_hash`` for authentication.  Returns None
+    if the e-mail is not found or the database is unavailable.
+    """
+    return User.query.filter_by(email=email).first()
 
 
 @_guard
 def list_users(org_id: Optional[str] = None) -> List[Dict]:
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            if org_id:
-                cur.execute(
-                    "SELECT * FROM users WHERE org_id = %s ORDER BY created_at DESC",
-                    (org_id,),
-                )
-            else:
-                cur.execute("SELECT * FROM users ORDER BY created_at DESC")
-            desc = cur.description
-            return [_row_to_dict(desc, row) for row in cur.fetchall()]
+    """
+    List users.
+
+    Args:
+        org_id: Optional UUID string — when provided, filters to that org only.
+
+    Returns:
+        List of user dicts ordered newest-first.
+    """
+    q = User.query
+    if org_id:
+        q = q.filter_by(org_id=_parse_uuid(org_id))
+    return [u.to_dict() for u in q.order_by(User.created_at.desc()).all()]
 
 
 # ---------------------------------------------------------------------------
@@ -214,29 +208,18 @@ def create_schedule(
     Returns:
         The newly created row (without the data column), or None on error.
     """
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO schedules
-                    (schedule_id, org_id, user_id, job_name,
-                     academic_year, semester, ga_params)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING schedule_id, org_id, user_id, job_name,
-                          academic_year, semester, status, progress,
-                          sheet_url, ga_params, error, created_at, updated_at
-                """,
-                (
-                    schedule_id,
-                    org_id or None,
-                    user_id or None,
-                    job_name,
-                    academic_year or None,
-                    semester,
-                    json.dumps(ga_params),
-                ),
-            )
-            return _row_to_dict(cur.description, cur.fetchone())
+    sched = Schedule(
+        schedule_id=uuid.UUID(schedule_id),
+        job_name=job_name,
+        academic_year=academic_year or None,
+        semester=semester,
+        ga_params=ga_params,
+        org_id=_parse_uuid(org_id),
+        user_id=_parse_uuid(user_id),
+    )
+    db.session.add(sched)
+    db.session.commit()
+    return sched.to_dict()
 
 
 @_guard
@@ -247,23 +230,15 @@ def update_schedule_status(
     error: Optional[str] = None,
 ) -> None:
     """Update the status (and optionally progress / error) of a schedule row."""
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            if progress is not None:
-                cur.execute(
-                    "UPDATE schedules SET status = %s, progress = %s WHERE schedule_id = %s",
-                    (status, progress, schedule_id),
-                )
-            else:
-                cur.execute(
-                    "UPDATE schedules SET status = %s WHERE schedule_id = %s",
-                    (status, schedule_id),
-                )
-            if error is not None:
-                cur.execute(
-                    "UPDATE schedules SET error = %s WHERE schedule_id = %s",
-                    (error, schedule_id),
-                )
+    sched = db.session.get(Schedule, uuid.UUID(schedule_id))
+    if not sched:
+        return
+    sched.status = status
+    if progress is not None:
+        sched.progress = progress
+    if error is not None:
+        sched.error = error
+    db.session.commit()
 
 
 @_guard
@@ -275,33 +250,24 @@ def complete_schedule(schedule_id: str, data: Dict) -> None:
         schedule_id: The job UUID.
         data:        The schedule output dict (content of schedule.json).
     """
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE schedules
-                SET status   = 'completed',
-                    progress = 100,
-                    data     = %s
-                WHERE schedule_id = %s
-                """,
-                (json.dumps(data), schedule_id),
-            )
+    sched = db.session.get(Schedule, uuid.UUID(schedule_id))
+    if not sched:
+        return
+    sched.status = 'completed'
+    sched.progress = 100.0
+    sched.data = data
+    db.session.commit()
 
 
 @_guard
 def fail_schedule(schedule_id: str, error: str) -> None:
     """Mark a schedule as failed and store the error message."""
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                UPDATE schedules
-                SET status = 'failed', error = %s
-                WHERE schedule_id = %s
-                """,
-                (error, schedule_id),
-            )
+    sched = db.session.get(Schedule, uuid.UUID(schedule_id))
+    if not sched:
+        return
+    sched.status = 'failed'
+    sched.error = error
+    db.session.commit()
 
 
 @_guard
@@ -310,21 +276,17 @@ def get_schedule(schedule_id: str) -> Optional[Dict]:
     Retrieve a single schedule row including the full data JSONB column.
 
     Returns:
-        Dict with all columns, or None if not found.
+        Dict with all columns (including data), or None if not found.
     """
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT * FROM schedules WHERE schedule_id = %s", (schedule_id,)
-            )
-            row = cur.fetchone()
-            return _row_to_dict(cur.description, row) if row else None
+    sched = db.session.get(Schedule, uuid.UUID(schedule_id))
+    return sched.to_dict(include_data=True) if sched else None
 
 
 @_guard
 def list_schedules(
     org_id: Optional[str] = None,
     user_id: Optional[str] = None,
+    status: Optional[str] = None,
 ) -> List[Dict]:
     """
     List schedules (excludes the large data column for efficiency).
@@ -332,29 +294,56 @@ def list_schedules(
     Args:
         org_id:  Filter by organization (optional).
         user_id: Filter by user (optional).
+        status:  Filter by status string e.g. "completed" (optional).
 
     Returns:
         List of dicts ordered newest-first.
     """
-    cols = (
-        "schedule_id, org_id, user_id, job_name, academic_year, semester, "
-        "status, progress, sheet_url, ga_params, error, created_at, updated_at"
+    q = Schedule.query
+    if org_id:
+        q = q.filter_by(org_id=_parse_uuid(org_id))
+    if user_id:
+        q = q.filter_by(user_id=_parse_uuid(user_id))
+    if status:
+        q = q.filter_by(status=status)
+    return [s.to_dict() for s in q.order_by(Schedule.created_at.desc()).all()]
+
+
+@_guard
+def get_user_schedules(user_id: str) -> List[Dict]:
+    """
+    Return all schedules submitted by a specific user.
+
+    Args:
+        user_id: UUID string of the user.
+
+    Returns:
+        List of schedule dicts ordered newest-first (data column excluded).
+    """
+    scheds = (
+        Schedule.query
+        .filter_by(user_id=_parse_uuid(user_id))
+        .order_by(Schedule.created_at.desc())
+        .all()
     )
-    with _conn() as conn:
-        with conn.cursor() as cur:
-            if org_id:
-                cur.execute(
-                    f"SELECT {cols} FROM schedules WHERE org_id = %s ORDER BY created_at DESC",
-                    (org_id,),
-                )
-            elif user_id:
-                cur.execute(
-                    f"SELECT {cols} FROM schedules WHERE user_id = %s ORDER BY created_at DESC",
-                    (user_id,),
-                )
-            else:
-                cur.execute(
-                    f"SELECT {cols} FROM schedules ORDER BY created_at DESC"
-                )
-            desc = cur.description
-            return [_row_to_dict(desc, row) for row in cur.fetchall()]
+    return [s.to_dict() for s in scheds]
+
+
+@_guard
+def get_org_schedules(org_id: str) -> List[Dict]:
+    """
+    Return all schedules belonging to a specific organization.
+
+    Args:
+        org_id: UUID string of the organization.
+
+    Returns:
+        List of schedule dicts ordered newest-first (data column excluded).
+    """
+    scheds = (
+        Schedule.query
+        .filter_by(org_id=_parse_uuid(org_id))
+        .order_by(Schedule.created_at.desc())
+        .all()
+    )
+    return [s.to_dict() for s in scheds]
