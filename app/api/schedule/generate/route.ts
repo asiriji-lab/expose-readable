@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
+import { BACKEND_BASE, BACKEND_SCHEDULE } from '@/lib/api/backend';
 
 /**
  * POST /api/schedule/generate
  *
  * Accepts validated tab data (parsedRows per tab) and forwards it to
- * the external scheduler at https://dev.winscloud.net/api/v1/schedule
- * as multipart/form-data CSV files.
+ * the backend scheduler as multipart/form-data CSV files.
  *
  * Request body:
  *   {
@@ -20,7 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
  *   { job_id, job_name, message, status_url, result_url, download_url }
  */
 
-const SCHEDULER_URL = 'https://dev.winscloud.net/api/v1/schedule';
+const SCHEDULER_URL = BACKEND_SCHEDULE;
 
 /**
  * Maps Thai column headers (from the Google Sheet template) to the English
@@ -121,6 +122,30 @@ export async function POST(req: NextRequest) {
     if (session?.semester != null) form.append('semester', String(session.semester));
     if (session?.year != null) form.append('academic_year', String(session.year));
 
+    // Sync the Supabase user to the backend and pass user_id so the job is
+    // associated with their account.  Failures are non-fatal.
+    try {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) {
+        const syncRes = await fetch(`${BACKEND_BASE}/api/v1/users/sync`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            email: user.email,
+            name:  user.user_metadata?.full_name ?? user.user_metadata?.name ?? '',
+          }),
+        });
+        if (syncRes.ok) {
+          const syncData = await syncRes.json();
+          const backendUserId = syncData.user?.user_id;
+          if (backendUserId) form.append('user_id', backendUserId);
+        }
+      }
+    } catch {
+      // Non-fatal — job will still be created, just without user association.
+    }
+
     const upstream = await fetch(SCHEDULER_URL, {
       method: 'POST',
       body: form,
@@ -135,7 +160,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json(result, { status: upstream.status });
+    // Rewrite download_url to go through our proxy so the browser resolves it correctly
+    const proxied = {
+      ...result,
+      download_url: result.job_id
+        ? `/api/schedule/download?job_id=${result.job_id}`
+        : result.download_url,
+    };
+    return NextResponse.json(proxied, { status: upstream.status });
   } catch (err: unknown) {
     console.error('[/api/schedule/generate]', err);
     return NextResponse.json(

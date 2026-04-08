@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BACKEND_SCHEDULE } from '@/lib/api/backend';
 
-const SCHEDULER_BASE = BACKEND_SCHEDULE;
-
 /**
- * GET /api/schedule/status?job_id=XXX
+ * DELETE /api/schedule/delete?job_id=XXX
  *
- * Proxy to GET https://dev.winscloud.net/api/v1/schedule/{job_id}
- *
- * Response:
- *   { success, job_id, status, progress, progress_details, error }
+ * Proxy to DELETE {BACKEND}/api/v1/schedule/{job_id}
  */
-export async function GET(req: NextRequest) {
+export async function DELETE(req: NextRequest) {
   const job_id = req.nextUrl.searchParams.get('job_id');
 
   if (!job_id) {
@@ -19,19 +14,19 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const upstream = await fetch(`${SCHEDULER_BASE}/${job_id}`);
+    const upstream = await fetch(`${BACKEND_SCHEDULE}/${job_id}`, { method: 'DELETE' });
     const data = await upstream.json();
 
     if (!upstream.ok) {
       return NextResponse.json(
-        { error: data?.message ?? 'Scheduler error' },
+        { error: data?.error ?? 'Delete failed' },
         { status: upstream.status },
       );
     }
 
     return NextResponse.json(data);
-  } catch (err: any) {
-    console.error('[/api/schedule/status]', err);
+  } catch (err: unknown) {
+    console.error('[/api/schedule/delete]', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Internal server error' },
       { status: 500 },

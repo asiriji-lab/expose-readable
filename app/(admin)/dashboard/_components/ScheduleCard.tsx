@@ -34,6 +34,13 @@ interface ScheduleCardProps {
 
 export default function ScheduleCard({ schedule }: ScheduleCardProps) {
   const { label, variant, icon: Icon, spin } = STATUS_BADGE[schedule.status];
+
+  // Completed jobs open the timetable viewer; everything else opens the
+  // setup / creation flow so the user can check status or retry.
+  const href = schedule.status === 'completed'
+    ? `/schedule?job_id=${schedule.id}`
+    : `/dashboard/new`;
+
   return (
     <tr className="hover:bg-background transition-colors">
       {/* Schedule Name */}
@@ -43,7 +50,7 @@ export default function ScheduleCard({ schedule }: ScheduleCardProps) {
 
       {/* Semester */}
       <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-foreground-muted">{schedule.semester}</div>
+        <div className="text-sm text-foreground-muted">{schedule.semester || '—'}</div>
       </td>
 
       {/* Last Edited */}
@@ -62,7 +69,7 @@ export default function ScheduleCard({ schedule }: ScheduleCardProps) {
       {/* Actions */}
       <td className="px-6 py-4 whitespace-nowrap text-sm">
         <Link
-          href={`/dashboard/${schedule.id}`}
+          href={href}
           className="text-primary hover:text-primary-hover inline-flex items-center gap-1 font-medium"
         >
           เปิด <ArrowRight size={14} />
