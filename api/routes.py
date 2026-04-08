@@ -288,12 +288,39 @@ def list_jobs():
     """
     job_manager = JobManager(current_app.config['JOBS_FOLDER'])
     jobs = job_manager.list_jobs()
-    
+
     return jsonify({
         "success": True,
         "count": len(jobs),
         "jobs": jobs
     })
+
+
+@api_bp.route('/jobs/latest', methods=['GET'])
+def get_latest_job():
+    """
+    Get the most recently completed scheduling job.
+    ---
+    tags:
+      - Scheduling
+    responses:
+      200:
+        description: Most recent completed job
+        schema:
+          type: object
+          properties:
+            success: {type: boolean}
+            job:     {type: object}
+      404:
+        description: No completed jobs found
+    """
+    job_manager = JobManager(current_app.config['JOBS_FOLDER'])
+    jobs = job_manager.list_jobs()
+    completed = [j for j in jobs if j.get('status') == 'completed']
+    if not completed:
+        return jsonify({"success": False, "error": "No completed jobs found"}), 404
+    latest = max(completed, key=lambda j: j.get('updated_at', ''))
+    return jsonify({"success": True, "job": latest})
 
 
 @api_bp.route('/schedule/<job_id>', methods=['GET'])
@@ -607,6 +634,69 @@ def get_organization(org_id):
 # =============================================================================
 # USER ENDPOINTS
 # =============================================================================
+
+@api_bp.route('/users/sync', methods=['POST'])
+def sync_user():
+    """
+    Create-or-return a user by e-mail (upsert).
+
+    Designed for the frontend to ensure a backend user exists for the currently
+    authenticated Supabase user before associating scheduling jobs with them.
+    ---
+    tags:
+      - Users
+    consumes:
+      - application/json
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [email]
+          properties:
+            email: {type: string, example: "jane@example.com"}
+            name:  {type: string, example: "Jane Smith"}
+    responses:
+      200:
+        description: Existing user returned
+        schema:
+          type: object
+          properties:
+            success: {type: boolean}
+            user:    {type: object}
+            created: {type: boolean, example: false}
+      201:
+        description: New user created
+        schema:
+          type: object
+          properties:
+            success: {type: boolean}
+            user:    {type: object}
+            created: {type: boolean, example: true}
+      400:
+        description: Missing email or database not configured
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    data  = request.get_json() or {}
+    email = (data.get('email') or '').strip()
+    name  = (data.get('name')  or '').strip() or None
+
+    if not email:
+        return jsonify({"success": False, "error": "'email' is required"}), 400
+
+    existing = models.get_user_by_email(email)
+    if existing:
+        return jsonify({"success": True, "user": existing, "created": False})
+
+    user = models.create_user(email=email, name=name)
+    if user is None:
+        return jsonify({"success": False, "error": "Could not create user"}), 500
+
+    return jsonify({"success": True, "user": user, "created": True}), 201
+
 
 @api_bp.route('/users', methods=['POST'])
 def create_user():
