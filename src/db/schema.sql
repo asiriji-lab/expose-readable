@@ -31,11 +31,21 @@ CREATE TABLE IF NOT EXISTS users (
     user_id       UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id        UUID         REFERENCES organizations(org_id) ON DELETE SET NULL,
     email         VARCHAR(255) NOT NULL UNIQUE,
+    username      VARCHAR(255) UNIQUE,
+    role          VARCHAR(50)  NOT NULL DEFAULT 'student',
+    first_name    VARCHAR(255),
+    last_name     VARCHAR(255),
     name          VARCHAR(255),
     password_hash VARCHAR(255),
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+
+-- Add profile columns to existing tables (idempotent)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username   VARCHAR(255) UNIQUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role       VARCHAR(50)  NOT NULL DEFAULT 'student';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name  VARCHAR(255);
 
 -- ----------------------------------------------------------------------------
 -- schedules

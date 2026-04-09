@@ -109,6 +109,10 @@ def list_organizations() -> List[Dict]:
 def create_user(
     email: str,
     name: Optional[str] = None,
+    username: Optional[str] = None,
+    role: str = 'student',
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
     org_id: Optional[str] = None,
     password_hash: Optional[str] = None,
 ) -> Optional[Dict]:
@@ -118,9 +122,12 @@ def create_user(
     Args:
         email:         Unique e-mail address.
         name:          Display name (optional).
+        username:      Unique username for login (optional).
+        role:          Account role: 'admin', 'teacher', or 'student'.
+        first_name:    First name (optional).
+        last_name:     Last name (optional).
         org_id:        UUID of the user's organization (optional).
         password_hash: Pre-hashed password string for auth (optional).
-                       Pass None for API-only accounts with no login.
 
     Returns:
         The newly created row as a dict (password_hash excluded), or None on error.
@@ -128,6 +135,10 @@ def create_user(
     user = User(
         email=email,
         name=name or None,
+        username=username or None,
+        role=role,
+        first_name=first_name or None,
+        last_name=last_name or None,
         org_id=_parse_uuid(org_id),
         password_hash=password_hash,
     )
@@ -151,6 +162,13 @@ def get_user_by_email(email: str) -> Optional[Dict]:
 
 
 @_guard
+def get_user_by_username(username: str) -> Optional[Dict]:
+    """Return a single user by username, or None if not found."""
+    user = User.query.filter_by(username=username).first()
+    return user.to_dict() if user else None
+
+
+@_guard
 def get_user_orm(email: str) -> Optional[User]:
     """
     Return the raw ORM User object for the given e-mail.
@@ -160,6 +178,16 @@ def get_user_orm(email: str) -> Optional[User]:
     if the e-mail is not found or the database is unavailable.
     """
     return User.query.filter_by(email=email).first()
+
+
+@_guard
+def get_user_orm_by_username(username: str) -> Optional[User]:
+    """
+    Return the raw ORM User object for the given username.
+
+    Returns None if the username is not found or the database is unavailable.
+    """
+    return User.query.filter_by(username=username).first()
 
 
 @_guard

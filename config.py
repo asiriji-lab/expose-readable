@@ -21,6 +21,9 @@ class Config:
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=int(os.getenv('JWT_EXPIRY_HOURS', 24)))
 
+    # Admin registration key — required when registering an admin account
+    ADMIN_REGISTRATION_KEY = os.getenv('ADMIN_REGISTRATION_KEY', '1234')
+
     # File storage paths
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'data', 'uploads')

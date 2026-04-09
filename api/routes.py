@@ -1029,34 +1029,38 @@ def auth_register():
         required: true
         schema:
           type: object
-          required: [email, password]
+          required: [email, password, username, role]
           properties:
-            email:    {type: string, example: "jane@springfieldhs.edu"}
-            password: {type: string, example: "s3cur3p@ss"}
-            name:     {type: string, example: "Jane Smith"}
-            org_id:   {type: string, example: "<org UUID>"}
+            email:      {type: string, example: "jane@springfieldhs.edu"}
+            password:   {type: string, example: "s3cur3p@ss"}
+            username:   {type: string, example: "jane_smith"}
+            role:       {type: string, example: "teacher", enum: [admin, teacher, student]}
+            first_name: {type: string, example: "Jane"}
+            last_name:  {type: string, example: "Smith"}
+            admin_key:  {type: string, example: "secret"}
+            org_id:     {type: string, example: "<org UUID>"}
     responses:
       201:
         description: Account created — JWT token returned
-        schema:
-          type: object
-          properties:
-            success:      {type: boolean}
-            access_token: {type: string}
-            user:         {type: object}
       400:
         description: Missing fields, invalid input, or DB unavailable
+      401:
+        description: Invalid admin key
       409:
-        description: Email already registered
+        description: Email or username already registered
     """
     if not database.is_available():
         return jsonify({"success": False, "error": "Database not configured"}), 400
 
-    data     = request.get_json() or {}
-    email    = (data.get('email')    or '').strip()
-    password = (data.get('password') or '').strip()
-    name     = (data.get('name')     or '').strip() or None
-    org_id   = (data.get('org_id')   or '').strip() or None
+    data       = request.get_json() or {}
+    email      = (data.get('email')      or '').strip()
+    password   = (data.get('password')   or '').strip()
+    username   = (data.get('username')   or '').strip() or None
+    role       = (data.get('role')       or 'student').strip().lower()
+    first_name = (data.get('first_name') or '').strip() or None
+    last_name  = (data.get('last_name')  or '').strip() or None
+    admin_key  = (data.get('admin_key')  or '').strip()
+    org_id     = (data.get('org_id')     or '').strip() or None
 
     if not email:
         return jsonify({"success": False, "error": "'email' is required"}), 400
@@ -1064,24 +1068,46 @@ def auth_register():
         return jsonify({"success": False, "error": "'password' is required"}), 400
     if len(password) < 8:
         return jsonify({"success": False, "error": "Password must be at least 8 characters"}), 400
+    if role not in ('admin', 'teacher', 'student'):
+        return jsonify({"success": False, "error": "role must be admin, teacher, or student"}), 400
 
-    # Check for existing account
+    # Validate admin registration key
+    if role == 'admin':
+        expected_key = os.getenv('ADMIN_REGISTRATION_KEY', '1234')
+        if admin_key != expected_key:
+            return jsonify({"success": False, "error": "Invalid admin key"}), 401
+
+    # Check for existing accounts
     if models.get_user_by_email(email):
         return jsonify({"success": False, "error": "Email already registered"}), 409
+    if username and models.get_user_by_username(username):
+        return jsonify({"success": False, "error": "Username already taken"}), 409
 
     hashed = generate_password_hash(password)
-    user = models.create_user(email=email, name=name, org_id=org_id, password_hash=hashed)
+    name   = ' '.join(filter(None, [first_name, last_name])) or None
+    user   = models.create_user(
+        email=email, password_hash=hashed, username=username,
+        role=role, first_name=first_name, last_name=last_name,
+        name=name, org_id=org_id,
+    )
     if not user:
         return jsonify({"success": False, "error": "Could not create account"}), 500
 
-    token = create_access_token(identity=user['user_id'])
+    additional_claims = {
+        "role":       user.get('role'),
+        "username":   user.get('username'),
+        "email":      user.get('email'),
+        "first_name": user.get('first_name'),
+        "last_name":  user.get('last_name'),
+    }
+    token = create_access_token(identity=user['user_id'], additional_claims=additional_claims)
     return jsonify({"success": True, "access_token": token, "user": user}), 201
 
 
 @api_bp.route('/auth/login', methods=['POST'])
 def auth_login():
     """
-    Login with email and password — returns a JWT access token.
+    Login with username/email and password — returns a JWT access token.
     ---
     tags:
       - Auth
@@ -1093,19 +1119,13 @@ def auth_login():
         required: true
         schema:
           type: object
-          required: [email, password]
+          required: [password]
           properties:
-            email:    {type: string, example: "jane@springfieldhs.edu"}
-            password: {type: string, example: "s3cur3p@ss"}
+            username_or_email: {type: string, example: "jane_smith or jane@school.edu"}
+            password:          {type: string, example: "s3cur3p@ss"}
     responses:
       200:
         description: Login successful
-        schema:
-          type: object
-          properties:
-            success:      {type: boolean}
-            access_token: {type: string}
-            user:         {type: object}
       400:
         description: Missing fields or DB unavailable
       401:
@@ -1114,21 +1134,70 @@ def auth_login():
     if not database.is_available():
         return jsonify({"success": False, "error": "Database not configured"}), 400
 
-    data     = request.get_json() or {}
-    email    = (data.get('email')    or '').strip()
-    password = (data.get('password') or '').strip()
+    data             = request.get_json() or {}
+    username_or_email = (data.get('username_or_email') or data.get('email') or '').strip()
+    password         = (data.get('password') or '').strip()
 
-    if not email or not password:
-        return jsonify({"success": False, "error": "'email' and 'password' are required"}), 400
+    if not username_or_email or not password:
+        return jsonify({"success": False, "error": "'username_or_email' and 'password' are required"}), 400
 
-    user_orm = models.get_user_orm(email)
+    # Look up by email or username
+    if '@' in username_or_email:
+        user_orm = models.get_user_orm(username_or_email)
+    else:
+        user_orm = models.get_user_orm_by_username(username_or_email)
+
     if not user_orm or not user_orm.password_hash:
-        return jsonify({"success": False, "error": "Invalid email or password"}), 401
+        return jsonify({"success": False, "error": "Invalid username/email or password"}), 401
     if not check_password_hash(user_orm.password_hash, password):
-        return jsonify({"success": False, "error": "Invalid email or password"}), 401
+        return jsonify({"success": False, "error": "Invalid username/email or password"}), 401
 
-    token = create_access_token(identity=str(user_orm.user_id))
-    return jsonify({"success": True, "access_token": token, "user": user_orm.to_dict()})
+    user_dict = user_orm.to_dict()
+    additional_claims = {
+        "role":       user_dict.get('role'),
+        "username":   user_dict.get('username'),
+        "email":      user_dict.get('email'),
+        "first_name": user_dict.get('first_name'),
+        "last_name":  user_dict.get('last_name'),
+    }
+    token = create_access_token(identity=str(user_orm.user_id), additional_claims=additional_claims)
+    return jsonify({"success": True, "access_token": token, "user": user_dict})
+
+
+@api_bp.route('/auth/detect-role', methods=['GET'])
+def auth_detect_role():
+    """
+    Look up a user's role by username or email (no authentication required).
+    Used by the login page to show the detected role badge.
+    ---
+    tags:
+      - Auth
+    parameters:
+      - in: query
+        name: q
+        type: string
+        required: true
+        description: Username or email address to look up
+    responses:
+      200:
+        description: Role found (or null if not found)
+    """
+    q = (request.args.get('q') or '').strip()
+    if not q:
+        return jsonify({"role": None}), 200
+
+    if not database.is_available():
+        return jsonify({"role": None}), 200
+
+    if '@' in q:
+        user = models.get_user_by_email(q)
+    else:
+        user = models.get_user_by_username(q)
+
+    if not user:
+        return jsonify({"role": None}), 200
+
+    return jsonify({"role": user.get('role')}), 200
 
 
 @api_bp.route('/auth/me', methods=['GET'])
