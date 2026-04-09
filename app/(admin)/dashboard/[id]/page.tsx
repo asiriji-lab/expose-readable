@@ -4,7 +4,6 @@ import { useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import AdminHeader from '../../_components/AdminHeader';
 import SheetConnector from './_components/SheetConnector';
-import InstructionPanel from './_components/InstructionPanel';
 import ValidationSection from './_components/ValidationSection';
 import ErrorPanel from './_components/ErrorPanel';
 import GenerationStatus from './_components/GenerationStatus';
@@ -12,7 +11,6 @@ import { useSimpleValidation } from './_hooks/useSimpleValidation';
 import { useGoogleSheet } from './_hooks/useGoogleSheet';
 import { TabName, AllTabStates } from '../../validators/types';
 import SessionInfoCard, { SessionInfo } from './_components/SessionInfoCard';
-import DevTestPanel from './_components/DevTestPanel';
 import { PageShell } from '@/components/layout/page-shell';
 import { PageHeader } from '@/components/layout/page-header';
 
@@ -29,7 +27,7 @@ export default function SessionDetailPage() {
   const id = Array.isArray(params.id) ? params.id[0] : (params.id ?? '');
 
   // ── Existing hooks ──
-  const { sheetData, fetchStatus, fetchError, missingTabs, fetchSheet, loadData, clearSheet, updateTabRow } = useGoogleSheet();
+  const { sheetData, fetchStatus, fetchError, missingTabs, fetchSheet, clearSheet, updateTabRow } = useGoogleSheet();
   const { tabStates, isRunning, runValidation, resetStates } = useSimpleValidation(sheetData);
 
   // ── Session info ──
@@ -79,14 +77,10 @@ export default function SessionDetailPage() {
 
   const handleValidate = useCallback(async () => {
     if (!connectedSheetId) return;
-    clearSheet();
     resetStates();
-    await fetchSheet(connectedSheetId);
-    // fetchSheet updates sheetData in state; runValidation will use it via the hook
-    // We pass the data explicitly via a small delay to ensure state settles
-    // However, since runValidation accepts optional data, we use the hook's data
-    runValidation();
-  }, [connectedSheetId, clearSheet, resetStates, fetchSheet, runValidation]);
+    const result = await fetchSheet(connectedSheetId);
+    if (result) runValidation(result.data);
+  }, [connectedSheetId, resetStates, fetchSheet, runValidation]);
 
   const handleSubmit = useCallback(async () => {
     setIsSubmitting(true);
@@ -114,9 +108,6 @@ export default function SessionDetailPage() {
     }
   }, [sessionInfo, tabStates]);
 
-  // ── Derived state ──
-  const isConnected = fetchStatus === 'success';
-
   return (
     <PageShell header={<AdminHeader />}>
       <PageHeader
@@ -142,24 +133,6 @@ export default function SessionDetailPage() {
         onConnectImport={handleConnectImport}
         onConnectSkeleton={handleConnectSkeleton}
       />
-
-      {/* Instruction panel (after connection, before generation) */}
-      {isConnected && generationState === 'idle' && (
-        <InstructionPanel
-          sheetUrl={connectedSheetUrl ?? ''}
-          onValidate={handleValidate}
-          isValidating={isRunning}
-        />
-      )}
-
-      {/* Dev testing panel — only in development */}
-      {process.env.NODE_ENV === 'development' && (
-        <DevTestPanel
-          currentData={sheetData}
-          onDataLoaded={(data) => { loadData(data); resetStates(); }}
-          onClear={() => { clearSheet(); resetStates(); }}
-        />
-      )}
 
       {/* Validation section */}
       {generationState === 'idle' && (

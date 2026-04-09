@@ -1,21 +1,6 @@
 // ─── Code.gs ─────────────────────────────────────────────────────────────────
-// Main entry: custom menu, skeleton generator, and validation runner.
+// Main entry: custom menu and validation runner.
 // ─────────────────────────────────────────────────────────────────────────────
-
-// ─── Tab Definitions ─────────────────────────────────────────────────────────
-// Each entry defines the tab name and its header row for the skeleton.
-
-var TAB_DEFS = [
-  { name: 'period',      headers: ['คาบ', 'เวลา'] },
-  { name: 'room',        headers: ['ห้องทั้งหมด', 'หมายเหตุ', 'ประเภท'] },
-  { name: 'teacher',     headers: ['teacher_id', 'ตำแหน่ง', 'ชื่อ', 'กลุ่มสาระ', 'available_slots', 'unavailable_slots', 'หมายเหตุ'] },
-  { name: 'student',     headers: ['ชั้นเรียน', 'ชั้น', 'ห้อง', 'ห้องประจำ', 'หลักสูตร'] },
-  { name: 'preplace',    headers: ['ชื่อ', 'คาบ', 'apply_to'] },
-  { name: 'scout',       headers: ['ลูกเสือม.1', 'ลูกเสือม.2', 'ลูกเสือม.3'] },
-  { name: 'elective',    headers: ['รหัสวิชา', 'ชื่อวิชา (เสรี)', 'ครูผู้สอน', 'ห้องเรียน', 'เสรีม.ต้น1', 'เสรีม.ต้น2', 'เสรีม.ปลาย1', 'เสรีม.ปลาย2', 'เสรีม.ปลาย3', 'เสรีม.ปลาย4', 'เสรีม.ปลาย5', 'เสรีม.ปลาย6'] },
-  { name: 'curriculum',  headers: ['รหัสวิชา', 'ชื่อวิชา', 'คาบ/สัปดาห์', 'จำนวนห้อง', 'รวมคาบ', 'ครู', 'การแบ่งคาบสอน', 'ห้อง (ชั้นเรียน) ที่สอน', 'หมายเหตุ', 'ห้องเรียน', 'คาบเรียน'] },
-  { name: 'constraints', headers: ['id', 'Name', 'Type', 'description', 'Note', 'parameters (example)', 'Example Constraints'] },
-];
 
 // Tab name → validator function mapping
 var TAB_VALIDATORS = {
@@ -30,69 +15,59 @@ var TAB_VALIDATORS = {
   'constraints': validateConstraints,
 };
 
+// Aliases to try (in order) when looking up a tab by its canonical name.
+// Handles Thai tab names and Title-case variants in addition to lowercase English.
+var TAB_ALIASES = {
+  'period':      ['period', 'Period', 'คาบ'],
+  'room':        ['room',   'Room',   'ห้อง'],
+  'teacher':     ['teacher','Teacher','ครู'],
+  'student':     ['student','Student','นักเรียน'],
+  'preplace':    ['preplace','Preplace','ตรึงคาบ'],
+  'scout':       ['scout',  'Scout',  'ลูกเสือ'],
+  'elective':    ['elective','Elective','วิชาเสรี'],
+  'curriculum':  ['curriculum','Curriculum','หลักสูตร'],
+  'constraints': ['constraints','Constraints'],
+};
+
+/**
+ * Returns the first Sheet found for a canonical tab name by trying all aliases.
+ * Returns null if none of the aliases match a sheet in the spreadsheet.
+ */
+function getSheetByAliases(ss, tabName) {
+  var aliases = TAB_ALIASES[tabName] || [tabName];
+  // Use trimmed comparison so trailing/leading spaces in tab names don't break lookup.
+  var allSheets = ss.getSheets();
+  for (var i = 0; i < allSheets.length; i++) {
+    var trimmedName = allSheets[i].getName().trim();
+    for (var j = 0; j < aliases.length; j++) {
+      if (trimmedName === aliases[j]) return allSheets[i];
+    }
+  }
+  return null;
+}
+
 // ─── Menu ────────────────────────────────────────────────────────────────────
 
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Schooldoo')
-    .addItem('Create Skeleton Tabs', 'createSkeleton')
-    .addSeparator()
     .addItem('Validate All Tabs', 'runValidation')
+    .addItem('Debug: Show Tab Names', 'debugTabNames')
     .addToUi();
 }
 
-// ─── Skeleton Generator ──────────────────────────────────────────────────────
-// Creates all 9 tabs with header rows. Skips tabs that already exist.
-
-function createSkeleton() {
+function debugTabNames() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var ui = SpreadsheetApp.getUi();
-  var created = [];
-  var skipped = [];
-
-  for (var i = 0; i < TAB_DEFS.length; i++) {
-    var def = TAB_DEFS[i];
-    var existing = ss.getSheetByName(def.name);
-
-    if (existing) {
-      skipped.push(def.name);
-      continue;
+  var sheets = ss.getSheets();
+  var lines = sheets.map(function(s) {
+    var name = s.getName();
+    var codes = [];
+    for (var i = 0; i < name.length; i++) {
+      codes.push('U+' + name.charCodeAt(i).toString(16).toUpperCase().padStart(4, '0'));
     }
-
-    var sheet = ss.insertSheet(def.name);
-
-    // Write header row
-    if (def.headers.length > 0) {
-      sheet.getRange(1, 1, 1, def.headers.length).setValues([def.headers]);
-
-      // Bold + freeze header row
-      sheet.getRange(1, 1, 1, def.headers.length)
-        .setFontWeight('bold')
-        .setBackground('#E8EAF6');
-      sheet.setFrozenRows(1);
-
-      // Protect header row — only owner can edit
-      var protection = sheet.getRange(1, 1, 1, def.headers.length).protect();
-      protection.setDescription('Header row — do not edit');
-      protection.setWarningOnly(true);
-    }
-
-    created.push(def.name);
-  }
-
-  // Remove the default "Sheet1" if it exists and is empty
-  var sheet1 = ss.getSheetByName('Sheet1');
-  if (sheet1 && sheet1.getDataRange().getNumRows() <= 1 &&
-      sheet1.getDataRange().getNumColumns() <= 1) {
-    ss.deleteSheet(sheet1);
-  }
-
-  var msg = '';
-  if (created.length) msg += 'Created: ' + created.join(', ') + '\n';
-  if (skipped.length) msg += 'Skipped (already exists): ' + skipped.join(', ');
-  if (!msg) msg = 'All tabs already exist.';
-
-  ui.alert('Skeleton Setup', msg, ui.ButtonSet.OK);
+    return '"' + name + '"  [' + codes.join(' ') + ']';
+  });
+  SpreadsheetApp.getUi().alert('Tab names in this spreadsheet:\n\n' + lines.join('\n'));
 }
 
 // ─── Validation Runner ──────────────────────────────────────────────────────
@@ -161,9 +136,17 @@ function runValidation() {
   for (var i = 0; i < tabNames.length; i++) {
     var tabName   = tabNames[i];
     var validator = TAB_VALIDATORS[tabName];
-    var sheet     = ss.getSheetByName(tabName);
+    var sheet     = getSheetByAliases(ss, tabName);
 
     if (!sheet) {
+      // constraints tab is optional — its validator always passes, so just skip it.
+      if (tabName === 'constraints') {
+        resultSheet.getRange(resultRow, 1, 1, 3)
+          .setValues([[tabName, 'SKIPPED', 'Optional tab not found — no validation required.']]);
+        resultSheet.getRange(resultRow, 2).setBackground(COLOR_YELLOW).setFontColor('#F57F17');
+        resultRow++;
+        continue;
+      }
       resultSheet.getRange(resultRow, 1, 1, 3)
         .setValues([[tabName, 'MISSING', 'Tab not found in this spreadsheet.']]);
       resultSheet.getRange(resultRow, 2).setBackground(COLOR_RED).setFontColor('#B71C1C');
@@ -173,9 +156,14 @@ function runValidation() {
       continue;
     }
 
-    // Read all data as strings
+    // Read all data as strings.
+    // Date objects (e.g. Sheets auto-converts "1/1" → Date) are formatted as M/D
+    // so validators receive the original class-ID format, not a full date string.
     var data = sheet.getDataRange().getValues().map(function(r) {
-      return r.map(function(c) { return String(c); });
+      return r.map(function(c) {
+        if (c instanceof Date) return (c.getMonth() + 1) + '/' + c.getDate();
+        return String(c);
+      });
     });
 
     var result = validator(data);

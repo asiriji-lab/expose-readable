@@ -9,7 +9,11 @@
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function _str(val) {
-  return (val == null ? '' : String(val)).trim();
+  var s = (val == null ? '' : String(val)).trim();
+  // Strip invisible/zero-width characters that Google Sheets sometimes inserts
+  // (BOM U+FEFF, zero-width space U+200B, non-breaking space U+00A0, etc.)
+  s = s.replace(/[\u0000-\u001F\u00A0\u200B\u200C\u200D\u2060\uFEFF]/g, '');
+  return s.trim();
 }
 
 function _isEmptyRow(row) {
@@ -19,8 +23,12 @@ function _isEmptyRow(row) {
 /** Returns structured errors for any required headers that are missing. */
 function _checkRequiredHeaders(headers, required) {
   var errors = [];
-  for (var i = 0; i < required.length; i++) {
-    if (headers.indexOf(required[i]) === -1) {
+  // Normalize required column names the same way as the parsed headers
+  var normRequired = required.map(function(r) {
+    return r.normalize ? r.normalize('NFC') : r;
+  });
+  for (var i = 0; i < normRequired.length; i++) {
+    if (headers.indexOf(normRequired[i]) === -1) {
       errors.push({ row: 1, col: 1, message: 'Missing required column: "' + required[i] + '"' });
     }
   }
@@ -156,10 +164,10 @@ function validateStudent(data) {
     return { valid: false, errors: [_err(1, 1, 'Tab "student" is empty.')], warnings: [] };
 
   var headers = data[0].map(function(h) { return _str(h); });
-  errors = errors.concat(_checkRequiredHeaders(headers, ['ชั้นเรียน', 'ชั้น', 'ห้อง']));
+  errors = errors.concat(_checkRequiredHeaders(headers, ['นักเรียน', 'ชั้น', 'ห้อง']));
   if (errors.length) return { valid: false, errors: errors, warnings: warnings };
 
-  var classIdx    = headers.indexOf('ชั้นเรียน');
+  var classIdx    = headers.indexOf('นักเรียน');
   var gradeIdx    = headers.indexOf('ชั้น');
   var sectionIdx  = headers.indexOf('ห้อง');
   var roomIdx     = headers.indexOf('ห้องประจำ');
@@ -175,7 +183,7 @@ function validateStudent(data) {
     if (_isEmptyRow(row)) continue;
 
     if (classId && !isValidClassId(classId))
-      errors.push(_err(sheetRow, classIdx + 1, 'ชั้นเรียน: ต้องเป็นรูปแบบ G/S เช่น 1/1 — ได้รับ "' + classId + '"'));
+      errors.push(_err(sheetRow, classIdx + 1, 'นักเรียน: ต้องเป็นรูปแบบ G/S เช่น 1/1 — ได้รับ "' + classId + '"'));
     if (grade && !/^ม\.[1-6]$/.test(grade))
       errors.push(_err(sheetRow, gradeIdx + 1, 'ชั้น: ต้องเป็น ม.1–ม.6 — ได้รับ "' + grade + '"'));
     if (section && (!/^\d+$/.test(section) || parseInt(section) <= 0))

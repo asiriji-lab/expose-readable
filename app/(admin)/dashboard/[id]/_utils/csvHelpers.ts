@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { TabName } from '../../../validators/types';
+import { TabName, SheetData } from '../../../validators/types';
 
 export const ALL_TAB_NAMES: TabName[] = [
   'period', 'room', 'teacher', 'student', 'preplace', 'scout', 'elective', 'curriculum',
@@ -7,21 +7,32 @@ export const ALL_TAB_NAMES: TabName[] = [
 
 /** Maps Google Sheets tab titles (Thai or English) to our internal TabName keys */
 export const TAB_KEY_MAP: Record<string, TabName> = {
+  // English — lowercase
   period: 'period',
-  คาบ: 'period',
   room: 'room',
-  ห้อง: 'room',
   teacher: 'teacher',
-  ครู: 'teacher',
   student: 'student',
-  นักเรียน: 'student',
   preplace: 'preplace',
-  ตรึงคาบ: 'preplace',
   scout: 'scout',
-  ลูกเสือ: 'scout',
   elective: 'elective',
-  วิชาเสรี: 'elective',
   curriculum: 'curriculum',
+  // English — Title case (Google Sheets sometimes capitalises tab names)
+  Period: 'period',
+  Room: 'room',
+  Teacher: 'teacher',
+  Student: 'student',
+  Preplace: 'preplace',
+  Scout: 'scout',
+  Elective: 'elective',
+  Curriculum: 'curriculum',
+  // Thai aliases
+  คาบ: 'period',
+  ห้อง: 'room',
+  ครู: 'teacher',
+  นักเรียน: 'student',
+  ตรึงคาบ: 'preplace',
+  ลูกเสือ: 'scout',
+  วิชาเสรี: 'elective',
   หลักสูตร: 'curriculum',
 };
 
@@ -121,4 +132,40 @@ export async function fetchPublicSheetTab(
   }
 
   return null;
+}
+
+/**
+ * Fetches all 8 required tabs from a Google Sheet via the backend API route.
+ * Uses the service account server-side — no CORS issues, no public sharing required
+ * (sheet must be accessible to the service account or set to "Anyone with the link").
+ */
+export async function fetchAllSheetTabs(
+  sheetId: string,
+): Promise<{ data: SheetData; missingTabs: TabName[] }> {
+  const res = await fetch(`/api/sheets?id=${encodeURIComponent(sheetId)}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? 'ดึงข้อมูลชีทไม่สำเร็จ');
+  }
+
+  const { tabs } = await res.json() as { tabs: Record<string, string[][]> };
+
+  const data: SheetData = {};
+  for (const [title, rows] of Object.entries(tabs)) {
+    // Normalize: strip invisible/zero-width chars and leading/trailing whitespace,
+    // then try NFC (handles Thai NFC vs NFD encoding differences) and lowercase fallback.
+    const clean = title
+      .replace(/[\u00A0\u200B\u200C\u200D\u2060\uFEFF]/g, '')
+      .trim();
+    const tabName =
+      TAB_KEY_MAP[clean] ??
+      TAB_KEY_MAP[clean.normalize('NFC')] ??
+      TAB_KEY_MAP[clean.toLowerCase()];
+    if (tabName && rows.length > 0) {
+      data[tabName] = rows;
+    }
+  }
+
+  const missingTabs = ALL_TAB_NAMES.filter((t) => !data[t]);
+  return { data, missingTabs };
 }

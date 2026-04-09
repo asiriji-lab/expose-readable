@@ -21,11 +21,11 @@ const REQUIRED_FIELDS: Record<TabName, string[]> = {
   period:     ['คาบ', 'เวลา'],
   room:       ['ห้องทั้งหมด'],
   teacher:    ['teacher_id', 'ชื่อ'],
-  student:    ['ชั้นเรียน', 'ชั้น', 'ห้อง'],
+  student:    ['นักเรียน', 'ชั้น', 'ห้อง'],
   preplace:   ['ชื่อ', 'คาบ', 'apply_to'],
   scout:      [], // special: at least one column non-empty per row
   elective:   ['รหัสวิชา', 'ชื่อวิชา (เสรี)', 'ครูผู้สอน'],
-  curriculum: ['รหัสวิชา', 'ชื่อวิชา', 'คาบ/สัปดาห์', 'ครู', 'ห้อง (ชั้นเรียน) ที่สอน'],
+  curriculum: ['รหัสวิชา', 'ชื่อวิชา', 'คาบ/สัปดาห์', 'ครู', 'ห้อง (นักเรียน) ที่สอน'],
 };
 
 /** Optional fields per tab — empty cell = warning */

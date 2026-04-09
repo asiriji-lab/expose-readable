@@ -1,82 +1,66 @@
-# Apps Script Setup — Schooldoo Skeleton Sheets
+# Apps Script Setup — Schooldoo Validator
 
-## One-Time Setup (Template Owner)
+## Installing the Validator on Your Google Sheet
 
-### Step 1: Create a new Google Sheet
-1. Go to [sheets.new](https://sheets.new)
-2. Name it: **"Schooldoo Template"**
+> You only need to do this once per Google Sheet.
 
-### Step 2: Open Apps Script
-1. Go to **Extensions > Apps Script**
-2. Delete the default `Code.gs` content
+### Step 1: Open Apps Script
+1. Open your Google Sheet
+2. Click **Extensions > Apps Script**
 
-### Step 3: Create the script files
-Create 3 files (click **+** next to "Files" > Script):
+### Step 2: Add the script files
+You need 3 files total. Apps Script starts with a default `Code.gs` — replace it and add 2 more.
 
-| File | Copy from |
-|------|-----------|
-| `Code.gs` | `appscript/Code.gs` |
-| `parsers` | `appscript/parsers.gs` |
-| `validators` | `appscript/validators.gs` |
+**File 1 — `Code.gs`** (already exists, just replace the content)
+1. Click on `Code.gs` in the left sidebar
+2. Select all (Ctrl+A) and delete
+3. Paste in the contents of `appscript/Code.gs`
 
-> When you create a new script file in Apps Script, it automatically adds `.gs`.
-> So name them `parsers` and `validators` (without .gs).
+**File 2 — `parsers`**
+1. Click **+** next to "Files" > **Script**
+2. Name it `parsers` (Apps Script adds `.gs` automatically)
+3. Paste in the contents of `appscript/parsers.gs`
 
-### Step 4: Run the skeleton generator
-1. Save all files (Ctrl+S)
-2. In Apps Script, select `createSkeleton` from the function dropdown (top bar)
-3. Click **Run**
-4. Authorize when prompted (review permissions > allow)
-5. Go back to your Google Sheet — you should see 9 tabs with headers
+**File 3 — `validators`**
+1. Click **+** next to "Files" > **Script**
+2. Name it `validators`
+3. Paste in the contents of `appscript/validators.gs`
 
-### Step 5: Share with admins
-1. Click **Share** (top right of the Google Sheet)
-2. Add admin emails (e.g., `admin1@school.ac.th`)
-3. Set permission to **Editor**
-4. The Apps Script is bound to the sheet — every admin gets the menu
+### Step 3: Save and authorize
+1. Save all files (Ctrl+S or the save icon)
+2. Reload your Google Sheet
+3. A **Schooldoo** menu will appear in the top menu bar
+4. The first time you run it, Google will ask you to authorize — click **Review permissions > Allow**
+
+### Step 4: Validate
+1. Click **Schooldoo > Validate All Tabs**
+2. A "Validation Results" tab will be created with the results
+3. Fix any red rows and re-validate until all tabs pass
 
 ---
 
-## Per-Semester Usage (Every Admin)
+## Re-pasting After Updates
 
-### Step 1: Copy the template
-1. Open the template sheet
-2. **File > Make a copy**
-3. Rename to e.g., "Schedule 2026 Semester 1"
-
-> The copy includes the Apps Script automatically.
-
-### Step 2: Fill in data
-Fill in each of the 9 tabs. Leave the header row untouched.
-
-### Step 3: Validate
-1. In the sheet menu bar, click **Schooldoo > Validate All Tabs**
-2. Check the "Validation Results" tab
-3. Fix any errors and re-validate
-
-### Step 4: Connect to the React app
-1. Make the sheet viewable: **Share > Anyone with the link > Viewer**
-2. Copy the sheet URL
-3. Paste it into the Schooldoo app's file input
+When the validator code is updated (new rules, bug fixes), you need to re-paste the updated files:
+1. Go to **Extensions > Apps Script**
+2. Replace the content of the changed file(s)
+3. Save (Ctrl+S)
+4. Reload the sheet and re-run validation — no redeployment needed
 
 ---
 
 ## Tab Reference
 
-| # | Tab | Required Columns |
-|---|-----|-----------------|
-| 1 | period | คาบ, เวลา |
-| 2 | room | ห้องทั้งหมด, หมายเหตุ, ประเภท |
-| 3 | teacher | teacher_id, ชื่อ, available_slots, unavailable_slots |
-| 4 | student | นักเรียน, ชั้น, ห้อง |
-| 5 | preplace | ชื่อ, คาบ, apply_to |
-| 6 | scout | _(flexible — group names as headers)_ |
-| 7 | elective | รหัสวิชา, ชื่อวิชา (เสรี), ครูผู้สอน, ห้องเรียน |
-| 8 | curriculum | รหัสวิชา, subject_name, คาบ/สัปดาห์, ครู, block_pattern, student_class, constraint, room, fixed_period |
-| 9 | constraints | slot_name, periods, apply_to |
+| # | Tab name | Required columns |
+|---|----------|-----------------|
+| 1 | `period` | คาบ, เวลา |
+| 2 | `room` | ห้องทั้งหมด |
+| 3 | `teacher` | teacher_id, ชื่อ |
+| 4 | `student` | นักเรียน, ชั้น, ห้อง |
+| 5 | `preplace` | ชื่อ, คาบ, apply_to |
+| 6 | `scout` | _(no required columns — flexible structure)_ |
+| 7 | `elective` | รหัสวิชา, ชื่อวิชา (เสรี), ครูผู้สอน, ห้องเรียน |
+| 8 | `curriculum` | รหัสวิชา, ครู, คาบ/สัปดาห์ |
+| 9 | `constraints` | _(optional tab — skipped if not present)_ |
 
----
-
-## Updating Validators
-
-When you update the TypeScript validators in `app/(admin)/validators/`, port the changes to the `.gs` files and re-paste into Apps Script. The logic should stay in sync between both places.
+> Tab names must be **exactly** as shown above (lowercase English). Column names must match exactly including Thai characters.

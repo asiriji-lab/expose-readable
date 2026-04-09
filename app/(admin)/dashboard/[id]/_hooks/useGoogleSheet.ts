@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { SheetData, TabName } from '../../../validators/types';
-import { ALL_TAB_NAMES, TAB_KEY_MAP } from '../_utils/csvHelpers';
+import { ALL_TAB_NAMES, fetchAllSheetTabs } from '../_utils/csvHelpers';
 
 export type FetchStatus = 'idle' | 'fetching' | 'success' | 'error';
 
@@ -11,7 +11,7 @@ export interface UseGoogleSheetReturn {
   fetchStatus: FetchStatus;
   fetchError: string | null;
   missingTabs: TabName[];
-  fetchSheet: (spreadsheetId: string) => Promise<void>;
+  fetchSheet: (spreadsheetId: string) => Promise<{ data: SheetData; missingTabs: TabName[] } | null>;
   loadData: (data: SheetData) => void;
   clearSheet: () => void;
   updateTabRow: (tabName: TabName, rowIndex: number, key: string, value: string) => void;
@@ -23,33 +23,24 @@ export function useGoogleSheet(): UseGoogleSheetReturn {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [missingTabs, setMissingTabs] = useState<TabName[]>([]);
 
-  const fetchSheet = useCallback(async (spreadsheetId: string) => {
+  const fetchSheet = useCallback(async (spreadsheetId: string): Promise<{ data: SheetData; missingTabs: TabName[] } | null> => {
     setFetchStatus('fetching');
     setFetchError(null);
 
     try {
-      const res = await fetch(`/api/sheets?id=${spreadsheetId}`);
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `HTTP ${res.status}`);
-      }
-
-      const json: { tabs: Record<string, string[][]> } = await res.json();
-
-      // Map tab titles → our TabName keys
-      const result: SheetData = {};
-      for (const [title, rows] of Object.entries(json.tabs)) {
-        const key = TAB_KEY_MAP[title.trim()];
-        if (key) result[key] = rows;
-      }
-
-      const missing = ALL_TAB_NAMES.filter((t) => !result[t]);
-      setMissingTabs(missing);
-      setSheetData(result);
+      const { data, missingTabs } = await fetchAllSheetTabs(spreadsheetId);
+      setSheetData(data);
+      setMissingTabs(missingTabs);
       setFetchStatus('success');
+      return { data, missingTabs };
     } catch (err: unknown) {
-      setFetchError(err instanceof Error ? err.message : 'Unknown error');
+      setFetchError(
+        err instanceof Error
+          ? err.message
+          : 'ดึงข้อมูลไม่สำเร็จ — ตรวจสอบว่าชีทถูกตั้งค่าเป็น "ทุกคนที่มีลิงก์"',
+      );
       setFetchStatus('error');
+      return null;
     }
   }, []);
 

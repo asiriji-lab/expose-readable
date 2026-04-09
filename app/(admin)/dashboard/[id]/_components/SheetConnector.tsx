@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { ExternalLink, Loader2, CheckCircle, AlertTriangle, FileSpreadsheet, Upload, ArrowLeft } from 'lucide-react';
+import { ExternalLink, Loader2, CheckCircle, AlertTriangle, FileSpreadsheet, Upload, ArrowLeft, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { type FetchStatus } from '../_hooks/useGoogleSheet';
 import { extractSheetId } from '../_utils/csvHelpers';
+import AppScriptSheet from './AppScriptSheet';
 
 interface SheetConnectorProps {
   fetchStatus: FetchStatus;
@@ -29,8 +30,9 @@ export default function SheetConnector({
   onConnectImport,
   onConnectSkeleton,
 }: SheetConnectorProps) {
-  const [mode, setMode] = useState<'skeleton' | 'import'>('skeleton');
+  const [mode, setMode] = useState<'skeleton' | 'import' | 'setup'>('skeleton');
   const [importUrl, setImportUrl] = useState('');
+  const [pendingSheetId, setPendingSheetId] = useState<string | null>(null);
 
   const isFetching = fetchStatus === 'fetching';
   const isConnected = fetchStatus === 'success';
@@ -38,7 +40,13 @@ export default function SheetConnector({
   function handleImportConnect() {
     const id = extractSheetId(importUrl);
     if (!id) return;
-    onConnectImport(id);
+    setPendingSheetId(id);
+    setMode('setup');
+  }
+
+  function handleConfirmConnect() {
+    if (!pendingSheetId) return;
+    onConnectImport(pendingSheetId);
   }
 
   // ── Skeleton mode ──
@@ -129,6 +137,81 @@ export default function SheetConnector({
               <Upload size={12} /> นำเข้าข้อมูลของฉัน (Import)
             </button>
           )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // ── Setup guide (shown after pasting URL, before fetching) ──
+  if (mode === 'setup' && pendingSheetId) {
+    const sheetUrl = `https://docs.google.com/spreadsheets/d/${pendingSheetId}/edit`;
+    return (
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <p className="text-sm font-semibold text-foreground">ตั้งค่า Apps Script ก่อนตรวจสอบ</p>
+
+          <ol className="space-y-3">
+            <li className="flex gap-3">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold shrink-0 mt-0.5">1</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">เปิด Google Sheet ในแท็บใหม่</p>
+                <a
+                  href={sheetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary-hover font-medium mt-1"
+                >
+                  <ExternalLink size={12} /> เปิด Google Sheet
+                </a>
+              </div>
+            </li>
+
+            <li className="flex gap-3">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold shrink-0 mt-0.5">2</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">เพิ่ม Apps Script เข้า Google Sheet</p>
+                <p className="text-xs text-foreground-muted mt-0.5">Extensions → Apps Script → วางโค้ด 3 ไฟล์ → Save</p>
+                <AppScriptSheet />
+              </div>
+            </li>
+
+            <li className="flex gap-3">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold shrink-0 mt-0.5">3</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">รัน Schooldoo → Validate All Tabs</p>
+                <p className="text-xs text-foreground-muted mt-0.5">แก้ไขเซลล์สีแดงให้ครบ แล้วกลับมาที่หน้านี้</p>
+              </div>
+            </li>
+
+            <li className="flex gap-3">
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold shrink-0 mt-0.5">4</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">กดปุ่มด้านล่างเพื่อตรวจสอบ</p>
+              </div>
+            </li>
+          </ol>
+
+          {fetchError && (
+            <p className="flex items-center gap-1.5 text-xs text-danger">
+              <AlertTriangle size={13} className="shrink-0" />
+              {fetchError}
+            </p>
+          )}
+
+          <Button onClick={handleConfirmConnect} disabled={isFetching} size="full">
+            {isFetching ? (
+              <><Loader2 size={14} className="animate-spin" /> กำลังดึงข้อมูล...</>
+            ) : (
+              <><Search size={14} /> ตรวจสอบข้อมูล</>
+            )}
+          </Button>
+
+          <button
+            onClick={() => { setMode('import'); setPendingSheetId(null); }}
+            className="flex items-center gap-1.5 text-xs text-foreground-muted hover:text-foreground transition-colors"
+          >
+            <ArrowLeft size={12} /> เปลี่ยน URL
+          </button>
         </CardContent>
       </Card>
     );
