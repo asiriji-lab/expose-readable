@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Eye, EyeOff, Shield, BookOpen, GraduationCap } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { registerAction } from '../actions';
 import { useRouter } from 'next/navigation';
 
 const Box: React.FC = () => {
@@ -41,41 +41,26 @@ const Box: React.FC = () => {
     setLoading(true);
 
     try {
-      // 1. Validation for Admin Role
-      if (selectedRole === 'admin') {
-        const secretAdminKey = process.env.NEXT_PUBLIC_ADMIN_REGISTRATION_KEY;
-        if (adminKey !== secretAdminKey) {
-          throw new Error('Invalid Admin Key');
-        }
-      }
-
-      // 2. Sign up user in Supabase Auth with metadata
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
+      const result = await registerAction({
+        username,
         password,
-        options: {
-          data: {
-            username,
-            role: selectedRole,
-            first_name: name,
-            last_name: surname,
-          },
-        },
+        role: selectedRole,
+        first_name: name,
+        last_name: surname,
+        email,
+        admin_key: adminKey,
       });
 
-      if (authError) throw authError;
-      if (authData.session) {
-        // User is auto-confirmed and logged in
-        const redirectPath = selectedRole === 'teacher'
-          ? '/teacher/dashboard'
-          : selectedRole === 'student'
-            ? '/student/dashboard'
-            : '/dashboard';
-        router.push(redirectPath);
-      } else if (authData.user) {
-        // User needs to confirm email (OTP)
-        router.push(`/verify-otp?email=${encodeURIComponent(email)}&role=${selectedRole}`);
+      if (result.error) {
+        throw new Error(result.error);
       }
+
+      const redirectPath = selectedRole === 'teacher'
+        ? '/teacher/dashboard'
+        : selectedRole === 'student'
+          ? '/student/dashboard'
+          : '/dashboard';
+      router.push(redirectPath);
     } catch (error: any) {
       alert(error.message || 'An error occurred during registration');
     } finally {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { getAuthUser } from '@/utils/auth/server';
 import { BACKEND_BASE, BACKEND_SCHEDULE } from '@/lib/api/backend';
 
 /**
@@ -122,19 +122,17 @@ export async function POST(req: NextRequest) {
     if (session?.semester != null) form.append('semester', String(session.semester));
     if (session?.year != null) form.append('academic_year', String(session.year));
 
-    // Sync the Supabase user to the backend and pass user_id so the job is
+    // Sync the authenticated user to the backend and pass user_id so the job is
     // associated with their account.  Failures are non-fatal.
     try {
-      const supabase = await createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) {
+      const authUser = await getAuthUser();
+      if (authUser?.email) {
+        const name = [authUser.first_name, authUser.last_name].filter(Boolean).join(' ')
+                  || authUser.username || '';
         const syncRes = await fetch(`${BACKEND_BASE}/api/v1/users/sync`, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({
-            email: user.email,
-            name:  user.user_metadata?.full_name ?? user.user_metadata?.name ?? '',
-          }),
+          body:    JSON.stringify({ email: authUser.email, name }),
         });
         if (syncRes.ok) {
           const syncData = await syncRes.json();

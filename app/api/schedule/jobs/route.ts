@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { getAuthUser } from '@/utils/auth/server';
 import { BACKEND_BASE, BACKEND_JOBS } from '@/lib/api/backend';
 
 /**
  * GET /api/schedule/jobs
  *
- * Returns scheduling jobs.  When a Supabase session is present and the DB is
+ * Returns scheduling jobs.  When a user session is present and the DB is
  * configured, filters by the matching backend user so each user only sees
  * their own jobs.  Falls back to the full job-manager list otherwise.
  */
@@ -14,18 +14,16 @@ export async function GET() {
   let backendUserId: string | null = null;
 
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const authUser = await getAuthUser();
 
-    if (user?.email) {
+    if (authUser?.email) {
+      const name = [authUser.first_name, authUser.last_name].filter(Boolean).join(' ')
+                || authUser.username || '';
       // Look up (or create) the backend user so we have their UUID.
       const syncRes = await fetch(`${BACKEND_BASE}/api/v1/users/sync`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          email: user.email,
-          name:  user.user_metadata?.full_name ?? user.user_metadata?.name ?? '',
-        }),
+        body:    JSON.stringify({ email: authUser.email, name }),
       });
       if (syncRes.ok) {
         const syncData = await syncRes.json();

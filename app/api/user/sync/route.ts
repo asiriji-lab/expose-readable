@@ -1,34 +1,31 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { getAuthToken, getAuthUser } from '@/utils/auth/server';
 import { BACKEND_BASE } from '@/lib/api/backend';
 
 /**
  * POST /api/user/sync
  *
- * Ensures the currently authenticated Supabase user has a matching record
- * in the backend's users table.  Returns the backend user_id so callers
- * can associate scheduling jobs with this account.
+ * Ensures the currently authenticated user has a matching record in the
+ * backend's users table.  Returns the backend user_id so callers can
+ * associate scheduling jobs with this account.
  *
  * Response:
  *   { user_id: string, created: boolean }  — on success
  *   { error: string }                       — when unauthenticated or DB unavailable
  */
 export async function POST() {
-  // 1. Get the Supabase session from cookies.
-  const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const token    = await getAuthToken();
+  const authUser = await getAuthUser();
 
-  if (authError || !user) {
+  if (!token || !authUser) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  const email = user.email ?? '';
-  const name  = user.user_metadata?.full_name
-             || user.user_metadata?.name
-             || user.user_metadata?.first_name
+  const email = authUser.email ?? '';
+  const name  = [authUser.first_name, authUser.last_name].filter(Boolean).join(' ')
+             || authUser.username
              || '';
 
-  // 2. Upsert into the backend user table.
   try {
     const res = await fetch(`${BACKEND_BASE}/api/v1/users/sync`, {
       method:  'POST',
@@ -39,7 +36,6 @@ export async function POST() {
     const data = await res.json();
 
     if (!res.ok) {
-      // Graceful degradation — DB might not be configured; that's OK.
       return NextResponse.json({ error: data.error ?? 'Sync failed' }, { status: res.status });
     }
 

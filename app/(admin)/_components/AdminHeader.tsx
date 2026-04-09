@@ -1,9 +1,17 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
 import { signOutAction } from '../_actions/auth';
 import { LogOut, CalendarDays, User } from 'lucide-react';
+
+/** Read a non-httpOnly cookie by name from document.cookie */
+function getCookieValue(name: string): string | undefined {
+    if (typeof document === 'undefined') return undefined;
+    const match = document.cookie
+        .split('; ')
+        .find((row) => row.startsWith(name + '='));
+    return match ? decodeURIComponent(match.split('=').slice(1).join('=')) : undefined;
+}
 
 interface AdminHeaderProps {
     roleLabel?: string;
@@ -11,72 +19,51 @@ interface AdminHeaderProps {
 
 export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [user, setUser] = useState<{ firstName: string; lastName: string; email: string; role: string } | null>(null);
+    const [user, setUser] = useState<{
+        firstName: string;
+        lastName: string;
+        email: string;
+        role: string;
+    } | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        async function fetchUser() {
-            try {
-                const { data: { session }, error } = await supabase.auth.getSession();
-
-                if (error) {
-                    const isInvalidRefreshToken = error.message?.toLowerCase().includes('invalid refresh token');
-                    if (isInvalidRefreshToken) {
-                        await supabase.auth.signOut({ scope: 'local' });
-                    }
-                    return;
-                }
-
-                if (!session?.user) return;
-
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', session.user.id)
-                    .single();
-
-                if (profile) {
-                    setUser({
-                        firstName: profile.first_name || '',
-                        lastName: profile.last_name || '',
-                        email: profile.email || session.user.email || '',
-                        role: profile.role || 'Admin',
-                    });
-                }
-            } catch {
-                return;
-            }
+        const raw = getCookieValue('auth-user');
+        if (!raw) return;
+        try {
+            const parsed = JSON.parse(raw);
+            setUser({
+                firstName: parsed.first_name || '',
+                lastName:  parsed.last_name  || '',
+                email:     parsed.email      || '',
+                role:      parsed.role       || 'admin',
+            });
+        } catch {
+            // malformed cookie
         }
-
-        fetchUser();
     }, []);
 
-    // Close dropdown when clicking outside
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
                 setIsDropdownOpen(false);
             }
         }
-
         document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const handleSignOut = async () => {
         await signOutAction();
     };
 
-    const currentRole = roleLabel || (user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Admin');
-    const normalizedRole = currentRole.toLowerCase();
-    const roleBadgeClass = normalizedRole === 'student'
+    const currentRole     = roleLabel || (user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Admin');
+    const normalizedRole  = currentRole.toLowerCase();
+    const roleBadgeClass  = normalizedRole === 'student'
         ? 'bg-[var(--role-student-bg)] text-[var(--role-student)]'
         : normalizedRole === 'admin'
             ? 'bg-[var(--role-admin-bg)] text-[var(--role-admin)]'
             : 'bg-[var(--role-teacher-bg)] text-[var(--role-teacher)]';
-    // Use first letter of first name, else a generic icon SVG
     const avatarText = user?.firstName ? user.firstName.charAt(0).toUpperCase() : null;
 
     return (
@@ -92,7 +79,7 @@ export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
                         <span className="text-foreground-muted text-sm md:text-base hidden sm:inline">Bodindecha School</span>
                     </div>
 
-                    {/* Right: Admin Badge and User Icon */}
+                    {/* Right: Role Badge and User Icon */}
                     <div className="flex items-center gap-3 relative" ref={dropdownRef}>
                         <span className={`px-3 py-1.5 rounded-md text-sm font-medium ${roleBadgeClass}`}>
                             {currentRole}
