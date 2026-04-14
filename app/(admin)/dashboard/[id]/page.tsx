@@ -15,6 +15,8 @@ import SessionInfoCard, { SessionInfo } from './_components/SessionInfoCard';
 import DevTestPanel from './_components/DevTestPanel';
 import { PageShell } from '@/components/layout/page-shell';
 import { PageHeader } from '@/components/layout/page-header';
+import Papa from 'papaparse';
+import { submitScheduleJob } from '@/api/schedule';
 
 const ALL_TABS: TabName[] = ['period', 'room', 'teacher', 'student', 'preplace', 'scout', 'elective', 'curriculum'];
 
@@ -94,18 +96,28 @@ export default function SessionDetailPage() {
     setJobId(null);
     setDownloadUrl(null);
     try {
-      const res = await fetch('/api/schedule/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session: sessionInfo,
-          data: buildExportData(tabStates),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Scheduler error');
-      setJobId(data.job_id ?? null);
-      setDownloadUrl(data.download_url ?? null);
+      const exportData = buildExportData(tabStates);
+      
+      const toFile = (rows: any[], name: string) => {
+        const csv = Papa.unparse(rows);
+        return new File([csv], `${name}.csv`, { type: 'text/csv' });
+      };
+
+      const params: any = {
+        curriculum: toFile(exportData.curriculum, 'curriculum'),
+        room: toFile(exportData.room, 'room'),
+        jobName: sessionInfo.name,
+        academicYear: String(sessionInfo.year),
+        semester: sessionInfo.semester,
+      };
+
+      if (exportData.elective?.length) params.elective = toFile(exportData.elective, 'elective');
+      if (exportData.teacher?.length) params.teacher = toFile(exportData.teacher, 'teacher');
+      if (exportData.period?.length) params.period = toFile(exportData.period, 'period');
+
+      const res = await submitScheduleJob(params);
+      setJobId(res.job_id);
+      setDownloadUrl(res.download_url ?? null); // might be provided in initial response or status
     } catch (e) {
       console.error('[handleSubmit]', e);
       setGenerationState('failed');

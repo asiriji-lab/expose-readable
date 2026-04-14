@@ -126,6 +126,14 @@ export default function SchedulePage() {
             if (!response.ok) throw new Error('Failed to import JSON');
             const result = await response.json();
             console.log('Import Successful:', result.data);
+            
+            // Post the uploaded output into the output page UI
+            const payload = result.data.schedule ? result.data.schedule : result.data;
+            const transformed = transformToFullDataset(payload as BackendSchedule);
+            const { dataset: clean } = autoEjectConflicts(transformed);
+            setDataset(clean);
+            setJobName(payload.job_name || 'Imported Schedule');
+            
             alert('JSON imported successfully!');
         } catch (e) {
             console.error('Import error:', e);

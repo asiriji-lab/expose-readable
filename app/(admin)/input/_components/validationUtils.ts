@@ -16,3 +16,8 @@ export interface ColumnRule {
    */
   validate?: (value: string, row: string[]) => string | null | undefined;
 }
+
+export const CURRICULUM_VALIDATION_RULES = {};
+export const validateFile = async (file: File, rules: any): Promise<any> => {
+    return { isValid: true, errors: [], warnings: [] };
+};

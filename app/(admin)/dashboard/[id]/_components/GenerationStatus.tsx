@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect } from 'react';
 import { CheckCircle, XCircle, Loader2, Download } from 'lucide-react';
+import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useJobStatus } from '@/hooks/useJobStatus';
+import { downloadScheduleZip } from '@/api/schedule';
 
 type GenerationState = 'generating' | 'completed' | 'failed';
 
@@ -27,61 +30,22 @@ const STATUS_LABEL: Record<string, string> = {
 export default function GenerationStatus({
   state,
   jobId,
-  downloadUrl,
   onCompleted,
   onFailed,
 }: GenerationStatusProps) {
-  const [progress, setProgress] = useState(0);
-  const [statusLabel, setStatusLabel] = useState('กำลังเตรียมข้อมูล...');
-  const [apiError, setApiError] = useState<string | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { job, error } = useJobStatus(jobId);
 
   useEffect(() => {
     if (state !== 'generating' || !jobId) return;
 
-    function stopPolling() {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
+    if (job?.status === 'completed') {
+      onCompleted();
+    } else if (job?.status === 'failed') {
+      onFailed(job?.error || error || 'สร้างตารางไม่สำเร็จ');
+    } else if (error) {
+      onFailed(error);
     }
-
-    async function poll() {
-      try {
-        const res = await fetch(`/api/schedule/status?job_id=${jobId}`);
-        const data = await res.json();
-
-        if (!res.ok) {
-          stopPolling();
-          setApiError(data.error ?? 'เกิดข้อผิดพลาด');
-          onFailed(data.error);
-          return;
-        }
-
-        setProgress(data.progress ?? 0);
-        if (data.status && STATUS_LABEL[data.status]) {
-          setStatusLabel(STATUS_LABEL[data.status]);
-        }
-
-        if (data.status === 'completed') {
-          stopPolling();
-          setProgress(100);
-          onCompleted();
-        } else if (data.status === 'failed') {
-          stopPolling();
-          setApiError(data.error ?? 'สร้างตารางไม่สำเร็จ');
-          onFailed(data.error);
-        }
-      } catch {
-        // network error — keep polling
-      }
-    }
-
-    poll(); // immediate first call
-    intervalRef.current = setInterval(poll, 3000);
-
-    return stopPolling;
-  }, [state, jobId, onCompleted, onFailed]);
+  }, [state, jobId, job, error, onCompleted, onFailed]);
 
   if (state === 'completed') {
     return (
@@ -89,15 +53,21 @@ export default function GenerationStatus({
         <CardContent className="px-6 py-8 text-center space-y-4">
           <CheckCircle size={40} className="text-success mx-auto" />
           <p className="text-lg font-semibold text-success">สร้างตารางสอนเสร็จสิ้น!</p>
-          {downloadUrl && (
-            <a
-              href={downloadUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(buttonVariants({ variant: 'success', size: 'lg' }))}
-            >
-              <Download size={16} /> ดาวน์โหลดตารางสอน
-            </a>
+          {jobId && (
+            <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+              <Link
+                href={`/schedule?job_id=${encodeURIComponent(jobId)}`}
+                className={cn(buttonVariants({ variant: 'success', size: 'lg' }))}
+              >
+                ดูตารางสอน
+              </Link>
+              <button
+                onClick={() => downloadScheduleZip(jobId)}
+                className={cn(buttonVariants({ variant: 'outline', size: 'lg' }))}
+              >
+                <Download size={16} className="mr-2" /> ดาวน์โหลดตารางสอน
+              </button>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -111,25 +81,36 @@ export default function GenerationStatus({
           <XCircle size={40} className="text-danger mx-auto" />
           <p className="text-lg font-semibold text-danger">สร้างตารางไม่สำเร็จ</p>
           <p className="text-sm text-foreground-muted">
-            {apiError ?? 'ตรวจสอบข้อมูลและลองอีกครั้ง'}
+            {job?.error || error || 'ตรวจสอบข้อมูลและลองอีกครั้ง'}
           </p>
         </CardContent>
       </Card>
     );
   }
 
+  const progress = job?.progress ?? 0;
+  const statusKey = job?.status ?? 'created';
+  const statusLabel = STATUS_LABEL[statusKey] || 'กำลังประมวลผล...';
+
   return (
     <Card className="border-primary-border bg-primary-light">
       <CardContent className="px-6 py-8 text-center space-y-4">
         <Loader2 size={40} className="text-primary mx-auto animate-spin" />
         <p className="text-lg font-semibold text-primary">{statusLabel}</p>
-        <div className="w-full bg-primary-light rounded-full h-3 overflow-hidden border border-primary-border">
+        
+        {job?.status === 'running_ga' && job?.progress_details && (
+           <p className="text-sm text-primary font-mono">
+             Generation: {job.progress_details.generation} / {job.progress_details.max_generations}
+           </p>
+        )}
+
+        <div className="w-full bg-primary-light rounded-full h-3 overflow-hidden border border-primary-border relative">
           <div
             className="bg-primary h-3 rounded-full transition-all duration-700"
             style={{ width: `${progress}%` }}
           />
         </div>
-        <p className="text-sm text-primary">{progress}%</p>
+        <p className="text-sm text-primary font-bold">{progress.toFixed(1)}%</p>
       </CardContent>
     </Card>
   );

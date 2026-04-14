@@ -36,10 +36,10 @@ export default function ScheduleCard({ schedule }: ScheduleCardProps) {
   const { label, variant, icon: Icon, spin } = STATUS_BADGE[schedule.status];
 
   // Completed jobs open the timetable viewer; everything else opens the
-  // setup / creation flow so the user can check status or retry.
+  // job detail page so the user can check status or retry.
   const href = schedule.status === 'completed'
     ? `/schedule?job_id=${schedule.id}`
-    : `/dashboard/new`;
+    : `/dashboard/${schedule.id}`;
 
   return (
     <tr className="hover:bg-background transition-colors">
