@@ -55,3 +55,7 @@ local_idea/
 SAMPLE/
 temp_backend_for_example/
 Untitled/
+
+# graphify generated outputs
+.graphify_detect.json
+graphify-out/
