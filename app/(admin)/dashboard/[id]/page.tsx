@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import Papa from 'papaparse';
 import AdminHeader from '../../_components/AdminHeader';
 import SheetEmbed from './_components/SheetEmbed';
 import ValidationSection from './_components/ValidationSection';
@@ -14,6 +15,7 @@ import DevTestPanel from './_components/DevTestPanel';
 import { ALL_TAB_NAMES } from './_utils/csvHelpers';
 import { PageShell } from '@/components/layout/page-shell';
 import { PageHeader } from '@/components/layout/page-header';
+import { submitScheduleJob } from '@/lib/api/scheduleApi';
 
 export default function SessionDetailPage() {
   const params = useParams();
@@ -44,6 +46,39 @@ export default function SessionDetailPage() {
   const [generationState, setGenerationState] = useState<
     'idle' | 'generating' | 'completed' | 'failed'
   >('idle');
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  // Client-only flag — avoids SSR/client hydration mismatch on process.env.NODE_ENV
+  const [isDev, setIsDev] = useState(false);
+  useEffect(() => { setIsDev(process.env.NODE_ENV === 'development'); }, []);
+
+  const handleSubmit = async () => {
+    try {
+      setGenerationState('generating');
+      
+      const payload: Record<string, Blob> = {};
+      
+      for (const tab of ALL_TAB_NAMES) {
+        if (sheetData[tab] && sheetData[tab]!.length > 0) {
+          const csvStr = Papa.unparse(sheetData[tab]!);
+          payload[tab] = new Blob([csvStr], { type: 'text/csv' });
+        }
+      }
+
+      if (!payload.curriculum || !payload.room) {
+        alert('Missing required tabs (curriculum or room)!');
+        setGenerationState('idle');
+        return;
+      }
+
+      const res = await submitScheduleJob(payload as any);
+      setJobId(res.job_id);
+    } catch (error) {
+      console.error(error);
+      alert('Failed to submit job.');
+      setGenerationState('idle');
+    }
+  };
 
   return (
     <PageShell header={<AdminHeader />}>
@@ -62,8 +97,9 @@ export default function SessionDetailPage() {
       {/* Google Sheet setup (skeleton — coming soon) */}
       <SheetEmbed />
 
-      {/* Dev testing panel — only in development */}
-      {process.env.NODE_ENV === 'development' && (
+      {/* Dev testing panel — only in development.
+           Uses state+effect to avoid SSR/client hydration mismatch on NODE_ENV. */}
+      {isDev && (
         <DevTestPanel
           currentData={sheetData}
           onDataLoaded={(data) => { setSheetData(data); resetStates(); }}
@@ -79,12 +115,18 @@ export default function SessionDetailPage() {
           missingTabs={missingTabs}
           onValidate={runValidation}
           onTabClick={setOpenTab}
+          onSubmit={handleSubmit}
         />
       )}
 
       {/* Generation status */}
       {generationState !== 'idle' && (
-        <GenerationStatus state={generationState} sessionId={id} />
+        <GenerationStatus 
+          state={generationState} 
+          sessionId={id} 
+          jobId={jobId ?? undefined} 
+          onStateChange={setGenerationState} 
+        />
       )}
 
       {/* Error panel slide-over (Sheet: always rendered, controlled via open) */}

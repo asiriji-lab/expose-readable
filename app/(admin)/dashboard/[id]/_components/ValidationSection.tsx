@@ -19,6 +19,7 @@ interface ValidationSectionProps {
   missingTabs: TabName[];
   onValidate: () => void;
   onTabClick: (tabName: TabName) => void;
+  onSubmit?: () => void;
 }
 
 export default function ValidationSection({
@@ -27,6 +28,7 @@ export default function ValidationSection({
   missingTabs,
   onValidate,
   onTabClick,
+  onSubmit,
 }: ValidationSectionProps) {
   const phase1Done = PHASE_1_TABS.every((t) => {
     const s = tabStates[t].status;
@@ -116,7 +118,7 @@ export default function ValidationSection({
               { value: totalErrors,   label: 'ข้อผิดพลาด', variant: totalErrors   > 0 ? 'danger'  : 'success' },
               { value: totalWarnings, label: 'คำเตือน',    variant: totalWarnings > 0 ? 'warning' : 'default' },
             ]} />
-            <SubmitButton allPassed={allPassed} hasErrors={hasErrors} />
+            <SubmitButton allPassed={allPassed} hasErrors={hasErrors} onSubmit={onSubmit} />
           </CardContent>
           {totalWarnings > 0 && !hasErrors && (
             <p className="text-xs text-warning px-4 pb-3 flex items-center gap-1.5">
@@ -130,7 +132,7 @@ export default function ValidationSection({
   );
 }
 
-function SubmitButton({ allPassed, hasErrors }: { allPassed: boolean; hasErrors: boolean }) {
+function SubmitButton({ allPassed, hasErrors, onSubmit }: { allPassed: boolean; hasErrors: boolean; onSubmit?: () => void }) {
   if (hasErrors) {
     return (
       <Button variant="outline" disabled size="sm">
@@ -140,7 +142,7 @@ function SubmitButton({ allPassed, hasErrors }: { allPassed: boolean; hasErrors:
   }
   if (!allPassed) return null;
   return (
-    <Button variant="success" size="sm">
+    <Button variant="success" size="sm" onClick={onSubmit}>
       <Send size={14} /> ส่งข้อมูลสร้างตาราง
     </Button>
   );

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, Upload, Download, Save, Trash2, Sparkles, MoreHorizontal } from 'lucide-react';
 import ViewModeToggle from './_components/ViewModeToggle';
 import TimetableGridV2 from './_components/TimetableGridV2';
@@ -11,21 +11,26 @@ import ScheduleDndProvider from './_components/ScheduleDndProvider';
 import EditOverlay from './_components/EditOverlay';
 import FilterDropdown from './_components/FilterDropdown';
 import AdminHeader from '../_components/AdminHeader';
+import UploadModal from './_components/UploadModal';
+import { getJobResult } from '../../../lib/api/scheduleApi';
+import { adaptBackendSchedule } from '../../../lib/adapters/scheduleAdapter';
 import {
     generateFullScheduleDataset,
     TEACHER_CODES,
     CLASS_CODES,
     ROOM_CODES,
-    DragPayload,
 } from './_utils/dummyData';
 import { computeOverlayData } from './_utils/overlayUtils';
 import { moveItem, hasConflict, removeItemFromDataset, autoEjectConflicts } from './_utils/scheduleLogic';
-import { FullDataset, ScheduleItem, ScheduleData, ViewMode, OverlayCellData, EntityType } from './_types/schedule.types';
+import { FullDataset, ScheduleItem, ScheduleData, ViewMode, OverlayCellData, EntityType, DragPayload } from './_types/schedule.types';
 import OverlayInspectPopover from './_components/OverlayInspectPopover';
 import BandHoverTooltip from './_components/BandHoverTooltip';
 
-export default function SchedulePage() {
+function SchedulePageContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const initJobId = searchParams.get('jobId');
+
     const [viewMode, setViewMode] = useState<ViewMode>('all');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -43,10 +48,70 @@ export default function SchedulePage() {
     // ─── Full dataset ──────────────────────────────────────────────────────
     const [dataset, setDataset] = useState<FullDataset | null>(null);
 
+    // ─── Derive code lists from real dataset, fall back to dummy ──────────
+    const teacherCodes = useMemo(() => dataset ? Object.keys(dataset.teachers) : TEACHER_CODES, [dataset]);
+    const classCodes   = useMemo(() => dataset ? Object.keys(dataset.classes)  : CLASS_CODES,   [dataset]);
+    const roomCodes    = useMemo(() => dataset ? Object.keys(dataset.rooms)    : ROOM_CODES,    [dataset]);
+
+    // Reset filter selections when a real dataset is first loaded
     useEffect(() => {
-        const { dataset: clean } = autoEjectConflicts(generateFullScheduleDataset());
-        setDataset(clean);
-    }, []);
+        if (!dataset) return;
+        const teachers = Object.keys(dataset.teachers);
+        const classes  = Object.keys(dataset.classes);
+        const rooms    = Object.keys(dataset.rooms);
+        console.log('[schedule] dataset loaded — resetting filters to:', { teacher: teachers[0], class: classes[0], room: rooms[0] });
+        if (teachers.length) setTCode(teachers[0]);
+        if (classes.length)  setClassCode(classes[0]);
+        if (rooms.length)    setRoom(rooms[0]);
+    }, [dataset]);
+
+    // ─── Actions menu ──────────────────────────────────────────────────────
+    const [actionsOpen, setActionsOpen] = useState(false);
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+    const [unfilledPalette, setUnfilledPalette] = useState<any[]>([]);
+
+  const handleJobSuccess = async (jobId: string) => {
+    setIsUploadModalOpen(false);
+    try {
+      console.log('[schedule] fetching result for jobId:', jobId);
+      const raw = await getJobResult(jobId);
+      console.log('[schedule] raw API response:', raw);
+      const { schedule } = raw;
+      console.log('[schedule] schedule payload:', schedule);
+      const { dataset: newDataset, unfilled } = adaptBackendSchedule(schedule);
+      console.log('[schedule] adapted dataset — teachers:', Object.keys(newDataset.teachers));
+      console.log('[schedule] adapted dataset — classes:', Object.keys(newDataset.classes));
+      console.log('[schedule] adapted dataset — rooms:', Object.keys(newDataset.rooms));
+      console.log('[schedule] unfilled slots:', unfilled);
+      setDataset(newDataset);
+      setUnfilledPalette(unfilled);
+    } catch (e) {
+      console.error('[schedule] Fetch result error:', e);
+      alert('Failed to drop data into grid.');
+    }
+  };
+
+  // ─── Load initial dataset — once on mount only ─────────────────────────
+  // useRef guard prevents the router.replace('/schedule') call from clearing
+  // initJobId and triggering the else-branch (dummy data) while getJobResult
+  // is still in-flight. Without this, real backend data gets overwritten.
+  const hasBootstrapped = useRef(false);
+
+  useEffect(() => {
+    if (hasBootstrapped.current) return;
+    hasBootstrapped.current = true;
+
+    if (initJobId) {
+      console.log('[schedule] boot — got jobId from URL:', initJobId);
+      // Remove jobId from URL immediately so a refresh doesn't re-trigger
+      router.replace('/schedule', { scroll: false });
+      handleJobSuccess(initJobId);
+    } else {
+      const { dataset: clean } = autoEjectConflicts(generateFullScheduleDataset());
+      setDataset(clean);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — run once on mount
 
     // ─── Derived schedules ─────────────────────────────────────────────────
     const teacherSchedule = useMemo(
@@ -76,54 +141,19 @@ export default function SchedulePage() {
 
 
 
-    // ─── Actions menu ──────────────────────────────────────────────────────
-    const [actionsOpen, setActionsOpen] = useState(false);
 
-    // ─── Import / Export ───────────────────────────────────────────────────
-    const handleImportClick = () => fileInputRef.current?.click();
 
-    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        try {
-            const text = await file.text();
-            const jsonPayload = JSON.parse(text);
-            const response = await fetch('/api/schedule/import', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(jsonPayload),
-            });
-            if (!response.ok) throw new Error('Failed to import JSON');
-            const result = await response.json();
-            console.log('Import Successful:', result.data);
-            alert('JSON imported successfully!');
-        } catch (e) {
-            console.error('Import error:', e);
-            alert('Failed to parse or import JSON file.');
-        } finally {
-            if (fileInputRef.current) fileInputRef.current.value = '';
-        }
-    };
-
-    const handleExportClick = async () => {
+    const handleExportClick = () => {
         try {
             const exportData = {
-                config: { academic_year: '2026', semester: 1 },
-                teachers: dataset?.teachers ?? {},
-                classes: dataset?.classes ?? {},
-                rooms: dataset?.rooms ?? {},
+                metadata: { exported_at: new Date().toISOString() },
+                dataset: dataset
             };
-            const response = await fetch('/api/schedule/export', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(exportData),
-            });
-            if (!response.ok) throw new Error('Failed to generate export');
-            const blob = await response.blob();
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
             const downloadUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = downloadUrl;
-            link.download = 'schedule.json';
+            link.download = `schedule_export_${new Date().toISOString().slice(0,10)}.json`;
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -310,13 +340,13 @@ export default function SchedulePage() {
                     <div className="flex items-center gap-2 flex-shrink-0">
                         {/* Inline filter for individual views — avoids a separate filter bar row */}
                         {viewMode === 'teacher' && (
-                            <FilterDropdown label="T. code" value={tCode} options={TEACHER_CODES} onChange={handleTCodeChange} labelClassName="text-primary font-semibold w-14" />
+                            <FilterDropdown label="T. code" value={tCode} options={teacherCodes} onChange={handleTCodeChange} labelClassName="text-primary font-semibold w-14" />
                         )}
                         {viewMode === 'class' && (
-                            <FilterDropdown label="Class" value={classCode} options={CLASS_CODES} onChange={handleClassChange} labelClassName="text-primary font-semibold w-14" />
+                            <FilterDropdown label="Class" value={classCode} options={classCodes} onChange={handleClassChange} labelClassName="text-primary font-semibold w-14" />
                         )}
                         {viewMode === 'room' && (
-                            <FilterDropdown label="Room" value={room} options={ROOM_CODES} onChange={handleRoomChange} labelClassName="text-primary font-semibold w-14" />
+                            <FilterDropdown label="Room" value={room} options={roomCodes} onChange={handleRoomChange} labelClassName="text-primary font-semibold w-14" />
                         )}
                         {viewMode !== 'all' && <div className="h-5 w-px bg-border hidden sm:block" />}
                         <ViewModeToggle activeMode={viewMode} onChange={setViewMode} />
@@ -344,23 +374,15 @@ export default function SchedulePage() {
                                 <>
                                     <div className="fixed inset-0 z-30" onClick={() => setActionsOpen(false)} />
                                     <div className="absolute right-0 top-full mt-1 z-40 w-48 bg-surface border border-border rounded-xl shadow-lg py-1">
-                                        <input type="file" accept=".json" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
-                                        <button onClick={() => { handleImportClick(); setActionsOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors">
-                                            <Upload className="w-4 h-4 text-foreground-muted" /> Import JSON
+                                        <button onClick={() => { setIsUploadModalOpen(true); setActionsOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors">
+                                            <Upload className="w-4 h-4 text-foreground-muted" /> Upload CSVs
                                         </button>
                                         <button onClick={() => { handleExportClick(); setActionsOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors">
                                             <Download className="w-4 h-4 text-foreground-muted" /> Export JSON
                                         </button>
-                                        <button className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors">
-                                            <Save className="w-4 h-4 text-foreground-muted" /> Save Draft
-                                        </button>
                                         <div className="my-1 border-t border-border" />
                                         <button className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-purple-600 hover:bg-surface-alt transition-colors">
                                             <Sparkles className="w-4 h-4" /> AI Shuffle
-                                        </button>
-                                        <div className="my-1 border-t border-border" />
-                                        <button className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
-                                            <Trash2 className="w-4 h-4" /> Delete Schedule
                                         </button>
                                     </div>
                                 </>
@@ -377,21 +399,21 @@ export default function SchedulePage() {
                         <FilterDropdown
                             label="T. code"
                             value={tCode}
-                            options={TEACHER_CODES}
+                            options={teacherCodes}
                             onChange={handleTCodeChange}
                             labelClassName={activeEntity === 'teacher' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
                         />
                         <FilterDropdown
                             label="Class"
                             value={classCode}
-                            options={CLASS_CODES}
+                            options={classCodes}
                             onChange={handleClassChange}
                             labelClassName={activeEntity === 'class' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
                         />
                         <FilterDropdown
                             label="Room"
                             value={room}
-                            options={ROOM_CODES}
+                            options={roomCodes}
                             onChange={handleRoomChange}
                             labelClassName={activeEntity === 'room' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
                         />
@@ -456,6 +478,20 @@ export default function SchedulePage() {
                 data={bandInspect?.data ?? null}
                 focusedEntity={bandInspect?.entityType ?? activeEntity}
             />
+            {isUploadModalOpen && (
+                <UploadModal 
+                    onClose={() => setIsUploadModalOpen(false)} 
+                    onSuccess={handleJobSuccess} 
+                />
+            )}
         </div>
+    );
+}
+
+export default function SchedulePage() {
+    return (
+        <Suspense fallback={<div className="h-screen flex items-center justify-center">Loading...</div>}>
+            <SchedulePageContent />
+        </Suspense>
     );
 }

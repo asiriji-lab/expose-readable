@@ -29,14 +29,7 @@ export interface MoveResult {
 // ─── Immutable helpers ───────────────────────────────────────────────────────
 
 function cloneEntityMap(map: EntityScheduleMap): EntityScheduleMap {
-    const out: EntityScheduleMap = {};
-    for (const key of Object.keys(map)) {
-        out[key] = {};
-        for (const day of Object.keys(map[key])) {
-            out[key][day] = { ...map[key][day] };
-        }
-    }
-    return out;
+    return structuredClone(map);
 }
 
 function deleteSlot(map: EntityScheduleMap, key: string, day: string, slot: number): void {

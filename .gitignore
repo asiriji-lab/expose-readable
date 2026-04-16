@@ -47,3 +47,11 @@ next-env.d.ts
 .agent/solver_something/cleaned/
 .agent/solver_something/*.py
 .agent/solver_something/.venv/
+.agent/
+# Project specific junk & local agent files
+.agent/
+.obsidian/
+local_idea/
+SAMPLE/
+temp_backend_for_example/
+Untitled/

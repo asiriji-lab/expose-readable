@@ -5,24 +5,29 @@ import { CheckCircle, XCircle, Loader2, Calendar } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useJobStatus } from '@/lib/hooks/useJobStatus';
 
-type GenerationState = 'generating' | 'completed' | 'failed';
+type GenerationState = 'idle' | 'generating' | 'completed' | 'failed';
 
 interface GenerationStatusProps {
   state: GenerationState;
   sessionId: string;
+  jobId?: string;
+  onStateChange: (state: GenerationState) => void;
 }
 
-export default function GenerationStatus({ state, sessionId }: GenerationStatusProps) {
-  const [progress, setProgress] = useState(10);
+export default function GenerationStatus({ state, sessionId, jobId, onStateChange }: GenerationStatusProps) {
+  const { job, error } = useJobStatus(jobId ?? null);
+  const status = job?.status;
+  const progress = job?.progress;
 
   useEffect(() => {
-    if (state !== 'generating') return;
-    const interval = setInterval(() => {
-      setProgress((p) => Math.min(p + 5, 90));
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [state]);
+    if (status === 'completed' && state !== 'completed') {
+      onStateChange('completed');
+    } else if (status === 'failed' && state !== 'failed') {
+      onStateChange('failed');
+    }
+  }, [status, state, onStateChange]);
 
   if (state === 'completed') {
     return (
@@ -30,7 +35,7 @@ export default function GenerationStatus({ state, sessionId }: GenerationStatusP
         <CardContent className="px-6 py-8 text-center space-y-4">
           <CheckCircle size={40} className="text-success mx-auto" />
           <p className="text-lg font-semibold text-success">สร้างตารางสอนเสร็จสิ้น!</p>
-          <a href="/schedule" className={cn(buttonVariants({ variant: 'success', size: 'lg' }))}>
+          <a href={`/schedule?jobId=${jobId}`} className={cn(buttonVariants({ variant: 'success', size: 'lg' }))}>
             <Calendar size={16} /> ดูตารางสอน
           </a>
         </CardContent>
@@ -44,7 +49,7 @@ export default function GenerationStatus({ state, sessionId }: GenerationStatusP
         <CardContent className="px-6 py-8 text-center space-y-4">
           <XCircle size={40} className="text-danger mx-auto" />
           <p className="text-lg font-semibold text-danger">สร้างตารางไม่สำเร็จ</p>
-          <p className="text-sm text-foreground-muted">ตรวจสอบข้อมูลและลองอีกครั้ง</p>
+          <p className="text-sm text-foreground-muted">{error ?? 'ตรวจสอบข้อมูลและลองอีกครั้ง'}</p>
         </CardContent>
       </Card>
     );
@@ -58,10 +63,10 @@ export default function GenerationStatus({ state, sessionId }: GenerationStatusP
         <div className="w-full bg-primary-light rounded-full h-3 overflow-hidden border border-primary-border">
           <div
             className="bg-primary h-3 rounded-full transition-all duration-1000"
-            style={{ width: `${progress}%` }}
+            style={{ width: `${progress ?? 0}%` }}
           />
         </div>
-        <p className="text-sm text-primary">ประมาณ 2–5 นาที</p>
+        <p className="text-sm text-primary">Job ID: {jobId}</p>
       </CardContent>
     </Card>
   );
