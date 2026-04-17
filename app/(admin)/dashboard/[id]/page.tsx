@@ -13,6 +13,7 @@ import { TabName, AllTabStates } from '../../validators/types';
 import SessionInfoCard, { SessionInfo } from './_components/SessionInfoCard';
 import { PageShell } from '@/components/layout/page-shell';
 import { PageHeader } from '@/components/layout/page-header';
+import { supabase } from '@/lib/supabase';
 
 const ALL_TABS: TabName[] = ['period', 'room', 'teacher', 'student', 'preplace', 'scout', 'elective', 'curriculum'];
 
@@ -52,11 +53,47 @@ export default function SessionDetailPage() {
 
   // ── Handlers ──
 
-  const handleCreateSkeleton = useCallback(() => {
-    const templateId = process.env.NEXT_PUBLIC_GOOGLE_TEMPLATE_SHEET_ID;
-    if (!templateId) return;
-    window.open(`https://docs.google.com/spreadsheets/d/${templateId}/copy`, '_blank');
-  }, []);
+  const handleCreateSkeleton = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const adminEmail = session?.user?.email;
+
+      const res = await fetch('/api/sheets/copy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminEmail,
+          title: sessionInfo.name?.trim() || undefined,
+        }),
+      });
+
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(body.error ?? 'สร้าง Google Sheet ไม่สำเร็จ');
+      }
+
+      const sheetId = body.spreadsheetId as string | undefined;
+      const sheetUrl = body.spreadsheetUrl as string | undefined;
+      if (!sheetId || !sheetUrl) {
+        throw new Error('ไม่พบข้อมูลชีทที่สร้างใหม่');
+      }
+
+      setConnectedSheetId(sheetId);
+      setConnectedSheetUrl(sheetUrl);
+      window.open(sheetUrl, '_blank');
+    } catch (err) {
+      console.error('[handleCreateSkeleton]', err);
+
+      // Backward-compatible fallback for environments that still use template copy links.
+      const templateId = process.env.NEXT_PUBLIC_GOOGLE_TEMPLATE_SHEET_ID;
+      if (templateId) {
+        window.open(`https://docs.google.com/spreadsheets/d/${templateId}/copy`, '_blank');
+        return;
+      }
+
+      window.alert('สร้าง Google Sheet ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง หรือวางลิงก์ชีทของคุณในโหมดนำเข้า');
+    }
+  }, [sessionInfo.name]);
 
   const handleConnectSkeleton = useCallback(() => {
     if (!connectedSheetId) return;
