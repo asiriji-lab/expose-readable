@@ -56,3 +56,7 @@ cleaned_input/teacher_cleaned.csv
 data/*
 schedool/
 logs/
+
+.vscode
+.claude
+/examples
