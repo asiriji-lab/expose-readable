@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useRef, useCallback, useMemo } from 'react';
 import Papa from 'papaparse';
@@ -9,7 +9,7 @@ import {
 } from '../../../schedule/_utils/parseCurriculum';
 import { TEACHER_META } from '../../../schedule/_utils/dummyData';
 import { SheetData, TabName } from '../../../validators/types';
-import { ALL_TAB_NAMES, extractSheetId, filenameToTabName, parseCSVText, fetchPublicSheetTab } from '../_utils/csvHelpers';
+import { ALL_TAB_NAMES, extractSheetId, filenameToTabName, parseCSVText, fetchAllPublicTabs } from '../_utils/csvHelpers';
 
 // ── Icons / labels per tab ──────────────────────────────────────────────────
 const TAB_META: Record<TabName, { icon: string; label: string }> = {
@@ -197,18 +197,11 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
     setLinkMissing([]);
 
     try {
-      const data: SheetData = {};
-      await Promise.all(
-        ALL_TAB_NAMES.map(async (tab) => {
-          const rows = await fetchPublicSheetTab(id, tab);
-          if (rows) data[tab] = rows;
-        })
-      );
+      const { data, missingTabs } = await fetchAllPublicTabs(id);
 
-      const found   = ALL_TAB_NAMES.filter((t) =>  data[t]);
-      const missing = ALL_TAB_NAMES.filter((t) => !data[t]);
+      const found = ALL_TAB_NAMES.filter((t) => data[t]);
       setLinkFound(found);
-      setLinkMissing(missing);
+      setLinkMissing(missingTabs);
       setLinkStatus(found.length > 0 ? 'success' : 'error');
       if (found.length > 0) {
         onDataLoaded(data);

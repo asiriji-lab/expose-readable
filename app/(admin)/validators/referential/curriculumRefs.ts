@@ -16,12 +16,7 @@ export function validateCurriculumRefs(
     const row = curriculumResult.parsedRows[i];
     const rowNum = i + 2;
 
-    if (!row['ห้องเรียน']?.trim()) {
-      warnings.push({ row: rowNum, col: -1, column: 'ห้องเรียน', value: '', message: `Row ${rowNum}, 'ห้องเรียน': ไม่ได้ระบุห้องเรียน`, severity: 'warning' });
-    }
-    if (!row['การแบ่งคาบสอน']?.trim()) {
-      warnings.push({ row: rowNum, col: -1, column: 'การแบ่งคาบสอน', value: '', message: `Row ${rowNum}, 'การแบ่งคาบสอน': ไม่ได้ระบุการแบ่งคาบ`, severity: 'warning' });
-    }
+    // No empty warnings for "ห้องเรียน" or "การแบ่งคาบสอน".
   }
 
   return { ...curriculumResult, errors, warnings, valid: errors.length === 0 };

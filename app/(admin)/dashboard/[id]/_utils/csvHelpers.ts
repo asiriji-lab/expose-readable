@@ -1,9 +1,21 @@
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { TabName, SheetData } from '../../../validators/types';
 
 export const ALL_TAB_NAMES: TabName[] = [
   'period', 'room', 'teacher', 'student', 'preplace', 'scout', 'elective', 'curriculum',
 ];
+
+const EXPECTED_HEADERS: Record<TabName, string[]> = {
+  period: ['คาบ', 'เวลา', 'period', 'time'],
+  room: ['ห้อง', 'ห้องทั้งหมด', 'room'],
+  teacher: ['teacher_id', 'ชื่อ', 'ครู', 'teacher'],
+  student: ['นักเรียน', 'ชั้น', 'ห้อง', 'student', 'grade'],
+  preplace: ['teacher_id', 'คาบ', 'วัน'],
+  scout: ['teacher_id', 'ชั้น'],
+  elective: ['รหัสวิชา', 'teacher_id'],
+  curriculum: ['รหัสวิชา', 'teacher_id', 'การแบ่งคาบสอน', 'ห้องเรียน'],
+};
 
 /** Maps Google Sheets tab titles (Thai or English) to our internal TabName keys */
 export const TAB_KEY_MAP: Record<string, TabName> = {
@@ -94,46 +106,43 @@ export function parseCSVText(text: string): string[][] {
 }
 
 /**
- * Fetches a single tab from a **publicly shared** Google Sheet using the
- * gviz CSV export endpoint (no API key or service account required).
- *
- * Tries each alias in `TAB_ALIASES[tabName]` in order and returns the rows
- * from the first one that responds with valid CSV data.
- *
- * Returns `null` when:
- * - None of the aliases matched a real tab (Google returns an HTML error page)
- * - The network request failed
- *
- * Requirements: the spreadsheet must be set to “Anyone with the link can view”.
+ * Fetches all tabs from a **publicly shared** Google Sheet by downloading the
+ * entire workbook as an XLSX file, completely bypassing .gviz limitations,
+ * alias misspellings, and encoding discrepancies.
  */
-export async function fetchPublicSheetTab(
-  sheetId: string,
-  tabName: TabName,
-): Promise<string[][] | null> {
-  const aliases = TAB_ALIASES[tabName];
+export async function fetchAllPublicTabs(sheetId: string): Promise<{ data: SheetData; missingTabs: TabName[] }> {
+  const url = `https://docs.google.com/spreadsheets/export?id=${sheetId}&exportFormat=xlsx`;
+  const res = await fetch(url);
+  
+  if (!res.ok) {
+    throw new Error('ดึงข้อมูลไม่สำเร็จ ตรวจสอบว่าแชร์เป็น Anyone with the link');
+  }
 
-  for (const alias of aliases) {
-    try {
-      const url =
-        `https://docs.google.com/spreadsheets/d/${sheetId}` +
-        `/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(alias)}`;
+  const arrayBuffer = await res.arrayBuffer();
+  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+  const data: SheetData = {};
 
-      const res = await fetch(url);
-      if (!res.ok) continue;
+  for (const sheetName of workbook.SheetNames) {
+    // Exactly the same normalization used by the server API
+    const clean = sheetName
+      .replace(/[\u00A0\u200B\u200C\u200D\u2060\uFEFF]/g, '')
+      .trim();
+    const tabName =
+      TAB_KEY_MAP[clean] ??
+      TAB_KEY_MAP[clean.normalize('NFC')] ??
+      TAB_KEY_MAP[clean.toLowerCase()];
 
-      const text = await res.text();
-
-      // Google returns an HTML error page when the tab name doesn’t exist
-      if (text.trim().startsWith('<')) continue;
-
-      const rows = parseCSVText(text);
-      if (rows.length > 0) return rows;
-    } catch {
-      // network error for this alias — try the next one
+    if (tabName) {
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '', raw: false });
+      if (rows.length > 0) {
+        data[tabName] = rows;
+      }
     }
   }
 
-  return null;
+  const missingTabs = ALL_TAB_NAMES.filter((t) => !data[t]);
+  return { data, missingTabs };
 }
 
 /**

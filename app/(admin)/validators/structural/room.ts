@@ -67,9 +67,7 @@ export function validateRoom(data: TabData): ValidationResult {
       seen.set(roomId, rowNum);
     }
 
-    if (noteIdx !== -1 && !(data[r][noteIdx] ?? '').trim()) {
-      warnings.push({ row: rowNum, col: noteIdx + 1, column: 'หมายเหตุ', value: '', message: `Row ${rowNum}, 'หมายเหตุ': ไม่ได้ระบุหมายเหตุ`, severity: 'warning' });
-    }
+    // No warning for empty note
 
     const rowMap: Record<string, string> = {};
     headers.forEach((h, i) => { rowMap[h] = (row[i] ?? '').trim(); });

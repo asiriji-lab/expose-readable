@@ -86,7 +86,6 @@ export function validateTeacher(data: TabData): ValidationResult {
       if (colIdx === -1) continue;
       const slotVal = (row[colIdx] ?? '').trim();
       if (!slotVal) {
-        warnings.push({ row: rowNum, col: colIdx + 1, column: colName, value: '', message: `Row ${rowNum}, '${colName}': ไม่ได้ระบุคาบว่าง`, severity: 'warning' });
         continue;
       }
       const invalid = getInvalidSlotTokens(slotVal);
