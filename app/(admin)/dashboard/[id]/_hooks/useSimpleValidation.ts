@@ -10,6 +10,10 @@ import {
   ValidationResult,
   SheetData,
 } from '../../../validators/types';
+import { isSkipRow, isGradeHeader } from '../../../validators/utils/parsers';
+
+// Curriculum columns that use merged cells in Google Sheets — forward-fill their values from CSV
+const CURRICULUM_MERGE_COLS = ['รหัสวิชา', 'ชื่อวิชา', 'คาบ/สัปดาห์', 'ครู'];
 
 const ALL_TABS: TabName[] = [
   'period', 'room', 'teacher', 'student',
@@ -86,8 +90,41 @@ function validateTab(tabName: TabName, data: TabData | undefined): ValidationRes
 
   const optionalFields = OPTIONAL_FIELDS[tabName];
 
-  for (let ri = 1; ri < data.length; ri++) {
-    const row = data[ri];
+  // Curriculum: forward-fill merged-cell columns so continuation rows aren't flagged as empty
+  let resolvedData = data;
+  if (tabName === 'curriculum') {
+    const fillIndices = CURRICULUM_MERGE_COLS.map((f) => headerIndex.get(f) ?? -1).filter((i) => i >= 0);
+    const lastVals: string[] = [];
+    resolvedData = data.map((row, ri) => {
+      if (ri === 0) return row;
+      const newRow = [...row];
+      for (const ci of fillIndices) {
+        const val = row[ci]?.trim();
+        if (!val) {
+          if (lastVals[ci]) newRow[ci] = lastVals[ci];
+        } else {
+          lastVals[ci] = val;
+        }
+      }
+      return newRow;
+    });
+  }
+
+  for (let ri = 1; ri < resolvedData.length; ri++) {
+    const row = resolvedData[ri];
+
+    // Teacher: skip section-header rows (ครูในโรงเรียน, อาจารย์นอก)
+    if (tabName === 'teacher') {
+      const idIdx = headerIndex.get('teacher_id');
+      if (idIdx !== undefined && isSkipRow(row[idIdx]?.trim() ?? '')) continue;
+    }
+
+    // Curriculum: skip grade-header rows (ม.1–ม.6) and fully empty rows
+    if (tabName === 'curriculum') {
+      const firstCell = row[0]?.trim() ?? '';
+      if (isGradeHeader(firstCell) || row.every((c) => !c?.trim())) continue;
+    }
+
     const parsed: Record<string, string> = {};
     headers.forEach((h, ci) => {
       parsed[h] = row[ci]?.trim() ?? '';

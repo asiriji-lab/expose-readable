@@ -1,6 +1,6 @@
 import { TabData, ValidationError, ValidationResult } from '../types';
 
-const REQUIRED_HEADERS = ['ห้องทั้งหมด', 'หมายเหตุ', 'ประเภท'];
+const REQUIRED_HEADERS = ['ห้องทั้งหมด'];
 
 /**
  * RM-1: Required columns must be present.
@@ -36,6 +36,7 @@ export function validateRoom(data: TabData): ValidationResult {
   }
 
   const roomIdx = headers.indexOf('ห้องทั้งหมด');
+  const noteIdx = headers.indexOf('หมายเหตุ');
   const parsedRows: Record<string, string>[] = [];
   const seen = new Map<string, number>(); // roomId → first row number
 
@@ -64,6 +65,10 @@ export function validateRoom(data: TabData): ValidationResult {
       });
     } else {
       seen.set(roomId, rowNum);
+    }
+
+    if (noteIdx !== -1 && !(data[r][noteIdx] ?? '').trim()) {
+      warnings.push({ row: rowNum, col: noteIdx + 1, column: 'หมายเหตุ', value: '', message: `Row ${rowNum}, 'หมายเหตุ': ไม่ได้ระบุหมายเหตุ`, severity: 'warning' });
     }
 
     const rowMap: Record<string, string> = {};

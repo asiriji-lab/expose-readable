@@ -87,7 +87,9 @@ export const TAB_ALIASES: Record<TabName, string[]> = {
 
 /** Parse a raw CSV string into a 2-D string array using papaparse. */
 export function parseCSVText(text: string): string[][] {
-  const result = Papa.parse<string[]>(text, { skipEmptyLines: true });
+  // Strip UTF-8 BOM (\uFEFF) that Google Sheets CSV export prepends — it corrupts the first header
+  const cleaned = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+  const result = Papa.parse<string[]>(cleaned, { skipEmptyLines: true });
   return result.data as string[][];
 }
 
