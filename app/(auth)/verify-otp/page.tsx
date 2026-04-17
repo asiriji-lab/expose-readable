@@ -1,4 +1,6 @@
-﻿import React, { Suspense } from 'react';
+﻿export const dynamic = 'force-dynamic';
+
+import React, { Suspense } from 'react';
 import VerifyBox from './components/VerifyBox';
 
 const VerifyOTPPage: React.FC = () => {

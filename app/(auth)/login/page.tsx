@@ -1,4 +1,6 @@
-﻿import React from 'react';
+﻿export const dynamic = 'force-dynamic';
+
+import React from 'react';
 import Box from './components/box';
 
 const App: React.FC = () => {

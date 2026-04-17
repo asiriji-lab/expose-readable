@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { BACKEND_SCHEDULE } from '@/lib/api/backend';
 
-const SCHEDULER_BASE = 'https://dev.winscloud.net/api/v1/schedule';
+const SCHEDULER_BASE = BACKEND_SCHEDULE;
 
 /**
  * GET /api/schedule/status?job_id=XXX

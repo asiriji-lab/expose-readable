@@ -11,75 +11,105 @@ import ScheduleDndProvider from './_components/ScheduleDndProvider';
 import EditOverlay from './_components/EditOverlay';
 import FilterDropdown from './_components/FilterDropdown';
 import AdminHeader from '../_components/AdminHeader';
-import {
-    generateFullScheduleDataset,
-    TEACHER_CODES,
-    CLASS_CODES,
-    ROOM_CODES,
-    DragPayload,
-} from './_utils/dummyData';
+import { DragPayload } from './_utils/dummyData';
 import { computeOverlayData } from './_utils/overlayUtils';
 import { moveItem, hasConflict, removeItemFromDataset, autoEjectConflicts } from './_utils/scheduleLogic';
 import { FullDataset, ScheduleItem, ScheduleData, ViewMode, OverlayCellData, EntityType } from './_types/schedule.types';
 import OverlayInspectPopover from './_components/OverlayInspectPopover';
 import BandHoverTooltip from './_components/BandHoverTooltip';
+import { transformToFullDataset, getTeacherCodes, getClassCodes, getRoomCodes, emptyDataset, BackendSchedule } from '@/lib/api/transform';
 
 export default function SchedulePage() {
     const router = useRouter();
     const [viewMode, setViewMode] = useState<ViewMode>('all');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // ─── Filter state ──────────────────────────────────────────────────────
-    const [tCode, setTCode] = useState(TEACHER_CODES[0]);
-    const [classCode, setClassCode] = useState(CLASS_CODES[0]);
-    const [room, setRoom] = useState(ROOM_CODES[0]);
+    // ─── Schedule metadata ────────────────────────────────────────────────────
+    const [jobName, setJobName] = useState('ตารางสอน');
+    const [loadError, setLoadError] = useState<string | null>(null);
 
-    // ─── Active entity — tracks which filter was last interacted with ────
-    const [activeEntity, setActiveEntity] = useState<EntityType>('teacher');
-    const handleTCodeChange = (val: string) => { setTCode(val); setActiveEntity('teacher'); };
-    const handleClassChange = (val: string) => { setClassCode(val); setActiveEntity('class'); };
-    const handleRoomChange = (val: string) => { setRoom(val); setActiveEntity('room'); };
-
-    // ─── Full dataset ──────────────────────────────────────────────────────
+    // ─── Full dataset ─────────────────────────────────────────────────────────
     const [dataset, setDataset] = useState<FullDataset | null>(null);
 
+    // ─── Derived filter options (from real dataset, not hard-coded) ───────────
+    const teacherCodes = useMemo(() => dataset ? getTeacherCodes(dataset) : [], [dataset]);
+    const classCodes   = useMemo(() => dataset ? getClassCodes(dataset)   : [], [dataset]);
+    const roomCodes    = useMemo(() => dataset ? getRoomCodes(dataset)    : [], [dataset]);
+
+    // ─── Filter state ─────────────────────────────────────────────────────────
+    const [tCode, setTCode]         = useState('');
+    const [classCode, setClassCode] = useState('');
+    const [room, setRoom]           = useState('');
+
+    // Keep filter selections valid as dataset changes.
     useEffect(() => {
-        const { dataset: clean } = autoEjectConflicts(generateFullScheduleDataset());
-        setDataset(clean);
+        if (teacherCodes.length) setTCode(c => teacherCodes.includes(c) ? c : teacherCodes[0]);
+    }, [teacherCodes]);
+    useEffect(() => {
+        if (classCodes.length)   setClassCode(c => classCodes.includes(c) ? c : classCodes[0]);
+    }, [classCodes]);
+    useEffect(() => {
+        if (roomCodes.length)    setRoom(r => roomCodes.includes(r) ? r : roomCodes[0]);
+    }, [roomCodes]);
+
+    // ─── Active entity ────────────────────────────────────────────────────────
+    const [activeEntity, setActiveEntity] = useState<EntityType>('teacher');
+    const handleTCodeChange   = (val: string) => { setTCode(val);      setActiveEntity('teacher'); };
+    const handleClassChange   = (val: string) => { setClassCode(val);  setActiveEntity('class'); };
+    const handleRoomChange    = (val: string) => { setRoom(val);       setActiveEntity('room'); };
+
+    // ─── Load schedule on mount ───────────────────────────────────────────────
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const jobId  = params.get('job_id');
+
+        if (jobId) {
+            // Load a specific completed job by ID.
+            fetch(`/api/schedule/result?job_id=${encodeURIComponent(jobId)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+                    if (data.schedule) {
+                        const transformed = transformToFullDataset(data.schedule as BackendSchedule);
+                        const { dataset: clean } = autoEjectConflicts(transformed);
+                        setDataset(clean);
+                        setJobName(data.job_name || 'ตารางสอน');
+                    } else {
+                        setDataset(emptyDataset());
+                    }
+                })
+                .catch(err => {
+                    console.error('[SchedulePage] fetch result:', err);
+                    setLoadError(String(err.message ?? err));
+                    setDataset(emptyDataset());
+                });
+        } else {
+            // No job selected — start with an empty editable canvas.
+            setDataset(emptyDataset());
+        }
     }, []);
 
-    // ─── Derived schedules ─────────────────────────────────────────────────
-    const teacherSchedule = useMemo(
-        () => dataset?.teachers[tCode] ?? null,
-        [dataset, tCode]
-    );
-    const classSchedule = useMemo(
-        () => dataset?.classes[classCode] ?? null,
-        [dataset, classCode]
-    );
-    const roomSchedule = useMemo(
-        () => dataset?.rooms[room] ?? null,
-        [dataset, room]
-    );
+    // ─── Derived schedules ────────────────────────────────────────────────────
+    const teacherSchedule = useMemo(() => dataset?.teachers[tCode] ?? null, [dataset, tCode]);
+    const classSchedule   = useMemo(() => dataset?.classes[classCode] ?? null, [dataset, classCode]);
+    const roomSchedule    = useMemo(() => dataset?.rooms[room] ?? null, [dataset, room]);
 
     const activeSchedule = useMemo<ScheduleData>(() => {
         if (viewMode === 'teacher') return teacherSchedule ?? {};
-        if (viewMode === 'class')   return classSchedule ?? {};
-        if (viewMode === 'room')    return roomSchedule ?? {};
+        if (viewMode === 'class')   return classSchedule   ?? {};
+        if (viewMode === 'room')    return roomSchedule    ?? {};
         return {};
     }, [viewMode, teacherSchedule, classSchedule, roomSchedule]);
 
     const overlayData = useMemo(
         () => computeOverlayData(teacherSchedule, classSchedule, roomSchedule, dataset),
-        [teacherSchedule, classSchedule, roomSchedule, dataset]
+        [teacherSchedule, classSchedule, roomSchedule, dataset],
     );
 
-
-
-    // ─── Actions menu ──────────────────────────────────────────────────────
+    // ─── Actions menu ─────────────────────────────────────────────────────────
     const [actionsOpen, setActionsOpen] = useState(false);
 
-    // ─── Import / Export ───────────────────────────────────────────────────
+    // ─── Import / Export ──────────────────────────────────────────────────────
     const handleImportClick = () => fileInputRef.current?.click();
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,6 +126,14 @@ export default function SchedulePage() {
             if (!response.ok) throw new Error('Failed to import JSON');
             const result = await response.json();
             console.log('Import Successful:', result.data);
+            
+            // Post the uploaded output into the output page UI
+            const payload = result.data.schedule ? result.data.schedule : result.data;
+            const transformed = transformToFullDataset(payload as BackendSchedule);
+            const { dataset: clean } = autoEjectConflicts(transformed);
+            setDataset(clean);
+            setJobName(payload.job_name || 'Imported Schedule');
+            
             alert('JSON imported successfully!');
         } catch (e) {
             console.error('Import error:', e);
@@ -110,8 +148,8 @@ export default function SchedulePage() {
             const exportData = {
                 config: { academic_year: '2026', semester: 1 },
                 teachers: dataset?.teachers ?? {},
-                classes: dataset?.classes ?? {},
-                rooms: dataset?.rooms ?? {},
+                classes:  dataset?.classes  ?? {},
+                rooms:    dataset?.rooms    ?? {},
             };
             const response = await fetch('/api/schedule/export', {
                 method: 'POST',
@@ -134,77 +172,73 @@ export default function SchedulePage() {
         }
     };
 
-    // ─── Grid drag-drop ────────────────────────────────────────────────────
+    // ─── Delete job ───────────────────────────────────────────────────────────
+    const handleDeleteJob = async () => {
+        const params = new URLSearchParams(window.location.search);
+        const jobId  = params.get('job_id');
+        if (!jobId) return;
+        if (!confirm('Delete this schedule? This cannot be undone.')) return;
+        try {
+            await fetch(`/api/schedule/delete?job_id=${encodeURIComponent(jobId)}`, { method: 'DELETE' });
+            router.push('/dashboard');
+        } catch (e) {
+            console.error('Delete error:', e);
+            alert('Failed to delete schedule.');
+        }
+    };
+
+    // ─── Grid drag-drop ───────────────────────────────────────────────────────
     const handleGridDrop = (targetDay: string, targetSlot: number, payload: DragPayload) => {
         const { source, item, day: sourceDay, slot: sourceSlot } = payload;
-
         if (viewMode === 'all') {
             setDataset(prev => {
                 if (!prev) return prev;
                 const { dataset: newDataset } = moveItem(
-                    prev,
-                    item,
-                    targetDay,
-                    targetSlot,
-                    source === 'GRID' ? sourceDay : undefined,
+                    prev, item, targetDay, targetSlot,
+                    source === 'GRID' ? sourceDay  : undefined,
                     source === 'GRID' ? sourceSlot : undefined,
                 );
                 return newDataset;
             });
-            return;
         }
-
-        console.warn('handleGridDrop called in individual view mode — ignored');
     };
 
     const handleUnschedule = (item: ScheduleItem, day: string, slot: number) => {
-        setDataset(prev => {
-            if (!prev) return prev;
-            return removeItemFromDataset(prev, item, day, slot);
-        });
+        setDataset(prev => prev ? removeItemFromDataset(prev, item, day, slot) : prev);
     };
 
-    // handleSidebarDrop: called when a GRID card is dropped on the sidebar dropzone
     const handleSidebarDrop = (payload: DragPayload) => {
         const { source, item, day: sourceDay, slot: sourceSlot } = payload;
         if (source !== 'GRID' || !sourceDay || sourceSlot === undefined) return;
         handleUnschedule(item, sourceDay, sourceSlot);
     };
 
-    // ─── Conflict check (View All) ──────────────────────────────────────
     const checkOverlayConflict = useCallback(
         (targetDay: string, targetSlot: number, payload: DragPayload): boolean => {
             if (!dataset || viewMode !== 'all') return false;
             const { item, day: sourceDay, slot: sourceSlot, source } = payload;
             return hasConflict(
-                dataset,
-                targetDay,
-                targetSlot,
-                item,
-                source === 'GRID' ? sourceDay : undefined,
+                dataset, targetDay, targetSlot, item,
+                source === 'GRID' ? sourceDay  : undefined,
                 source === 'GRID' ? sourceSlot : undefined,
             );
         },
-        [dataset, viewMode]
+        [dataset, viewMode],
     );
 
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingParams, setEditingParams] = useState<{ day: string; slot: number } | null>(null);
-    const [editingItem, setEditingItem] = useState<ScheduleItem | null>(null);
+    const [isModalOpen, setIsModalOpen]         = useState(false);
+    const [editingParams, setEditingParams]     = useState<{ day: string; slot: number } | null>(null);
+    const [editingItem, setEditingItem]         = useState<ScheduleItem | null>(null);
 
-    // ─── Hover tooltip for busy bands ──────────────────────────────────
+    // ─── Hover tooltip ────────────────────────────────────────────────────────
     const [hoverTooltip, setHoverTooltip] = useState<{
-        item: ScheduleItem;
-        entityType: EntityType;
-        rect: DOMRect;
+        item: ScheduleItem; entityType: EntityType; rect: DOMRect;
     } | null>(null);
     const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const handleBandHover = useCallback((entityType: EntityType, rect: DOMRect, item: ScheduleItem) => {
         if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-        hoverTimeoutRef.current = setTimeout(() => {
-            setHoverTooltip({ item, entityType, rect });
-        }, 150);
+        hoverTimeoutRef.current = setTimeout(() => setHoverTooltip({ item, entityType, rect }), 150);
     }, []);
 
     const handleBandHoverEnd = useCallback(() => {
@@ -213,36 +247,29 @@ export default function SchedulePage() {
         setHoverTooltip(null);
     }, []);
 
-    // bandInspect: set when any occupied band is clicked in View All
     const [bandInspect, setBandInspect] = useState<{
-        day: string;
-        slot: number;
-        entityType: EntityType;
-        data: OverlayCellData;
+        day: string; slot: number; entityType: EntityType; data: OverlayCellData;
     } | null>(null);
 
     const handleCellClick = (day: string, slot: number) => {
-        if (viewMode !== 'all') return; // individual views are read-only
+        if (viewMode !== 'all') return;
         const cellData = overlayData?.[day]?.[slot];
         if (cellData?.allFree) {
             setEditingParams({ day, slot });
             setEditingItem(null);
             setIsModalOpen(true);
         }
-        // Non-free cells are handled by band clicks
     };
 
-    // Called when any colored band in View All is clicked
     const handleBandClick = (day: string, slot: number, entityType: EntityType, data: OverlayCellData) => {
-        handleBandHoverEnd(); // dismiss hover tooltip
+        handleBandHoverEnd();
         const item = entityType === 'teacher' ? data.teacher
                    : entityType === 'class'   ? data.class
                    : data.room;
-        if (!item) return; // empty band — nothing to show
+        if (!item) return;
         setBandInspect({ day, slot, entityType, data });
     };
 
-    // Edit slot from band inspect — only available when teacher band was clicked
     const handleBandEdit = () => {
         if (!bandInspect) return;
         const { day, slot, data } = bandInspect;
@@ -256,24 +283,20 @@ export default function SchedulePage() {
         if (!editingParams) return;
         const { day, slot } = editingParams;
         const newItem: ScheduleItem = {
-            teacher: data.teacher ?? '',
-            teacherName: data.teacherName ?? '',
-            classCode: data.classCode ?? '',
-            room: data.room ?? '',
-            roomName: data.roomName ?? '',
-            subjectCode: data.subjectCode ?? '',
-            subject: data.subject ?? '',
-            variant: data.variant ?? 'green',
+            teacher:      data.teacher      ?? '',
+            teacherName:  data.teacherName  ?? '',
+            classCode:    data.classCode    ?? '',
+            room:         data.room         ?? '',
+            roomName:     data.roomName     ?? '',
+            subjectCode:  data.subjectCode  ?? '',
+            subject:      data.subject      ?? '',
+            variant:      data.variant      ?? 'green',
         };
         setDataset(prev => {
             if (!prev) return prev;
-            // Use moveItem to write to all 3 entity maps consistently
-            // First remove old item at this slot if exists
             const currentItem = activeSchedule[day]?.[slot];
             let current: FullDataset = prev;
-            if (currentItem) {
-                current = removeItemFromDataset(current, currentItem, day, slot);
-            }
+            if (currentItem) current = removeItemFromDataset(current, currentItem, day, slot);
             const { dataset: updated } = moveItem(current, newItem, day, slot);
             return updated;
         });
@@ -300,23 +323,25 @@ export default function SchedulePage() {
                         </button>
                         <div className="h-5 w-px bg-border hidden sm:block" />
                         <div className="flex items-center gap-2 min-w-0">
-                            <h2 className="text-sm font-bold text-foreground truncate">Main Schedule 1/2025</h2>
-                            <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs font-semibold shrink-0">Draft</span>
-                            <span className="text-xs text-foreground-muted hidden md:inline shrink-0">Semester 1/2025</span>
+                            <h2 className="text-sm font-bold text-foreground truncate">{jobName}</h2>
+                            {loadError && (
+                                <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-semibold shrink-0" title={loadError}>
+                                    Load error
+                                </span>
+                            )}
                         </div>
                     </div>
 
-                    {/* Right: Inline filter (individual views) + ViewToggle + Publish + Actions */}
+                    {/* Right: Inline filter + ViewToggle + Publish + Actions */}
                     <div className="flex items-center gap-2 shrink-0">
-                        {/* Inline filter for individual views — avoids a separate filter bar row */}
-                        {viewMode === 'teacher' && (
-                            <FilterDropdown label="T. code" value={tCode} options={TEACHER_CODES} onChange={handleTCodeChange} labelClassName="text-primary font-semibold w-14" />
+                        {viewMode === 'teacher' && teacherCodes.length > 0 && (
+                            <FilterDropdown label="T. code" value={tCode} options={teacherCodes} onChange={handleTCodeChange} labelClassName="text-primary font-semibold w-14" />
                         )}
-                        {viewMode === 'class' && (
-                            <FilterDropdown label="Class" value={classCode} options={CLASS_CODES} onChange={handleClassChange} labelClassName="text-primary font-semibold w-14" />
+                        {viewMode === 'class' && classCodes.length > 0 && (
+                            <FilterDropdown label="Class" value={classCode} options={classCodes} onChange={handleClassChange} labelClassName="text-primary font-semibold w-14" />
                         )}
-                        {viewMode === 'room' && (
-                            <FilterDropdown label="Room" value={room} options={ROOM_CODES} onChange={handleRoomChange} labelClassName="text-primary font-semibold w-14" />
+                        {viewMode === 'room' && roomCodes.length > 0 && (
+                            <FilterDropdown label="Room" value={room} options={roomCodes} onChange={handleRoomChange} labelClassName="text-primary font-semibold w-14" />
                         )}
                         {viewMode !== 'all' && <div className="h-5 w-px bg-border hidden sm:block" />}
                         <ViewModeToggle activeMode={viewMode} onChange={setViewMode} />
@@ -359,7 +384,7 @@ export default function SchedulePage() {
                                             <Sparkles className="w-4 h-4" /> AI Shuffle
                                         </button>
                                         <div className="my-1 border-t border-border" />
-                                        <button className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                                        <button onClick={() => { handleDeleteJob(); setActionsOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
                                             <Trash2 className="w-4 h-4" /> Delete Schedule
                                         </button>
                                     </div>
@@ -370,31 +395,38 @@ export default function SchedulePage() {
                 </div>
             </header>
 
-            {/* ── Tier 2: Filter bar (View All only — individual views use inline filter in header) ── */}
+            {/* ── Tier 2: Filter bar (View All only) ── */}
             {viewMode === 'all' && (
                 <div className="bg-surface border-b border-border px-4 py-2.5">
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                        <FilterDropdown
-                            label="T. code"
-                            value={tCode}
-                            options={TEACHER_CODES}
-                            onChange={handleTCodeChange}
-                            labelClassName={activeEntity === 'teacher' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
-                        />
-                        <FilterDropdown
-                            label="Class"
-                            value={classCode}
-                            options={CLASS_CODES}
-                            onChange={handleClassChange}
-                            labelClassName={activeEntity === 'class' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
-                        />
-                        <FilterDropdown
-                            label="Room"
-                            value={room}
-                            options={ROOM_CODES}
-                            onChange={handleRoomChange}
-                            labelClassName={activeEntity === 'room' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
-                        />
+                        {teacherCodes.length > 0 && (
+                            <FilterDropdown
+                                label="T. code"
+                                value={tCode}
+                                options={teacherCodes}
+                                onChange={handleTCodeChange}
+                                labelClassName={activeEntity === 'teacher' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
+                            />
+                        )}
+                        {classCodes.length > 0 && (
+                            <FilterDropdown
+                                label="Class"
+                                value={classCode}
+                                options={classCodes}
+                                onChange={handleClassChange}
+                                labelClassName={activeEntity === 'class' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
+                            />
+                        )}
+                        {roomCodes.length > 0 && (
+                            <FilterDropdown
+                                label="Room"
+                                value={room}
+                                options={roomCodes}
+                                onChange={handleRoomChange}
+                                labelClassName={activeEntity === 'room' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
+                            />
+                        )}
+                        {!dataset && <span className="text-xs text-foreground-muted">กำลังโหลดข้อมูล...</span>}
                     </div>
                 </div>
             )}
