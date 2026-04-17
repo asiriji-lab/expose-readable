@@ -1,0 +1,239 @@
+{
+  "main": {
+    "id": "874e5a68c24eab10",
+    "type": "split",
+    "children": [
+      {
+        "id": "8b8612b8311d1522",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "c2d75a100f462288",
+            "type": "leaf",
+            "state": {
+              "type": "image",
+              "state": {
+                "file": "public/owl-logo.svg"
+              },
+              "icon": "lucide-image",
+              "title": "owl-logo"
+            }
+          },
+          {
+            "id": "cc664ba8a00bb4de",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "how do i can deploy appscript in google sheet.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "how do i can deploy appscript in google sheet"
+            }
+          }
+        ],
+        "currentTab": 1
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "27023ec590bc4e9e",
+    "type": "split",
+    "children": [
+      {
+        "id": "cb4f35560220ac4b",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "413c55d10c8054f9",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "88b32b3f833d2e8b",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "84990e3fd325e676",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "d8e431903c87b26b",
+    "type": "split",
+    "children": [
+      {
+        "id": "fb28dfe728dc6888",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "1bca3cf39109af1b",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "see/VIEW_PAGES_SPEC.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for VIEW_PAGES_SPEC"
+            }
+          },
+          {
+            "id": "27973623171e4a54",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "see/VIEW_PAGES_SPEC.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from VIEW_PAGES_SPEC"
+            }
+          },
+          {
+            "id": "59e6a9caddf81827",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "cd24dc49874de7b9",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "10a28ca8c3928ff6",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "see/VIEW_PAGES_SPEC.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of VIEW_PAGES_SPEC"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "cc664ba8a00bb4de",
+  "lastOpenFiles": [
+    "moonlit-poetry-491311-r2-a6a75a6f3b78.json",
+    "app/api/sheets/copy/route.ts",
+    "app/api/sheets/copy",
+    "tsconfig.tsbuildinfo",
+    "node_modules/googleapis/build/src/apis/vault/v1.d.ts",
+    "node_modules/google-auth-library/package.json",
+    "node_modules/extend/README.md",
+    "node_modules/extend/LICENSE",
+    "node_modules/googleapis-common/build/src/util.d.ts",
+    "node_modules/googleapis-common/build/src/util.js",
+    "node_modules/googleapis-common/build/src/schema.js",
+    "node_modules/googleapis-common/build/src/schema.d.ts",
+    "node_modules/url-template/uritemplate-test/README.md",
+    "node_modules/base64-js/README.md",
+    "appscript/SETUP.md",
+    "session_summary.md",
+    "how do i can deploy appscript in google sheet.md",
+    "local_idea/large_design_task.md",
+    "node_modules/wsl-utils/readme.md",
+    "node_modules/web-streams-polyfill/README.md",
+    "node_modules/until-async/README.md",
+    "node_modules/unicorn-magic/readme.md",
+    "node_modules/ts-morph/readme.md",
+    "node_modules/tabbable/SECURITY.md",
+    "node_modules/tabbable/README.md",
+    "node_modules/tabbable/CHANGELOG.md",
+    "node_modules/strip-final-newline/readme.md",
+    "node_modules/stdin-discarder/readme.md",
+    "node_modules/sisteransi/readme.md",
+    "node_modules/setprototypeof/README.md",
+    "node_modules/run-applescript/readme.md",
+    "node_modules/rettime/README.md",
+    "node_modules/rettime/LICENSE.md",
+    "node_modules/restore-cursor/readme.md",
+    "node_modules/reselect/README.md",
+    "node_modules/raw-body/README.md",
+    "public/owl-logo.svg"
+  ]
+}

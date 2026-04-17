@@ -30,7 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# local env files
+.env*.local
+.env
 .env*
 
 # vercel
@@ -39,3 +41,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# service account keys — NEVER commit
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!components.json
+!export-payload.json
+
+# agent working files — raw data and Python scripts are local-only
+.agent/solver_something/context/raw/
+.agent/solver_something/cleaned/
+.agent/solver_something/*.py
+.agent/solver_something/.venv/
