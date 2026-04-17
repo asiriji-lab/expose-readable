@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { SheetData, TabName } from '../../../validators/types';
-import { ALL_TAB_NAMES, fetchAllSheetTabs } from '../_utils/csvHelpers';
+import { ALL_TAB_NAMES, fetchPublicSheetTab } from '../_utils/csvHelpers';
 
 export type FetchStatus = 'idle' | 'fetching' | 'success' | 'error';
 
@@ -28,7 +28,12 @@ export function useGoogleSheet(): UseGoogleSheetReturn {
     setFetchError(null);
 
     try {
-      const { data, missingTabs } = await fetchAllSheetTabs(spreadsheetId);
+      const data: SheetData = {};
+      for (const tab of ALL_TAB_NAMES) {
+        const rows = await fetchPublicSheetTab(spreadsheetId, tab);
+        if (rows && rows.length > 0) data[tab] = rows;
+      }
+      const missingTabs = ALL_TAB_NAMES.filter((t) => !data[t]);
       setSheetData(data);
       setMissingTabs(missingTabs);
       setFetchStatus('success');
