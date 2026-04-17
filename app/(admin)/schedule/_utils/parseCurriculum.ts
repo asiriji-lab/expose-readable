@@ -171,7 +171,7 @@ export function parseCurriculumCSV(csvText: string): ParseResult {
         const subjectCode = fields[0] || (isContinuation ? lastSubjectCode : fields[1] || '');
         const subjectName = fields[1] || (isContinuation ? lastSubjectName : '');
 
-        if (!subjectCode && !subjectName) {
+        if ((!subjectCode && !subjectName) || fields.every(f => !f.trim())) {
             // Truly empty row
             continue;
         }

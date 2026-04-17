@@ -13,6 +13,7 @@ const MOCK_MESSAGES = [
 ];
 
 import { ScheduleFormData } from '../../_types';
+import { submitScheduleJob, getJobStatus } from '@/api/schedule';
 
 export function Step10_Generate({
   data,
@@ -29,48 +30,69 @@ export function Step10_Generate({
   const [status, setStatus] = useState<string>("");
 
   const handleGenerate = async () => {
-    // First, try to start generation (which includes validation)
-    const success = await onGenerate();
-
-    // If validation failed (returned false), stop here
-    if (!success) {
+    // Validate that we have the absolutely required files
+    if (!data.curriculumFile || !data.roomFile) {
+      setStatus("Error: Curriculum and Room files are required.");
       return;
     }
 
-    // If validation passed, proceed with the progress animation
     setIsGenerating(true);
     setProgress(0);
-    setStatus(MOCK_MESSAGES[0].text);
+    setStatus("Submitting data to backend...");
 
-    // Create a promise that resolves when the animation is done
-    const animationPromise = new Promise<void>((resolve) => {
-      let currentProgress = 0;
-      const interval = setInterval(() => {
-        currentProgress += 1; // Increment by 1% every tick
+    try {
+      // 1. Submit the job
+      const res = await submitScheduleJob({
+        curriculum: data.curriculumFile,
+        room: data.roomFile,
+        elective: data.electiveFile || undefined,
+        teacher: data.teacherFile || undefined,
+        period: data.periodFile || undefined,
+        student: data.studentFile || undefined,
+        preplace: data.constraintFile || undefined, // Preplace maps to constraint
+        scout: data.scoutFile || undefined,
+        jobName: data.scheduleName || 'Generated Schedule',
+        academicYear: data.year ? String(data.year) : undefined,
+        semester: data.semester === '1' || data.semester === '2' ? Number(data.semester) as 1|2 : undefined,
+      });
 
-        // Update status message based on progress
-        const currentMessage = MOCK_MESSAGES.slice().reverse().find(m => currentProgress >= m.threshold);
+      const jobId = res.job_id;
+      if (!jobId) throw new Error("No job ID received");
+
+      // 2. Poll for status
+      let isDone = false;
+      while (!isDone) {
+        await new Promise(r => setTimeout(r, 2000));
+        const statusRes = await getJobStatus(jobId);
+        
+        const prog = statusRes.progress || 0;
+        setProgress(prog);
+
+        const currentMessage = MOCK_MESSAGES.slice().reverse().find(m => prog >= m.threshold);
         if (currentMessage) {
           setStatus(currentMessage.text);
         }
 
-        setProgress(currentProgress);
-
-        if (currentProgress >= 100) {
-          clearInterval(interval);
-          resolve();
+        if (statusRes.status === 'completed') {
+          isDone = true;
+          setProgress(100);
+          setStatus("Schedule generated successfully!");
+        } else if (statusRes.status === 'failed') {
+          throw new Error(statusRes.error || "Generation failed on server");
         }
-      }, 50); // 50ms * 100 = 5000ms total duration (5 seconds)
-    });
+      }
 
-    await animationPromise;
+      // 3. Redirect with Job ID!
+      setTimeout(() => {
+        setIsGenerating(false);
+        router.push(`/schedule?job_id=${encodeURIComponent(jobId)}`);
+      }, 1000);
 
-    setStatus("Schedule generated successfully!");
-
-    setTimeout(() => {
+    } catch (err: any) {
+      console.error(err);
+      setStatus(`Error: ${err.message || 'Unknown error occurred'}`);
       setIsGenerating(false);
-      router.push('/schedule');
-    }, 1500);
+    }
   };
 
   return (

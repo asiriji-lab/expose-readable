@@ -16,6 +16,7 @@ interface GenerationStatusProps {
   sessionId: string;
   jobId: string | null;
   downloadUrl: string | null;
+  errorMessage?: string | null;
   onCompleted: () => void;
   onFailed: (error?: string) => void;
 }
@@ -30,6 +31,7 @@ const STATUS_LABEL: Record<string, string> = {
 export default function GenerationStatus({
   state,
   jobId,
+  errorMessage,
   onCompleted,
   onFailed,
 }: GenerationStatusProps) {
@@ -81,7 +83,7 @@ export default function GenerationStatus({
           <XCircle size={40} className="text-danger mx-auto" />
           <p className="text-lg font-semibold text-danger">สร้างตารางไม่สำเร็จ</p>
           <p className="text-sm text-foreground-muted">
-            {job?.error || error || 'ตรวจสอบข้อมูลและลองอีกครั้ง'}
+            {errorMessage || job?.error || error || 'ตรวจสอบข้อมูลและลองอีกครั้ง'}
           </p>
         </CardContent>
       </Card>
