@@ -39,19 +39,18 @@ class GeneticAlgorithm:
     Optimized GA for school timetable completion.
 
     Improvements over baseline:
-      1. Greedy constructive initialization
-      2. Teacher-grouped crossover
-      3. Targeted single-block mutation
-      4. Lower tournament size (default 3)
-      5. Stagnation restart-with-memory
-    """
+        1. Greedy constructive initialization
+        2. Teacher-grouped crossover
+        3. Targeted single-block mutation
+        4. Lower tournament size (default 3)
+        5. Stagnation restart-with-memory
+        """
 
     PENALTY_TEACHER_CONFLICT = 100
     PENALTY_STUDENT_CONFLICT = 100
-    PENALTY_ROOM_CONFLICT    = 50
+    PENALTY_ROOM_CONFLICT    = 75   # raised from 50 — double-booked room makes slot unusable
     PENALTY_BLOCK_VIOLATION  = 80   # raised from 30 — non-consecutive is not a cheap option
     PENALTY_PERIOD_COUNT     = 20
-    PENALTY_INVALID_ROOM     = 10
     PENALTY_SEPERATE_SLOT    = 100  # two lessons in same SEPERATE_SLOT group share a slot
     PENALTY_SUB_GROUP        = 100  # lessons in same SUB_GROUP group are NOT at the same slot
 
@@ -183,6 +182,24 @@ class GeneticAlgorithm:
         if self.room_list:
             return random.choice(self.room_list)
         return "NO_ROOM"
+
+    def _normalize_gene_room(self, lid: str, gene: List[Tuple[TimeSlot, str]]) -> List[Tuple[TimeSlot, str]]:
+        """
+        Ensure all periods of a lesson use the same room.
+        Called after block-level crossover which can mix rooms from different parents.
+        - Required-room lessons: re-pick from required_rooms list.
+        - Other lessons: inherit the room from the first assignment.
+        """
+        if not gene:
+            return gene
+        lesson = self.lesson_map.get(lid)
+        if not lesson:
+            return gene
+        if lesson.required_rooms:
+            room = random.choice(lesson.required_rooms)
+        else:
+            room = gene[0][1]
+        return [(ts, room) for ts, _ in gene]
 
     def _parse_fixed_period(self, fixed_period_str: str) -> List[Tuple[str, str]]:
         """
@@ -445,8 +462,6 @@ class GeneticAlgorithm:
                     student_slot[(cid, slot_key)] += 1
                 if room:
                     room_slot[(room, slot_key)] += 1
-                if room and self.room_list and room not in self.room_list:
-                    violations['invalid_room'] += 1
 
         for count in teacher_slot.values():
             if count > 1:
@@ -522,7 +537,6 @@ class GeneticAlgorithm:
             violations['room_conflict']    * self.PENALTY_ROOM_CONFLICT    +
             violations['block_violation']  * self.PENALTY_BLOCK_VIOLATION  +
             violations['period_count']     * self.PENALTY_PERIOD_COUNT     +
-            violations['invalid_room']     * self.PENALTY_INVALID_ROOM     +
             violations['seperate_slot']    * self.PENALTY_SEPERATE_SLOT    +
             violations['sub_group']        * self.PENALTY_SUB_GROUP
         )
@@ -607,6 +621,9 @@ class GeneticAlgorithm:
                     gene_c1, gene_c2 = self._mix_blocks(
                         p1.genes.get(lid, []), p2.genes.get(lid, []), lid
                     )
+                    # Normalize rooms: mixing blocks can produce inconsistent room assignments
+                    gene_c1 = self._normalize_gene_room(lid, gene_c1)
+                    gene_c2 = self._normalize_gene_room(lid, gene_c2)
                 else:
                     gene_c1 = list(src_c1.genes.get(lid, []))
                     gene_c2 = list(src_c2.genes.get(lid, []))
@@ -630,6 +647,9 @@ class GeneticAlgorithm:
                 gene_c1, gene_c2 = self._mix_blocks(
                     p1.genes.get(lid, []), p2.genes.get(lid, []), lid
                 )
+                # Normalize rooms: mixing blocks can produce inconsistent room assignments
+                gene_c1 = self._normalize_gene_room(lid, gene_c1)
+                gene_c2 = self._normalize_gene_room(lid, gene_c2)
             else:
                 take_from_p1 = random.random() < 0.5
                 gene_c1 = list((p1 if take_from_p1 else p2).genes.get(lid, []))
@@ -701,8 +721,11 @@ class GeneticAlgorithm:
 
             lid = lesson.lesson_id
 
-            # Fixed-period lessons: timeslot is locked — only room may change
+            # Fixed-period lessons: timeslot is locked — only room may change.
+            # Skip if only one required room — no alternative to switch to.
             if lid in self._fixed_slots:
+                if lesson.required_rooms and len(lesson.required_rooms) <= 1:
+                    continue
                 new_room = self._pick_room(lesson)
                 if lid in chromosome.genes:
                     chromosome.genes[lid] = [(ts, new_room) for ts, _ in chromosome.genes[lid]]
@@ -796,6 +819,9 @@ class GeneticAlgorithm:
 
             # ── room ─────────────────────────────────────────────────────────
             elif mutation_type == 'room':
+                # Skip if only one required room — nothing to switch to
+                if lesson.required_rooms and len(lesson.required_rooms) <= 1:
+                    continue
                 new_room = self._pick_room(lesson)
                 if lid in chromosome.genes:
                     chromosome.genes[lid] = [
@@ -805,8 +831,7 @@ class GeneticAlgorithm:
             # ── full_slot ────────────────────────────────────────────────────
             elif mutation_type == 'full_slot':
                 available = self._lesson_slots_cache[lid] or list(self.all_slots)
-                existing = chromosome.genes.get(lid, [])
-                room = existing[0][1] if existing else self._pick_room(lesson)
+                room = self._pick_room(lesson)
                 chromosome.genes[lid] = self._assign_blocks(lesson, available, room)
 
     # =========================================================================

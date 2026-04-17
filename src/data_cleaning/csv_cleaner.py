@@ -179,6 +179,17 @@ def clean_elective(
         
     print("\n--- Starting Elective Data Cleaning and Resolution ---")
 
+    # Drop section marker rows (e.g. "เสรีม.ต้น", "เสรีม.ปลาย") — they have no subject_name
+    before = len(df_elective)
+    df_elective = df_elective[
+        df_elective['subject_name'].apply(
+            lambda x: not (pd.isna(x) or str(x).strip() in ('', 'nan', 'None'))
+        )
+    ].copy()
+    dropped = before - len(df_elective)
+    if dropped:
+        print(f"  - Dropped {dropped} marker row(s) (no subject_name).")
+
     # Pre-process Lookups
     teacher_lookup = create_teacher_lookup(df_teacher)
     room_lookup = create_room_lookup(df_room) 

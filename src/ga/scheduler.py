@@ -209,6 +209,17 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
     feasibility_report = checker.check()
     log.info("  Feasibility: is_feasible=%s", feasibility_report.is_feasible)
 
+    if not feasibility_report.is_feasible:
+        stored_result = {
+            'job_id':      job_id,
+            'success':     False,
+            'error':       'Input data failed feasibility check — correct the errors above before running the scheduler.',
+            'feasibility': feasibility_report.to_dict(),
+        }
+        if job_manager:
+            job_manager.update_job_status(job_id, 'failed', result=stored_result)
+        return stored_result
+
     # ── Step 4: GA ────────────────────────────────────────────────────────────
     log.info("[STEP 4/5] Starting Genetic Algorithm …")
     if job_manager:

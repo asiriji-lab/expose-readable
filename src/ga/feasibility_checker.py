@@ -19,6 +19,7 @@ from src.preschedule.scheduleManager import ScheduleManager
 from .models import Lesson, WEEKDAYS
 from .data_loader import (
     _parse_block_pattern,
+    _parse_list_field,
     get_teaching_period_cols,
     build_lessons_from_manager,
     build_free_slots_per_entity,
@@ -152,6 +153,55 @@ class FeasibilityChecker:
             l.lesson_id: get_lesson_available_slots(l, self.free_slots, self.all_slots)
             for l in self.lessons
         }
+
+    # =========================================================================
+    # CHECK 0: Cross-sheet reference validation
+    # =========================================================================
+
+    def _check_cross_sheet_references(self, report: FeasibilityReport):
+        """
+        Validate that every ID referenced in the curriculum exists in its
+        master sheet. Detects typos and missing entries before the GA runs.
+
+        Validated fields:
+          - teacher  column → manager.teacher_grids keys
+          - room     column → manager.room_grids keys
+          - student_class column → manager.student_grids keys
+
+        Note: subject_id has no dedicated master sheet and is not validated.
+        """
+        df_curriculum = self.manager.get_sheet_data('curriculum')
+        if df_curriculum is None:
+            return
+
+        valid_teachers = set(self.manager.teacher_grids.keys())
+        valid_classes  = set(self.manager.student_grids.keys())
+        valid_rooms    = set(self.manager.room_grids.keys())
+
+        unknown_teachers: Set[str] = set()
+        unknown_classes:  Set[str] = set()
+        unknown_rooms:    Set[str] = set()
+
+        for _, row in df_curriculum.iterrows():
+            for tid in _parse_list_field(row.get('teacher')):
+                if valid_teachers and tid not in valid_teachers:
+                    unknown_teachers.add(tid)
+            for cid in _parse_list_field(row.get('student_class')):
+                if valid_classes and cid not in valid_classes:
+                    unknown_classes.add(cid)
+            for rid in _parse_list_field(row.get('room')):
+                if valid_rooms and rid not in valid_rooms:
+                    unknown_rooms.add(rid)
+
+        for tid in sorted(unknown_teachers):
+            report.add('ERROR', 'cross_sheet_reference', f"teacher:{tid}",
+                f"teacher ID '{tid}' in curriculum not found in teacher sheet")
+        for cid in sorted(unknown_classes):
+            report.add('ERROR', 'cross_sheet_reference', f"class:{cid}",
+                f"class ID '{cid}' in curriculum not found in student sheet")
+        for rid in sorted(unknown_rooms):
+            report.add('ERROR', 'cross_sheet_reference', f"room:{rid}",
+                f"room ID '{rid}' in curriculum not found in room sheet")
 
     # =========================================================================
     # CHECK 1: Entity capacity
@@ -329,6 +379,7 @@ class FeasibilityChecker:
 
         report = FeasibilityReport()
 
+        self._check_cross_sheet_references(report)
         self._check_entity_capacity(report)
         self._check_lesson_slots(report)
         self._check_block_structure(report)
