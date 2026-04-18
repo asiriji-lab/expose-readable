@@ -64,30 +64,56 @@ export default function SchedulePage() {
         const jobId  = params.get('job_id');
 
         if (jobId) {
-            // Load a specific completed job by ID.
-            fetch(`/api/schedule/result?job_id=${encodeURIComponent(jobId)}`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.error) throw new Error(data.error);
-                    if (data.schedule) {
-                        const transformed = transformToFullDataset(data.schedule as BackendSchedule);
+            const loadSchedule = async () => {
+                try {
+                    // ── 1. Check sessionStorage cache (populated by Step10_Generate) ──
+                    const cached = sessionStorage.getItem(`schedule_cache_${jobId}`);
+                    if (cached) {
+                        console.log('[SchedulePage] Loading from sessionStorage cache');
+                        const raw = JSON.parse(cached) as BackendSchedule;
+                        const transformed = transformToFullDataset(raw);
                         const { dataset: clean } = autoEjectConflicts(transformed);
                         setDataset(clean);
-                        setJobName(data.job_name || 'ตารางสอน');
+                        setJobName(raw.config?.academic_year || 'ตารางสอน');
+                        return;
+                    }
+
+                    // ── 2. Fetch directly from the backend API (same URL as submitScheduleJob) ──
+                    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dev.winscloud.net/api/v1';
+                    const res = await fetch(`${API_URL}/schedule/${encodeURIComponent(jobId)}/result`);
+                    const data = await res.json();
+
+                    if (!res.ok) throw new Error(data?.error ?? 'Backend error');
+
+                    // Backend returns { result, schedule } or the schedule directly
+                    const raw: BackendSchedule | null =
+                        data.schedule && data.schedule.teachers ? data.schedule :
+                        data.teachers                           ? data :
+                        null;
+
+                    if (raw) {
+                        const transformed = transformToFullDataset(raw);
+                        const { dataset: clean } = autoEjectConflicts(transformed);
+                        setDataset(clean);
+                        setJobName(data.job_name || raw.config?.academic_year || 'ตารางสอน');
                     } else {
+                        console.warn('[SchedulePage] Unexpected result shape:', data);
                         setDataset(emptyDataset());
                     }
-                })
-                .catch(err => {
+                } catch (err: any) {
                     console.error('[SchedulePage] fetch result:', err);
                     setLoadError(String(err.message ?? err));
                     setDataset(emptyDataset());
-                });
+                }
+            };
+
+            loadSchedule();
         } else {
             // No job selected — start with an empty editable canvas.
             setDataset(emptyDataset());
         }
     }, []);
+
 
     // ─── Derived schedules ────────────────────────────────────────────────────
     const teacherSchedule = useMemo(() => dataset?.teachers[tCode] ?? null, [dataset, tCode]);

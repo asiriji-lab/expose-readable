@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 const MOCK_MESSAGES = [
@@ -13,7 +13,7 @@ const MOCK_MESSAGES = [
 ];
 
 import { ScheduleFormData } from '../../_types';
-import { submitScheduleJob, getJobStatus } from '@/api/schedule';
+import { submitScheduleJob, getJobStatus, getJobResult } from '@/api/schedule';
 
 export function Step10_Generate({
   data,
@@ -82,11 +82,29 @@ export function Step10_Generate({
         }
       }
 
-      // 3. Redirect with Job ID!
+      // 3. Fetch the result JSON immediately and cache it in sessionStorage
+      //    so the schedule page can display it without a second backend round-trip.
+      setStatus("Loading schedule data...");
+      try {
+        const resultData = await getJobResult(jobId);
+        // Backend returns { result, schedule } — cache the schedule part.
+        const schedulePayload = (resultData as any).schedule ?? resultData;
+        sessionStorage.setItem(
+          `schedule_cache_${jobId}`,
+          JSON.stringify(schedulePayload)
+        );
+        console.log('[Step10] Schedule cached for job', jobId);
+      } catch (fetchErr) {
+        // Non-fatal — schedule page will fall back to its own fetch.
+        console.warn('[Step10] Could not pre-fetch result, schedule page will retry:', fetchErr);
+      }
+
+      // 4. Navigate to the schedule viewer
+      setStatus("Opening schedule...");
       setTimeout(() => {
         setIsGenerating(false);
         router.push(`/schedule?job_id=${encodeURIComponent(jobId)}`);
-      }, 1000);
+      }, 800);
 
     } catch (err: any) {
       console.error(err);

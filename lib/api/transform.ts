@@ -70,7 +70,26 @@ export interface BackendSchedule {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Deterministic colour per subject code — purely cosmetic. */
+/**
+ * Backend uses abbreviated day keys (MON, TUE, WED, THU, FRI, SAT, SUN).
+ * The timetable grid iterates full English names (Monday, Tuesday, …).
+ * This map normalises whatever the backend sends into the grid's expected format.
+ */
+const DAY_NORMALIZE: Record<string, string> = {
+  MON: 'Monday',  MONDAY:    'Monday',
+  TUE: 'Tuesday', TUESDAY:   'Tuesday',
+  WED: 'Wednesday', WEDNESDAY: 'Wednesday',
+  THU: 'Thursday', THURSDAY:  'Thursday',
+  FRI: 'Friday',  FRIDAY:    'Friday',
+  SAT: 'Saturday', SATURDAY:  'Saturday',
+  SUN: 'Sunday',  SUNDAY:    'Sunday',
+};
+
+function normalizeDay(raw: string): string {
+  return DAY_NORMALIZE[raw.toUpperCase()] ?? raw;
+}
+
+
 function subjectVariant(subjectId: string): 'green' | 'red' {
   let h = 0;
   for (let i = 0; i < subjectId.length; i++) h = (h * 31 + subjectId.charCodeAt(i)) | 0;
@@ -118,7 +137,7 @@ export function transformToFullDataset(schedule: BackendSchedule): FullDataset {
     teachers[tid] ??= {};
 
     for (const row of teacher.rows ?? []) {
-      const day = row.day;
+      const day = normalizeDay(row.day);   // MON → Monday, TUE → Tuesday, …
       teachers[tid][day] ??= {};
 
       for (const colEntry of row.columns ?? []) {
@@ -161,6 +180,7 @@ export function transformToFullDataset(schedule: BackendSchedule): FullDataset {
 
   return { teachers, classes, rooms };
 }
+
 
 // ---------------------------------------------------------------------------
 // Utility: derive sorted lists of entity codes from a FullDataset
