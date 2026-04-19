@@ -22,6 +22,8 @@ from src.ga.scheduler import run_scheduler_job
 from src.ga.job_manager import JobManager
 from src.utils.file_helpers import allowed_file, get_job_folder, create_zip_archive
 from src.db import database, models
+from src.db.database import db as _db
+from src.db.orm_models import Schedule as ScheduleModel
 
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
@@ -528,28 +530,38 @@ def delete_job(job_id):
             success: {type: boolean}
             message: {type: string}
       404:
-        description: Job not found
+        description: Job not found in file system or database
     """
     job_manager = JobManager(current_app.config['JOBS_FOLDER'])
     job = job_manager.get_job(job_id)
-    
-    if not job:
-        return jsonify({
-            "success": False,
-            "error": "Job not found"
-        }), 404
-    
-    # Delete job folder
-    job_folder = get_job_folder(current_app.config['JOBS_FOLDER'], job_id)
-    if os.path.exists(job_folder):
-        shutil.rmtree(job_folder)
-    
-    # Delete job record from file system
-    job_manager.delete_job(job_id)
 
-    # Delete from database if available
+    # Check DB directly (not via models._guard which silently returns None on error).
+    db_record = None
     if database.is_available():
-        models.delete_schedule(job_id)
+        try:
+            db_record = _db.session.get(ScheduleModel, uuid.UUID(job_id))
+        except Exception as e:
+            current_app.logger.error('[delete_job] DB lookup failed for %s: %s', job_id, e)
+
+    if not job and db_record is None:
+        return jsonify({"success": False, "error": "Job not found"}), 404
+
+    # Delete file-system job folder and record if they exist.
+    if job:
+        job_folder = get_job_folder(current_app.config['JOBS_FOLDER'], job_id)
+        if os.path.exists(job_folder):
+            shutil.rmtree(job_folder)
+        job_manager.delete_job(job_id)
+
+    # Delete DB record directly so errors are visible rather than swallowed.
+    if db_record is not None:
+        try:
+            _db.session.delete(db_record)
+            _db.session.commit()
+        except Exception as e:
+            _db.session.rollback()
+            current_app.logger.error('[delete_job] DB delete failed for %s: %s', job_id, e)
+            return jsonify({"success": False, "error": f"Database delete failed: {e}"}), 500
 
     return jsonify({
         "success": True,
