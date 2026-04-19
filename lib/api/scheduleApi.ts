@@ -1,4 +1,4 @@
-import type { JobDetail, ScheduleResult, SubmitJobResponse } from '../types/api';
+import type { JobDetail, ScheduleResult, SubmitJobResponse } from '../../types/api';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dev.winscloud.net/api/v1';
 
