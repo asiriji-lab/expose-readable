@@ -330,6 +330,31 @@ def get_user_schedules(user_id: str) -> List[Dict]:
 
 
 @_guard
+def update_schedule_job_name(schedule_id: str, job_name: str) -> None:
+    """Update the job_name of a schedule record."""
+    sched = db.session.get(Schedule, uuid.UUID(schedule_id))
+    if not sched:
+        return
+    sched.job_name = job_name
+    db.session.commit()
+
+
+@_guard
+def delete_schedule(schedule_id: str) -> bool:
+    """
+    Delete a schedule record from the database.
+
+    Returns True if deleted, False if not found.
+    """
+    sched = db.session.get(Schedule, uuid.UUID(schedule_id))
+    if not sched:
+        return False
+    db.session.delete(sched)
+    db.session.commit()
+    return True
+
+
+@_guard
 def get_org_schedules(org_id: str) -> List[Dict]:
     """
     Return all schedules belonging to a specific organization.

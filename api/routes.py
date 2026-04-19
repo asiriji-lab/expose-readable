@@ -407,6 +407,54 @@ def get_job_result(job_id):
     })
 
 
+@api_bp.route('/schedule/<job_id>/sync-status', methods=['POST'])
+def sync_job_status(job_id):
+    """
+    Sync a job's in-memory/filesystem status to the database.
+    Call this after frontend detects completion to ensure the DB reflects the
+    current state from the JobManager.
+    ---
+    tags:
+      - Scheduling
+    parameters:
+      - name: job_id
+        in: path
+        type: string
+        required: true
+    responses:
+      200:
+        description: Status synced
+      404:
+        description: Job not found
+    """
+    job_manager = JobManager(current_app.config['JOBS_FOLDER'])
+    job = job_manager.get_job(job_id)
+
+    if not job:
+        return jsonify({"success": False, "error": "Job not found"}), 404
+
+    if database.is_available():
+        status = job.get('status', 'created')
+        progress = job.get('progress', 0)
+        error = job.get('error')
+
+        if status == 'completed':
+            result = job.get('result') or {}
+            json_path = result.get('json_path')
+            if json_path and os.path.exists(json_path):
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    schedule_data = json.load(f)
+                models.complete_schedule(job_id, schedule_data)
+            else:
+                models.update_schedule_status(job_id, status, progress=100.0)
+        elif status == 'failed':
+            models.fail_schedule(job_id, error or 'Unknown error')
+        else:
+            models.update_schedule_status(job_id, status, progress=progress, error=error)
+
+    return jsonify({"success": True, "status": job.get('status')})
+
+
 @api_bp.route('/schedule/<job_id>/download', methods=['GET'])
 def download_results(job_id):
     """
@@ -496,9 +544,13 @@ def delete_job(job_id):
     if os.path.exists(job_folder):
         shutil.rmtree(job_folder)
     
-    # Delete job record
+    # Delete job record from file system
     job_manager.delete_job(job_id)
-    
+
+    # Delete from database if available
+    if database.is_available():
+        models.delete_schedule(job_id)
+
     return jsonify({
         "success": True,
         "message": f"Job {job_id} deleted successfully"
@@ -922,6 +974,105 @@ def list_user_schedules(user_id):
 # =============================================================================
 # AUTHENTICATION ENDPOINTS
 # =============================================================================
+
+@api_bp.route('/users/sync', methods=['POST'])
+def sync_user():
+    """
+    Create or retrieve a user by email — idempotent upsert.
+    ---
+    tags:
+      - Users
+    summary: Sync user (upsert by email)
+    consumes:
+      - application/json
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [email]
+          properties:
+            email: {type: string}
+            name:  {type: string}
+    responses:
+      200:
+        description: Existing user returned
+      201:
+        description: New user created
+      400:
+        description: Missing email or DB unavailable
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    data  = request.get_json() or {}
+    email = (data.get('email') or '').strip()
+    name  = (data.get('name')  or '').strip() or None
+
+    if not email:
+        return jsonify({"success": False, "error": "'email' is required"}), 400
+
+    existing = models.get_user_by_email(email)
+    if existing:
+        return jsonify({"success": True, "user": existing, "created": False})
+
+    user = models.create_user(email=email, name=name)
+    if not user:
+        return jsonify({"success": False, "error": "Could not create user"}), 500
+
+    return jsonify({"success": True, "user": user, "created": True}), 201
+
+
+@api_bp.route('/schedules/<schedule_id>', methods=['PUT'])
+def update_schedule_record(schedule_id):
+    """
+    Update a schedule record with new schedule data (from manual edits).
+    ---
+    tags:
+      - Schedules
+    consumes:
+      - application/json
+    parameters:
+      - name: schedule_id
+        in: path
+        type: string
+        required: true
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            data:     {type: object, description: "Updated schedule JSON"}
+            job_name: {type: string}
+    responses:
+      200:
+        description: Schedule updated
+      400:
+        description: DB unavailable or missing body
+      404:
+        description: Schedule not found
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    body = request.get_json() or {}
+    schedule_data = body.get('data')
+    job_name = (body.get('job_name') or '').strip() or None
+
+    sched = models.get_schedule(schedule_id)
+    if not sched:
+        return jsonify({"success": False, "error": "Schedule not found"}), 404
+
+    if schedule_data is not None:
+        models.complete_schedule(schedule_id, schedule_data)
+
+    if job_name:
+        models.update_schedule_job_name(schedule_id, job_name)
+
+    return jsonify({"success": True, "message": "Schedule updated"})
+
 
 @api_bp.route('/auth/register', methods=['POST'])
 def auth_register():
