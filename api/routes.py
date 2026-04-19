@@ -184,6 +184,7 @@ def submit_schedule():
     academic_year = request.form.get('academic_year', '')
     org_id        = request.form.get('org_id', '').strip() or None
     user_id       = request.form.get('user_id', '').strip() or None
+    sheet_url     = request.form.get('sheet_url', '').strip() or None
     try:
         semester = int(request.form.get('semester', 1))
     except (ValueError, TypeError):
@@ -219,6 +220,7 @@ def submit_schedule():
             ga_params=ga_params,
             org_id=org_id,
             user_id=user_id,
+            sheet_url=sheet_url,
         )
 
     # ── Save all uploaded files with canonical names ───────────────────────────

@@ -192,6 +192,7 @@ def create_schedule(
     ga_params: Dict,
     org_id: Optional[str] = None,
     user_id: Optional[str] = None,
+    sheet_url: Optional[str] = None,
 ) -> Optional[Dict]:
     """
     Insert a schedule row at the moment the API job is created.
@@ -216,6 +217,7 @@ def create_schedule(
         ga_params=ga_params,
         org_id=_parse_uuid(org_id),
         user_id=_parse_uuid(user_id),
+        sheet_url=sheet_url or None,
     )
     db.session.add(sched)
     db.session.commit()
