@@ -1086,6 +1086,58 @@ def update_schedule_record(schedule_id):
     return jsonify({"success": True, "message": "Schedule updated"})
 
 
+@api_bp.route('/schedules/<schedule_id>', methods=['DELETE'])
+def delete_schedule_record(schedule_id):
+    """
+    Delete a schedule record from the database and clean up its file-system job folder.
+    ---
+    tags:
+      - Schedules
+    parameters:
+      - name: schedule_id
+        in: path
+        type: string
+        required: true
+        description: Schedule UUID
+    responses:
+      200:
+        description: Schedule deleted
+      404:
+        description: Schedule not found in file system or database
+      400:
+        description: Database not configured
+    """
+    job_manager = JobManager(current_app.config['JOBS_FOLDER'])
+    job = job_manager.get_job(schedule_id)
+
+    db_record = None
+    if database.is_available():
+        try:
+            db_record = _db.session.get(ScheduleModel, uuid.UUID(schedule_id))
+        except Exception as e:
+            current_app.logger.error('[delete_schedule] DB lookup failed for %s: %s', schedule_id, e)
+
+    if not job and db_record is None:
+        return jsonify({"success": False, "error": "Schedule not found"}), 404
+
+    if job:
+        job_folder = get_job_folder(current_app.config['JOBS_FOLDER'], schedule_id)
+        if os.path.exists(job_folder):
+            shutil.rmtree(job_folder)
+        job_manager.delete_job(schedule_id)
+
+    if db_record is not None:
+        try:
+            _db.session.delete(db_record)
+            _db.session.commit()
+        except Exception as e:
+            _db.session.rollback()
+            current_app.logger.error('[delete_schedule] DB delete failed for %s: %s', schedule_id, e)
+            return jsonify({"success": False, "error": f"Database delete failed: {e}"}), 500
+
+    return jsonify({"success": True, "message": f"Schedule {schedule_id} deleted successfully"})
+
+
 @api_bp.route('/auth/register', methods=['POST'])
 def auth_register():
     """
