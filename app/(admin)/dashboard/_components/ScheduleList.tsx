@@ -43,7 +43,7 @@ export default function ScheduleList() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/schedule/jobs')
+    fetch('/api/schedule/jobs', { cache: 'no-store' })
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? 'Failed to load schedules');

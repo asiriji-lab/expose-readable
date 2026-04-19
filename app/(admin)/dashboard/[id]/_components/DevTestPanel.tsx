@@ -130,6 +130,7 @@ interface DevTestPanelProps {
   onDataLoaded: (data: SheetData) => void;
   onClear: () => void;
   currentData: SheetData;
+  onSheetUrlConnected?: (url: string) => void;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -144,7 +145,7 @@ function parseCSVFile(file: File): Promise<string[][]> {
 }
 
 // Component
-export default function DevTestPanel({ onDataLoaded, onClear, currentData }: DevTestPanelProps) {
+export default function DevTestPanel({ onDataLoaded, onClear, currentData, onSheetUrlConnected }: DevTestPanelProps) {
   const [collapsed, setCollapsed]   = useState(false);
   const [activeTab, setActiveTab]   = useState<'link' | 'upload'>('link');
 
@@ -205,6 +206,10 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
       setLinkStatus(found.length > 0 ? 'success' : 'error');
       if (found.length > 0) {
         onDataLoaded(data);
+        const fullUrl = linkInput.trim().startsWith('http')
+          ? linkInput.trim()
+          : `https://docs.google.com/spreadsheets/d/${id}/edit`;
+        onSheetUrlConnected?.(fullUrl);
       } else {
         setLinkError('ไม่พบแท็บใดเลย — ตรวจว่าชื่อแท็บตรงกับที่กำหนด (period, room, teacher, ...)');
       }

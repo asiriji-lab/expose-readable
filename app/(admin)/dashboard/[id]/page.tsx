@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 import AdminHeader from '../../_components/AdminHeader';
@@ -13,7 +13,7 @@ import { useGoogleSheet } from './_hooks/useGoogleSheet';
 import { TabName } from '../../validators/types';
 import SessionInfoCard, { SessionInfo } from './_components/SessionInfoCard';
 import DevTestPanel from './_components/DevTestPanel';
-import { submitScheduleJob, getJobStatus } from '@/lib/api/scheduleApi';
+import { submitScheduleJob, getJobStatus, getScheduleRecord } from '@/lib/api/scheduleApi';
 import { supabase } from '@/lib/supabase';
 import Papa from 'papaparse';
 import { stripMarkerRows } from './_utils/csvHelpers';
@@ -34,6 +34,13 @@ export default function SessionDetailPage() {
 
   const [connectedSheetId, setConnectedSheetId] = useState<string | null>(null);
   const [connectedSheetUrl, setConnectedSheetUrl] = useState<string | null>(null);
+  // Ref so handleSubmit always reads the latest URL regardless of closure timing
+  const connectedSheetUrlRef = useRef<string | null>(null);
+  const setSheetUrl = useCallback((url: string | null) => {
+    console.log('[setSheetUrl] called with:', url);
+    connectedSheetUrlRef.current = url;
+    setConnectedSheetUrl(url);
+  }, []);
 
   const [openTab, setOpenTab] = useState<TabName | null>(null);
   const [generationState, setGenerationState] = useState<'idle' | 'generating' | 'completed' | 'failed'>('idle');
@@ -46,11 +53,12 @@ export default function SessionDetailPage() {
   const [isCreatingSheet, setIsCreatingSheet] = useState(false);
   useEffect(() => { setIsDev(process.env.NODE_ENV === 'development'); }, []);
 
-  // When navigating to an existing job (non-new), check its current status
+  // When navigating to an existing job (non-new), load status + sheet_url from DB
   useEffect(() => {
     if (!id || id === 'new') return;
-    getJobStatus(id)
-      .then((job) => {
+    getScheduleRecord(id)
+      .then((res) => {
+        const job = res.schedule;
         if (job.status === 'completed') {
           setJobId(id);
           setGenerationState('completed');
@@ -58,14 +66,20 @@ export default function SessionDetailPage() {
           setJobId(id);
           setGenerationError(job.error ?? 'สร้างตารางไม่สำเร็จ');
           setGenerationState('failed');
-        } else if (job.status !== 'created') {
-          // in progress
+        } else {
+          // generating or created — restore sheet URL from DB
           setJobId(id);
           setGenerationState('generating');
+          if (job.sheet_url) {
+            const sheetId = job.sheet_url.match(/\/spreadsheets\/d\/([\w-]+)/)?.[1] ?? null;
+            setSheetUrl(job.sheet_url);
+            setConnectedSheetId(sheetId);
+            if (sheetId) fetchSheet(sheetId);
+          }
         }
       })
       .catch(() => { /* job may not exist yet, show normal UI */ });
-  }, [id]);
+  }, [id, fetchSheet]);
 
   const handleCreateSkeleton = useCallback(async () => {
     setIsCreatingSheet(true);
@@ -90,7 +104,7 @@ export default function SessionDetailPage() {
       if (!sheetId || !sheetUrl) throw new Error('ไม่พบข้อมูลชีทที่สร้างใหม่');
 
       setConnectedSheetId(sheetId);
-      setConnectedSheetUrl(sheetUrl);
+      setSheetUrl(sheetUrl);
       window.open(sheetUrl, '_blank');
     } catch (err) {
       console.error('[handleCreateSkeleton]', err);
@@ -115,7 +129,7 @@ export default function SessionDetailPage() {
   const handleConnectImport = useCallback((sheetId: string) => {
     const url = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
     setConnectedSheetId(sheetId);
-    setConnectedSheetUrl(url);
+    setSheetUrl(url);
     window.open(url, '_blank');
     clearSheet();
     resetStates();
@@ -152,7 +166,7 @@ export default function SessionDetailPage() {
         if (!rows || rows.length === 0) return undefined;
         // Strip empty rows and marker rows before export
         let cleanRows = rows.filter(row => !row.every(c => !String(c).trim()));
-        cleanRows = stripMarkerRows(cleanRows);
+        cleanRows = stripMarkerRows(cleanRows, name);
         if (cleanRows.length === 0) return undefined;
 
         if (name === 'student') {
@@ -184,6 +198,7 @@ export default function SessionDetailPage() {
         academicYear: String(sessionInfo.year),
         semester: sessionInfo.semester,
         userId: backendUserId,
+        sheetUrl: connectedSheetUrlRef.current ?? undefined,
       };
 
       if (sheetData.elective?.length) submitParams.elective = toFile(sheetData.elective, 'elective');
@@ -193,6 +208,9 @@ export default function SessionDetailPage() {
       if (sheetData.preplace?.length) submitParams.preplace = toFile(sheetData.preplace, 'preplace');
       if (sheetData.scout?.length) submitParams.scout = toFile(sheetData.scout, 'scout');
 
+      console.log('[submit] connectedSheetUrl state:', connectedSheetUrl);
+      console.log('[submit] connectedSheetUrlRef.current:', connectedSheetUrlRef.current);
+      console.log('[submit] submitParams.sheetUrl:', submitParams.sheetUrl);
       const res = await submitScheduleJob(submitParams);
       setJobId(res.job_id);
       setDownloadUrl(res.download_url ?? null);
@@ -245,18 +263,23 @@ export default function SessionDetailPage() {
               clearSheet();
               resetStates();
             }}
+            onSheetUrlConnected={(url) => {
+              setSheetUrl(url);
+              const sheetId = url.match(/\/spreadsheets\/d\/([\w-]+)/)?.[1] ?? null;
+              setConnectedSheetId(sheetId);
+            }}
           />
         )}
 
-        {generationState === 'idle' && (
+        {(generationState === 'idle' || generationState === 'generating') && (
           <ValidationSection
             tabStates={tabStates}
             isRunning={isRunning}
             missingTabs={missingTabs}
             onValidate={handleValidate}
             onTabClick={setOpenTab}
-            onSubmit={handleSubmit}
-            isSubmitting={isSubmitting}
+            onSubmit={generationState === 'idle' ? handleSubmit : undefined}
+            isSubmitting={generationState === 'generating' ? true : isSubmitting}
           />
         )}
 

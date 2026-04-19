@@ -15,6 +15,7 @@ export async function submitScheduleJob(params: {
   academicYear?: string;
   semester?: number;
   userId?: string;
+  sheetUrl?: string;
 }): Promise<SubmitJobResponse> {
   const form = new FormData();
   form.append('curriculum', params.curriculum, 'curriculum.csv');
@@ -31,11 +32,21 @@ export async function submitScheduleJob(params: {
   if (params.academicYear) form.append('academic_year', params.academicYear);
   if (params.semester !== undefined) form.append('semester', String(params.semester));
   if (params.userId) form.append('user_id', params.userId);
+  if (params.sheetUrl) form.append('sheet_url', params.sheetUrl);
 
   const res = await fetch(`${API_URL}/schedule`, { method: 'POST', body: form });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error ?? 'Failed to submit schedule job');
+  }
+  return res.json();
+}
+
+export async function getScheduleRecord(scheduleId: string): Promise<{ schedule: { status: string; sheet_url: string | null; job_name: string; error?: string; data?: any } }> {
+  const res = await fetch(`${API_URL}/schedules/${scheduleId}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? 'Failed to get schedule record');
   }
   return res.json();
 }

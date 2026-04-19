@@ -116,11 +116,29 @@ export function isMarkerRow(row: string[]): boolean {
 }
 
 /**
+ * Returns true only for label-ending-with-colon marker rows (e.g. "ม.1 เทอม 1:").
+ * Grade-level markers (ม.1–ม.6) are NOT matched here so the curriculum tab keeps them.
+ */
+function isColonMarkerRow(row: string[]): boolean {
+  if (!row || row.length === 0) return false;
+  const first = (row[0] ?? '').trim();
+  if (!first) return false;
+  const restEmpty = row.slice(1).every((c) => !(c ?? '').trim());
+  return restEmpty && /:\s*$/.test(first);
+}
+
+/**
  * Strips marker rows from a tab's data, keeping the header row (index 0)
  * and all non-marker data rows.
+ *
+ * For the curriculum tab, grade-level markers (ม.1–ม.6) are preserved because
+ * the backend's clean_curriculum relies on them to resolve class assignments.
  */
-export function stripMarkerRows(rows: string[][]): string[][] {
+export function stripMarkerRows(rows: string[][], tabName?: string): string[][] {
   if (!rows || rows.length === 0) return rows;
+  if (tabName === 'curriculum') {
+    return [rows[0], ...rows.slice(1).filter((r) => !isColonMarkerRow(r))];
+  }
   return [rows[0], ...rows.slice(1).filter((r) => !isMarkerRow(r))];
 }
 

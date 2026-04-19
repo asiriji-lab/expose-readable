@@ -29,13 +29,13 @@ function SchedulePageContent() {
 
     // ─── Derived filter options ───────────────────────────────────────────────
     const teacherCodes = useMemo(() => dataset ? getTeacherCodes(dataset) : [], [dataset]);
-    const classCodes   = useMemo(() => dataset ? getClassCodes(dataset)   : [], [dataset]);
-    const roomCodes    = useMemo(() => dataset ? getRoomCodes(dataset)    : [], [dataset]);
+    const classCodes = useMemo(() => dataset ? getClassCodes(dataset) : [], [dataset]);
+    const roomCodes = useMemo(() => dataset ? getRoomCodes(dataset) : [], [dataset]);
 
     // ─── Filter state ─────────────────────────────────────────────────────────
-    const [tCode, setTCode]         = useState('');
+    const [tCode, setTCode] = useState('');
     const [classCode, setClassCode] = useState('');
-    const [room, setRoom]           = useState('');
+    const [room, setRoom] = useState('');
 
     useEffect(() => {
         if (teacherCodes.length) setTCode(c => teacherCodes.includes(c) ? c : teacherCodes[0]);
@@ -49,14 +49,14 @@ function SchedulePageContent() {
 
     // ─── Active entity ────────────────────────────────────────────────────────
     const [activeEntity, setActiveEntity] = useState<EntityType>('teacher');
-    const handleTCodeChange   = (val: string) => { setTCode(val);      setActiveEntity('teacher'); };
-    const handleClassChange   = (val: string) => { setClassCode(val);  setActiveEntity('class'); };
-    const handleRoomChange    = (val: string) => { setRoom(val);       setActiveEntity('room'); };
+    const handleTCodeChange = (val: string) => { setTCode(val); setActiveEntity('teacher'); };
+    const handleClassChange = (val: string) => { setClassCode(val); setActiveEntity('class'); };
+    const handleRoomChange = (val: string) => { setRoom(val); setActiveEntity('room'); };
 
     // ─── Load schedule on mount ───────────────────────────────────────────────
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const jobId  = params.get('job_id');
+        const jobId = params.get('job_id');
 
         if (jobId) {
             const loadSchedule = async () => {
@@ -72,21 +72,19 @@ function SchedulePageContent() {
                     }
 
                     const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dev.winscloud.net/api/v1';
-                    const res = await fetch(`${API_URL}/schedule/${encodeURIComponent(jobId)}/result`);
+                    const res = await fetch(`${API_URL}/schedules/${encodeURIComponent(jobId)}`);
                     const data = await res.json();
 
                     if (!res.ok) throw new Error(data?.error ?? 'Backend error');
 
-                    const raw: BackendSchedule | null =
-                        data.schedule && data.schedule.teachers ? data.schedule :
-                        data.teachers                           ? data :
-                        null;
+                    const raw: BackendSchedule | null = data.schedule?.data ?? null;
 
                     if (raw) {
                         const transformed = transformToFullDataset(raw);
                         const { dataset: clean } = autoEjectConflicts(transformed);
                         setDataset(clean);
-                        setJobName(data.job_name || raw.config?.academic_year || 'ตารางสอน');
+                        sessionStorage.setItem(`schedule_cache_${jobId}`, JSON.stringify(raw));
+                        setJobName(data.schedule?.job_name || raw.config?.academic_year || 'ตารางสอน');
                     } else {
                         console.warn('[SchedulePage] Unexpected result shape:', data);
                         setDataset(emptyDataset());
@@ -106,13 +104,13 @@ function SchedulePageContent() {
 
     // ─── Derived schedules ────────────────────────────────────────────────────
     const teacherSchedule = useMemo(() => dataset?.teachers[tCode] ?? null, [dataset, tCode]);
-    const classSchedule   = useMemo(() => dataset?.classes[classCode] ?? null, [dataset, classCode]);
-    const roomSchedule    = useMemo(() => dataset?.rooms[room] ?? null, [dataset, room]);
+    const classSchedule = useMemo(() => dataset?.classes[classCode] ?? null, [dataset, classCode]);
+    const roomSchedule = useMemo(() => dataset?.rooms[room] ?? null, [dataset, room]);
 
     const activeSchedule = useMemo<ScheduleData>(() => {
         if (viewMode === 'teacher') return teacherSchedule ?? {};
-        if (viewMode === 'class')   return classSchedule   ?? {};
-        if (viewMode === 'room')    return roomSchedule    ?? {};
+        if (viewMode === 'class') return classSchedule ?? {};
+        if (viewMode === 'room') return roomSchedule ?? {};
         return {};
     }, [viewMode, teacherSchedule, classSchedule, roomSchedule]);
 
@@ -157,14 +155,14 @@ function SchedulePageContent() {
             const exportData = {
                 config: { academic_year: '2026', semester: 1 },
                 teachers: dataset?.teachers ?? {},
-                classes:  dataset?.classes  ?? {},
-                rooms:    dataset?.rooms    ?? {},
+                classes: dataset?.classes ?? {},
+                rooms: dataset?.rooms ?? {},
             };
             const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
             const downloadUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = downloadUrl;
-            link.download = `schedule_export_${new Date().toISOString().slice(0,10)}.json`;
+            link.download = `schedule_export_${new Date().toISOString().slice(0, 10)}.json`;
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -177,7 +175,7 @@ function SchedulePageContent() {
 
     const handleDeleteJob = async () => {
         const params = new URLSearchParams(window.location.search);
-        const jobId  = params.get('job_id');
+        const jobId = params.get('job_id');
         if (!jobId) return;
         if (!confirm('Delete this schedule? This cannot be undone.')) return;
         try {
@@ -186,8 +184,8 @@ function SchedulePageContent() {
                 const data = await res.json().catch(() => ({}));
                 throw new Error(data?.error ?? 'Delete failed');
             }
-            router.push('/dashboard');
             router.refresh();
+            router.push('/dashboard');
         } catch (e) {
             console.error('Delete error:', e);
             alert('Failed to delete schedule.');
@@ -196,7 +194,7 @@ function SchedulePageContent() {
 
     const handleSaveSchedule = async () => {
         const params = new URLSearchParams(window.location.search);
-        const jobId  = params.get('job_id');
+        const jobId = params.get('job_id');
         if (!jobId || !dataset) return;
 
         try {
@@ -204,13 +202,13 @@ function SchedulePageContent() {
             const exportData = {
                 config: { academic_year: '2026', semester: 1 },
                 teachers: dataset.teachers,
-                classes:  dataset.classes,
-                rooms:    dataset.rooms,
+                classes: dataset.classes,
+                rooms: dataset.rooms,
             };
             const res = await fetch(`${API_URL}/schedules/${encodeURIComponent(jobId)}`, {
-                method:  'PUT',
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({ data: exportData }),
+                body: JSON.stringify({ data: exportData }),
             });
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
@@ -231,7 +229,7 @@ function SchedulePageContent() {
                 if (!prev) return prev;
                 const { dataset: newDataset } = moveItem(
                     prev, item, targetDay, targetSlot,
-                    source === 'GRID' ? sourceDay  : undefined,
+                    source === 'GRID' ? sourceDay : undefined,
                     source === 'GRID' ? sourceSlot : undefined,
                 );
                 return newDataset;
@@ -255,16 +253,16 @@ function SchedulePageContent() {
             const { item, day: sourceDay, slot: sourceSlot, source } = payload;
             return hasConflict(
                 dataset, targetDay, targetSlot, item,
-                source === 'GRID' ? sourceDay  : undefined,
+                source === 'GRID' ? sourceDay : undefined,
                 source === 'GRID' ? sourceSlot : undefined,
             );
         },
         [dataset, viewMode],
     );
 
-    const [isModalOpen, setIsModalOpen]     = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingParams, setEditingParams] = useState<{ day: string; slot: number } | null>(null);
-    const [editingItem, setEditingItem]     = useState<ScheduleItem | null>(null);
+    const [editingItem, setEditingItem] = useState<ScheduleItem | null>(null);
 
     // ─── Hover tooltip ────────────────────────────────────────────────────────
     const [hoverTooltip, setHoverTooltip] = useState<{
@@ -300,8 +298,8 @@ function SchedulePageContent() {
     const handleBandClick = (day: string, slot: number, entityType: EntityType, data: OverlayCellData) => {
         handleBandHoverEnd();
         const item = entityType === 'teacher' ? data.teacher
-                   : entityType === 'class'   ? data.class
-                   : data.room;
+            : entityType === 'class' ? data.class
+                : data.room;
         if (!item) return;
         setBandInspect({ day, slot, entityType, data });
     };
@@ -319,14 +317,14 @@ function SchedulePageContent() {
         if (!editingParams) return;
         const { day, slot } = editingParams;
         const newItem: ScheduleItem = {
-            teacher:      data.teacher      ?? '',
-            teacherName:  data.teacherName  ?? '',
-            classCode:    data.classCode    ?? '',
-            room:         data.room         ?? '',
-            roomName:     data.roomName     ?? '',
-            subjectCode:  data.subjectCode  ?? '',
-            subject:      data.subject      ?? '',
-            variant:      data.variant      ?? 'green',
+            teacher: data.teacher ?? '',
+            teacherName: data.teacherName ?? '',
+            classCode: data.classCode ?? '',
+            room: data.room ?? '',
+            roomName: data.roomName ?? '',
+            subjectCode: data.subjectCode ?? '',
+            subject: data.subject ?? '',
+            variant: data.variant ?? 'green',
         };
         setDataset(prev => {
             if (!prev) return prev;
