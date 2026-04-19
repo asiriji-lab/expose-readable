@@ -1,6 +1,7 @@
 'use server'
 
-import { createClient, createAdminClient } from '@/utils/supabase/server'
+import { setAuthCookies } from '@/utils/auth/server'
+import { BACKEND_BASE } from '@/lib/api/backend'
 
 function normalizeRole(value: unknown): 'admin' | 'teacher' | 'student' | null {
     if (typeof value !== 'string') return null;
@@ -19,71 +20,46 @@ export async function loginWithUsernameOrEmail(formData: FormData) {
         return { error: 'Username/Email and Password are required' };
     }
 
-    let loginEmail = usernameOrEmail;
+    try {
+        const res = await fetch(`${BACKEND_BASE}/api/v1/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username_or_email: usernameOrEmail, password }),
+        });
 
-    // 1. Secure Server-Side Lookup (Hides other users' emails from the public)
-    if (!usernameOrEmail.includes('@')) {
-        const adminSupabase = await createAdminClient();
-        const { data: profile, error } = await adminSupabase
-            .from('profiles')
-            .select('email')
-            .eq('username', usernameOrEmail)
-            .single();
+        const data = await res.json();
 
-        if (error || !profile?.email) {
-            return { error: 'Invalid username' };
+        if (!res.ok) {
+            return { error: data.error || 'Login failed' };
         }
 
-        loginEmail = profile.email;
+        const role = normalizeRole(data.user?.role);
+
+        await setAuthCookies(data.access_token, {
+            user_id:    data.user?.user_id    ?? '',
+            role:       role ?? 'student',
+            username:   data.user?.username   ?? '',
+            email:      data.user?.email      ?? '',
+            first_name: data.user?.first_name ?? '',
+            last_name:  data.user?.last_name  ?? '',
+        });
+
+        return { success: true, role };
+    } catch {
+        return { error: 'Network error — is the backend running?' };
     }
-
-    // 2. Log them in using cookies, so Next.js middleware and secure pages work
-    const supabase = await createClient();
-    const { data, error } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
-        password,
-    });
-
-    if (error) {
-        return { error: error.message };
-    }
-
-    let role: 'admin' | 'teacher' | 'student' | null = null;
-
-    if (data.user?.id) {
-        const adminSupabase = await createAdminClient();
-        const { data: profile } = await adminSupabase
-            .from('profiles')
-            .select('role')
-            .eq('id', data.user.id)
-            .single();
-
-        role = normalizeRole(profile?.role);
-    }
-
-    return { success: true, role };
 }
 
 export async function detectRoleAction(usernameOrEmail: string) {
     if (!usernameOrEmail) return { role: null };
 
-    const isEmail = usernameOrEmail.includes('@');
-
-    // Use admin client to ensure we can look up roles regardless of RLS safely on the server
-    const adminSupabase = await createAdminClient();
-    const query = adminSupabase.from('profiles').select('role');
-
-    if (isEmail) {
-        query.eq('email', usernameOrEmail);
-    } else {
-        query.eq('username', usernameOrEmail);
-    }
-
-    const { data, error } = await query.single();
-
-    if (error || !data) {
+    try {
+        const res = await fetch(
+            `${BACKEND_BASE}/api/v1/auth/detect-role?q=${encodeURIComponent(usernameOrEmail)}`
+        );
+        const data = await res.json();
+        return { role: normalizeRole(data.role) };
+    } catch {
         return { role: null };
     }
-
-    return { role: normalizeRole(data.role) };
 }

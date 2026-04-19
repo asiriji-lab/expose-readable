@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { google } from 'googleapis';
 
 /**
  * GET /api/sheets?id=SPREADSHEET_ID
  *
- * Reads all tabs from a publicly-shared Google Sheet using the
- * Sheets CSV export endpoint (no API key required, sheet must be
- * set to "Anyone with the link can view").
+ * Reads all tabs from a Google Sheet using the service account.
+ * The sheet must be shared with the service account email (or "Anyone with the link").
  *
  * Response shape:
  *   { tabs: { [tabTitle: string]: string[][] } }
- *
- * TODO: Replace with Google Sheets API + Service Account when
- * private sheets need to be supported.
  */
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('id');
@@ -19,81 +16,56 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Missing spreadsheet id' }, { status: 400 });
   }
 
-  try {
-    // Step 1: Fetch the sheet metadata to get all tab (sheet) names and gids
-    const metaUrl = `https://docs.google.com/spreadsheets/d/${id}/sheets/json/1`;
-    // The public sheets feed returns JSON with sheet metadata
-    const feedUrl = `https://spreadsheets.google.com/feeds/worksheets/${id}/public/full?alt=json`;
+  const serviceEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
 
-    const feedRes = await fetch(feedUrl);
-    if (!feedRes.ok) {
+  if (!serviceEmail || !privateKey) {
+    return NextResponse.json({ error: 'Google service account not configured.' }, { status: 500 });
+  }
+
+  try {
+    const auth = new google.auth.JWT({
+      email: serviceEmail,
+      key: privateKey.replace(/\\n/g, '\n'),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    });
+
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    // Step 1: Get spreadsheet metadata to list all sheet (tab) names
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: id });
+    const sheetList = meta.data.sheets ?? [];
+
+    // Step 2: Batch-read all tabs in one request
+    const ranges = sheetList.map((s) => s.properties?.title ?? '').filter(Boolean);
+
+    if (ranges.length === 0) {
+      return NextResponse.json({ tabs: {} });
+    }
+
+    const batchRes = await sheets.spreadsheets.values.batchGet({
+      spreadsheetId: id,
+      ranges,
+    });
+
+    const tabs: Record<string, string[][]> = {};
+    for (const vr of batchRes.data.valueRanges ?? []) {
+      // range comes back as "SheetName!A1:Z100" — extract the sheet name
+      const title = vr.range?.split('!')[0].replace(/^'|'$/g, '') ?? '';
+      tabs[title] = (vr.values as string[][] | undefined) ?? [];
+    }
+
+    return NextResponse.json({ tabs });
+  } catch (err: unknown) {
+    console.error('[/api/sheets]', err);
+    const message = err instanceof Error ? err.message : 'Failed to fetch spreadsheet data.';
+    // Surface a friendlier message for permission errors
+    if (message.includes('not found') || message.includes('403') || message.includes('permission')) {
       return NextResponse.json(
-        { error: 'Cannot access spreadsheet. Make sure it is shared as "Anyone with the link can view".' },
+        { error: `Cannot access spreadsheet. Share it with the service account: ${process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL}` },
         { status: 403 }
       );
     }
-
-    const feedJson = await feedRes.json();
-    const entries: Array<{ title: { $t: string }; id: { $t: string } }> =
-      feedJson.feed.entry ?? [];
-
-    // Step 2: For each tab, fetch CSV data
-    const tabs: Record<string, string[][]> = {};
-
-    await Promise.all(
-      entries.map(async (entry) => {
-        const tabTitle = entry.title.$t;
-
-        // Extract gid from entry id URL
-        const gidMatch = entry.id.$t.match(/\/(\d+)$/);
-        if (!gidMatch) return;
-        const gid = gidMatch[1];
-
-        const csvUrl = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`;
-        const csvRes = await fetch(csvUrl);
-        if (!csvRes.ok) return;
-
-        const csvText = await csvRes.text();
-        const rows = parseCSV(csvText);
-        tabs[tabTitle] = rows;
-      })
-    );
-
-    return NextResponse.json({ tabs });
-  } catch (err) {
-    console.error('[/api/sheets]', err);
-    return NextResponse.json({ error: 'Failed to fetch spreadsheet data.' }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-}
-
-/**
- * Minimal CSV parser — handles quoted fields with commas and newlines.
- */
-function parseCSV(text: string): string[][] {
-  const rows: string[][] = [];
-  const lines = text.split(/\r?\n/);
-
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    const cells: string[] = [];
-    let cur = '';
-    let inQuote = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuote && line[i + 1] === '"') { cur += '"'; i++; }
-        else { inQuote = !inQuote; }
-      } else if (ch === ',' && !inQuote) {
-        cells.push(cur);
-        cur = '';
-      } else {
-        cur += ch;
-      }
-    }
-    cells.push(cur);
-    rows.push(cells);
-  }
-
-  return rows;
 }

@@ -51,7 +51,23 @@ export function validateStudent(data: TabData): ValidationResult {
     if (row.every((c) => !c.trim())) continue;
 
     // ST-2: class ID format G/S (e.g. 1/1)
-    if (classId && !isValidClassId(classId)) {
+    // Fix Google Sheets Date Mangling: "1/1" -> "1/1/24" or "1-Jan"
+    let cleanClassId = classId;
+    if (classId) {
+      if (/^\d+\/\d+\/\d+$/.test(classId)) {
+        // "1/1/24" -> "1/1"
+        cleanClassId = classId.split('/').slice(0, 2).join('/');
+      } else if (/^\d+-[A-Za-z]+(-\d+)?$/.test(classId)) {
+        // "1-Jan" -> "1/1"
+        // Note: January = 1, February = 2, March = 3
+        const parts = classId.split('-');
+        const months = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+        const m = months[parts[1].toLowerCase().substring(0, 3) as keyof typeof months];
+        if (m) cleanClassId = `${parts[0]}/${m}`;
+      }
+    }
+
+    if (cleanClassId && !isValidClassId(cleanClassId)) {
       errors.push({
         row: rowNum, col: classIdx + 1, column: 'นักเรียน', value: classId,
         message: `Row ${rowNum}, 'นักเรียน': Class ID must be G/S format (e.g. 1/1) — got "${classId}"`,
@@ -70,7 +86,14 @@ export function validateStudent(data: TabData): ValidationResult {
     }
 
     const rowMap: Record<string, string> = {};
-    headers.forEach((h, i) => { rowMap[h] = (row[i] ?? '').trim(); });
+    headers.forEach((h, i) => { 
+      let val = (row[i] ?? '').trim();
+      // Apply the same cleanClassId patch to the exported parsedRows so Phase 2 gets the clean "1/1"
+      if (i === classIdx && cleanClassId !== classId) {
+        val = cleanClassId;
+      }
+      rowMap[h] = val; 
+    });
     parsedRows.push(rowMap);
   }
 

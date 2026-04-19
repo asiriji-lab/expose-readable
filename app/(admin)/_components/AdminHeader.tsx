@@ -1,9 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useState, useEffect, useRef } from 'react';
 import { signOutAction } from '../_actions/auth';
-import { LogOut } from 'lucide-react';
+import { LogOut, CalendarDays, User } from 'lucide-react';
+
+/** Read a non-httpOnly cookie by name from document.cookie */
+function getCookieValue(name: string): string | undefined {
+    if (typeof document === 'undefined') return undefined;
+    const match = document.cookie
+        .split('; ')
+        .find((row) => row.startsWith(name + '='));
+    return match ? decodeURIComponent(match.split('=').slice(1).join('=')) : undefined;
+}
 
 interface AdminHeaderProps {
     roleLabel?: string;
@@ -11,72 +19,51 @@ interface AdminHeaderProps {
 
 export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [user, setUser] = useState<{ firstName: string; lastName: string; email: string; role: string } | null>(null);
+    const [user, setUser] = useState<{
+        firstName: string;
+        lastName: string;
+        email: string;
+        role: string;
+    } | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        async function fetchUser() {
-            try {
-                const { data: { session }, error } = await supabase.auth.getSession();
-
-                if (error) {
-                    const isInvalidRefreshToken = error.message?.toLowerCase().includes('invalid refresh token');
-                    if (isInvalidRefreshToken) {
-                        await supabase.auth.signOut({ scope: 'local' });
-                    }
-                    return;
-                }
-
-                if (!session?.user) return;
-
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', session.user.id)
-                    .single();
-
-                if (profile) {
-                    setUser({
-                        firstName: profile.first_name || '',
-                        lastName: profile.last_name || '',
-                        email: profile.email || session.user.email || '',
-                        role: profile.role || 'Admin',
-                    });
-                }
-            } catch {
-                return;
-            }
+        const raw = getCookieValue('auth-user');
+        if (!raw) return;
+        try {
+            const parsed = JSON.parse(raw);
+            setUser({
+                firstName: parsed.first_name || '',
+                lastName:  parsed.last_name  || '',
+                email:     parsed.email      || '',
+                role:      parsed.role       || 'admin',
+            });
+        } catch {
+            // malformed cookie
         }
-
-        fetchUser();
     }, []);
 
-    // Close dropdown when clicking outside
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
                 setIsDropdownOpen(false);
             }
         }
-
         document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const handleSignOut = async () => {
         await signOutAction();
     };
 
-    const currentRole = roleLabel || (user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Admin');
-    const normalizedRole = currentRole.toLowerCase();
-    const roleBadgeClass = normalizedRole === 'student'
+    const currentRole     = roleLabel || (user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Admin');
+    const normalizedRole  = currentRole.toLowerCase();
+    const roleBadgeClass  = normalizedRole === 'student'
         ? 'bg-[var(--role-student-bg)] text-[var(--role-student)]'
         : normalizedRole === 'admin'
             ? 'bg-[var(--role-admin-bg)] text-[var(--role-admin)]'
             : 'bg-[var(--role-teacher-bg)] text-[var(--role-teacher)]';
-    // Use first letter of first name, else a generic icon SVG
     const avatarText = user?.firstName ? user.firstName.charAt(0).toUpperCase() : null;
 
     return (
@@ -85,16 +72,14 @@ export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
                 <div className="flex items-center justify-between h-10">
                     {/* Left: Logo and School Name */}
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
+                        <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center shrink-0">
+                            <CalendarDays size={20} className="text-white" />
                         </div>
                         <h1 className="text-xl font-bold text-foreground">ScheDool</h1>
                         <span className="text-foreground-muted text-sm md:text-base hidden sm:inline">Bodindecha School</span>
                     </div>
 
-                    {/* Right: Admin Badge and User Icon */}
+                    {/* Right: Role Badge and User Icon */}
                     <div className="flex items-center gap-3 relative" ref={dropdownRef}>
                         <span className={`px-3 py-1.5 rounded-md text-sm font-medium ${roleBadgeClass}`}>
                             {currentRole}
@@ -108,9 +93,7 @@ export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
                             {avatarText ? (
                                 <span>{avatarText}</span>
                             ) : (
-                                <svg className="w-5 h-5 text-foreground-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                </svg>
+                                <User size={18} className="text-foreground-muted" />
                             )}
                         </button>
 
@@ -129,7 +112,7 @@ export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
                                 <div className="p-1">
                                     <button
                                         onClick={handleSignOut}
-                                        className="w-full text-left px-4 py-2.5 text-sm text-red-600 font-medium hover:bg-red-50 rounded-lg transition-colors flex items-center gap-2"
+                                        className="w-full text-left px-4 py-2.5 text-sm text-danger font-medium hover:bg-danger-light rounded-lg transition-colors flex items-center gap-2"
                                     >
                                         <LogOut size={16} />
                                         Sign Out

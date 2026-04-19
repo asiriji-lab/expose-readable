@@ -2,10 +2,8 @@
 
 import { Play, Loader2, Send, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { SectionHeader } from '@/components/ui/section-header';
-import { StatSummary } from '@/components/ui/stat-summary';
 import { cn } from '@/lib/utils';
 import { TabName, AllTabStates } from '../../../validators/types';
 import TabCard from './TabCard';
@@ -20,6 +18,7 @@ interface ValidationSectionProps {
   onValidate: () => void;
   onTabClick: (tabName: TabName) => void;
   onSubmit?: () => void;
+  isSubmitting?: boolean;
 }
 
 export default function ValidationSection({
@@ -29,6 +28,7 @@ export default function ValidationSection({
   onValidate,
   onTabClick,
   onSubmit,
+  isSubmitting = false,
 }: ValidationSectionProps) {
   const phase1Done = PHASE_1_TABS.every((t) => {
     const s = tabStates[t].status;
@@ -113,12 +113,12 @@ export default function ValidationSection({
           hasErrors ? 'border-danger-border bg-danger-light' : 'border-success-border bg-success-light',
         )}>
           <CardContent className="py-3 px-4 flex items-center justify-between flex-wrap gap-3">
-            <StatSummary items={[
-              { value: totalRows,    label: 'แถว' },
-              { value: totalErrors,   label: 'ข้อผิดพลาด', variant: totalErrors   > 0 ? 'danger'  : 'success' },
-              { value: totalWarnings, label: 'คำเตือน',    variant: totalWarnings > 0 ? 'warning' : 'default' },
-            ]} />
-            <SubmitButton allPassed={allPassed} hasErrors={hasErrors} onSubmit={onSubmit} />
+            <div className="flex items-center gap-4 text-sm">
+              <span className="text-foreground-muted">{totalRows} แถว</span>
+              <span className={totalErrors > 0 ? 'text-danger font-semibold' : 'text-success'}>{totalErrors} ข้อผิดพลาด</span>
+              <span className={totalWarnings > 0 ? 'text-warning font-semibold' : 'text-foreground-muted'}>{totalWarnings} คำเตือน</span>
+            </div>
+            <SubmitButton allPassed={allPassed} hasErrors={hasErrors} onSubmit={onSubmit} isSubmitting={isSubmitting} />
           </CardContent>
           {totalWarnings > 0 && !hasErrors && (
             <p className="text-xs text-warning px-4 pb-3 flex items-center gap-1.5">
@@ -132,7 +132,17 @@ export default function ValidationSection({
   );
 }
 
-function SubmitButton({ allPassed, hasErrors, onSubmit }: { allPassed: boolean; hasErrors: boolean; onSubmit?: () => void }) {
+function SubmitButton({
+  allPassed,
+  hasErrors,
+  onSubmit,
+  isSubmitting,
+}: {
+  allPassed: boolean;
+  hasErrors: boolean;
+  onSubmit?: () => void;
+  isSubmitting: boolean;
+}) {
   if (hasErrors) {
     return (
       <Button variant="outline" disabled size="sm">
@@ -142,8 +152,12 @@ function SubmitButton({ allPassed, hasErrors, onSubmit }: { allPassed: boolean; 
   }
   if (!allPassed) return null;
   return (
-    <Button variant="success" size="sm" onClick={onSubmit}>
-      <Send size={14} /> ส่งข้อมูลสร้างตาราง
+    <Button variant="success" size="sm" onClick={onSubmit} disabled={isSubmitting}>
+      {isSubmitting ? (
+        <><Loader2 size={14} className="animate-spin" /> กำลังส่ง...</>
+      ) : (
+        <><Send size={14} /> ส่งข้อมูลสร้างตาราง</>
+      )}
     </Button>
   );
 }

@@ -59,8 +59,9 @@ export function validateCurriculum(data: TabData): ValidationResult {
     // Skip rows where subject is empty (forward-fill continuation rows — validated server-side)
     if (!subject) continue;
 
-    // CU-3: คาบ/สัปดาห์ must be a positive integer
-    if (periods && (!/^\d+$/.test(periods) || parseInt(periods) <= 0)) {
+    // CU-3: คาบ/สัปดาห์ must be a positive number (integer or decimal)
+    // Only strictly enforce this on main subject rows (continuation rows might have empty periods)
+    if (subject && periods && (!/^\d+(\.\d+)?$/.test(periods) || parseFloat(periods) <= 0)) {
       errors.push({
         row: r + 1, col: periodsIdx + 1, column: 'คาบ/สัปดาห์', value: periods,
         message: `Row ${r + 1}, 'คาบ/สัปดาห์': Must be a positive integer — got "${periods}"`,

@@ -42,6 +42,14 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# service account keys — NEVER commit
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!components.json
+!export-payload.json
+
 # agent working files — raw data and Python scripts are local-only
 .agent/solver_something/context/raw/
 .agent/solver_something/cleaned/

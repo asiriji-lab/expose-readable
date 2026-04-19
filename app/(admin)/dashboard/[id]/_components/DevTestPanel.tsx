@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useRef, useCallback, useMemo } from 'react';
 import Papa from 'papaparse';
@@ -9,7 +9,7 @@ import {
 } from '../../../schedule/_utils/parseCurriculum';
 import { TEACHER_META } from '../../../schedule/_utils/dummyData';
 import { SheetData, TabName } from '../../../validators/types';
-import { ALL_TAB_NAMES, extractSheetId, filenameToTabName, parseCSVText, fetchPublicSheetTab } from '../_utils/csvHelpers';
+import { ALL_TAB_NAMES, extractSheetId, filenameToTabName, parseCSVText, fetchAllPublicTabs } from '../_utils/csvHelpers';
 
 // ── Icons / labels per tab ──────────────────────────────────────────────────
 const TAB_META: Record<TabName, { icon: string; label: string }> = {
@@ -49,30 +49,30 @@ function CurriculumSummary({ rows }: { rows: string[][] }) {
   const warningCount = parseResult.warnings.length;
 
   return (
-    <div className="rounded-lg border border-yellow-300 bg-yellow-50 text-xs">
+    <div className="rounded-lg border border-primary-border bg-primary-light text-xs">
       {/* Stats bar — always visible */}
       <button
         onClick={() => setExpanded(e => !e)}
-        className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-yellow-100 transition-colors rounded-lg"
+        className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-surface-alt transition-colors rounded-lg"
       >
-        <span className="font-semibold text-yellow-800">
+        <span className="font-semibold text-primary font-bold">
           📊 Curriculum Summary
         </span>
-        <span className="text-yellow-700">
+        <span className="text-foreground">
           {teachers.length} ครู · {totalPeriods} คาบ/สัปดาห์
           {warningCount > 0 && <span className="ml-1 text-orange-600">· ⚠️ {warningCount} warnings</span>}
           {unmapped.length > 0 && <span className="ml-1 text-red-600">· ❌ {unmapped.length} unmapped</span>}
-          <span className="ml-2 text-yellow-500">{expanded ? '▼' : '▶'}</span>
+          <span className="ml-2 text-primary/70">{expanded ? '▼' : '▶'}</span>
         </span>
       </button>
 
       {expanded && (
-        <div className="px-3 pb-3 space-y-3 border-t border-yellow-200">
+        <div className="px-3 pb-3 space-y-3 border-t border-border">
           {/* Teacher table */}
           <div className="max-h-60 overflow-y-auto mt-2">
             <table className="w-full text-xs">
               <thead>
-                <tr className="text-left text-yellow-700">
+                <tr className="text-left text-foreground">
                   <th className="pb-1 pr-2">Code</th>
                   <th className="pb-1 pr-2">Name</th>
                   <th className="pb-1 pr-2">Subjects</th>
@@ -82,8 +82,8 @@ function CurriculumSummary({ rows }: { rows: string[][] }) {
               </thead>
               <tbody>
                 {teachers.map(t => (
-                  <tr key={t.code} className="border-t border-yellow-100">
-                    <td className="py-0.5 pr-2 text-yellow-700">{t.code}</td>
+                  <tr key={t.code} className="border-t border-border">
+                    <td className="py-0.5 pr-2 text-foreground">{t.code}</td>
                     <td className="py-0.5 pr-2">{t.name}</td>
                     <td className="py-0.5 pr-2 text-center">{t.subjectCount}</td>
                     <td className="py-0.5 pr-2 text-center">{t.classCount}</td>
@@ -197,18 +197,11 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
     setLinkMissing([]);
 
     try {
-      const data: SheetData = {};
-      await Promise.all(
-        ALL_TAB_NAMES.map(async (tab) => {
-          const rows = await fetchPublicSheetTab(id, tab);
-          if (rows) data[tab] = rows;
-        })
-      );
+      const { data, missingTabs } = await fetchAllPublicTabs(id);
 
-      const found   = ALL_TAB_NAMES.filter((t) =>  data[t]);
-      const missing = ALL_TAB_NAMES.filter((t) => !data[t]);
+      const found = ALL_TAB_NAMES.filter((t) => data[t]);
       setLinkFound(found);
-      setLinkMissing(missing);
+      setLinkMissing(missingTabs);
       setLinkStatus(found.length > 0 ? 'success' : 'error');
       if (found.length > 0) {
         onDataLoaded(data);
@@ -252,39 +245,39 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
 
   // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <div data-testid="dev-test-panel" className="rounded-xl border-2 border-dashed border-yellow-300 bg-yellow-50 overflow-hidden">
+    <div data-testid="dev-test-panel" className="rounded-xl border-2 border-dashed border-primary-border bg-primary-light overflow-hidden">
       {/* Header bar */}
       <button
-        className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-yellow-100 transition-colors"
+        className="w-full flex items-center justify-between px-5 py-3 text-left hover:bg-surface-alt transition-colors"
         onClick={() => setCollapsed((c) => !c)}
       >
         <div className="flex items-center gap-2">
           <span className="text-base">🧪</span>
-          <span className="font-semibold text-yellow-800 text-sm">Dev Testing Panel</span>
+          <span className="font-semibold text-primary font-bold text-sm">Dev Testing Panel</span>
           {loadedCount > 0 && (
-            <span className="rounded-full bg-yellow-200 px-2 py-0.5 text-xs font-medium text-yellow-800">
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary font-bold">
               {loadedCount}/8 แท็บ
             </span>
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-yellow-600">⚠️ Development Only</span>
-          <span className="text-yellow-600 text-xs">{collapsed ? '▶' : '▼'}</span>
+          <span className="text-xs text-foreground-muted">⚠️ Development Only</span>
+          <span className="text-foreground-muted text-xs">{collapsed ? '▶' : '▼'}</span>
         </div>
       </button>
 
       {!collapsed && (
-        <div className="px-5 pb-5 space-y-4 border-t border-yellow-200">
+        <div className="px-5 pb-5 space-y-4 border-t border-border">
           {/* Mode switcher */}
-          <div className="flex gap-1 mt-4 bg-yellow-100 rounded-lg p-1 w-fit">
+          <div className="flex gap-1 mt-4 bg-surface-alt rounded-lg p-1 w-fit">
             {(['link', 'upload'] as const).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setActiveTab(mode)}
                 className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   activeTab === mode
-                    ? 'bg-surface text-yellow-800 shadow-sm'
-                    : 'text-yellow-600 hover:text-yellow-800'
+                    ? 'bg-surface text-primary font-bold shadow-sm'
+                    : 'text-foreground-muted hover:text-primary font-bold'
                 }`}
               >
                 {mode === 'link' ? '🔗 Google Sheet Link' : '📁 Upload CSV'}
@@ -302,15 +295,15 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
                   onChange={(e) => { setLinkInput(e.target.value); setLinkError(''); setLinkStatus('idle'); }}
                   onKeyDown={(e) => e.key === 'Enter' && handleFetchSheet()}
                   placeholder="https://docs.google.com/spreadsheets/d/..."
-                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-yellow-300 bg-surface outline-none focus:border-yellow-500 focus:ring-2 focus:ring-yellow-100 transition-all"
+                  className="flex-1 px-3 py-2 text-sm rounded-lg border border-primary-border bg-surface outline-none focus:border-primary focus:ring-2 focus:ring-yellow-100 transition-all"
                 />
                 <button
                   onClick={handleFetchSheet}
                   disabled={!linkInput.trim() || linkStatus === 'fetching'}
                   className={`px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all ${
                     !linkInput.trim() || linkStatus === 'fetching'
-                      ? 'bg-yellow-100 text-yellow-400 cursor-not-allowed'
-                      : 'bg-yellow-500 hover:bg-yellow-600 text-white shadow-sm'
+                      ? 'bg-surface-alt text-primary/70 cursor-not-allowed'
+                      : 'bg-primary-light0 hover:bg-primary/90 text-white shadow-sm'
                   }`}
                 >
                   {linkStatus === 'fetching' ? '🔄 กำลังดึง...' : '🔍 ดึงข้อมูล'}
@@ -332,8 +325,8 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
                 </div>
               )}
 
-              <p className="text-xs text-yellow-600">
-                💡 Sheet ต้องตั้งค่า "Anyone with the link can view"
+              <p className="text-xs text-foreground-muted">
+                💡 Sheet ต้องตั้งค่า &quot;Anyone with the link can view&quot;
               </p>
             </div>
           )}
@@ -347,13 +340,13 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
                 className={`rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
-                  isDragging ? 'border-yellow-500 bg-yellow-100' : 'border-yellow-300 bg-surface'
+                  isDragging ? 'border-primary bg-surface-alt' : 'border-primary-border bg-surface'
                 }`}
               >
-                <p className="text-sm text-yellow-700">
+                <p className="text-sm text-foreground">
                   📂 ลากไฟล์ <code>.csv</code> ทั้งหมดมาวางที่นี่
                 </p>
-                <p className="text-xs text-yellow-500 mt-1">
+                <p className="text-xs text-primary/70 mt-1">
                   ชื่อไฟล์จะถูก match อัตโนมัติ เช่น <code>period.csv</code> → period
                 </p>
               </div>
@@ -378,7 +371,7 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
                       </span>
                       <button
                         onClick={() => fileInputRefs.current[tab]?.click()}
-                        className="text-yellow-600 hover:text-yellow-800 underline"
+                        className="text-foreground-muted hover:text-primary font-bold underline"
                       >
                         {loaded ? '🔄' : '+ ไฟล์'}
                       </button>
@@ -411,22 +404,22 @@ export default function DevTestPanel({ onDataLoaded, onClear, currentData }: Dev
           )}
 
           {/* ── Shared action buttons ── */}
-          <div className="flex items-center gap-2 pt-2 border-t border-yellow-200">
+          <div className="flex items-center gap-2 pt-2 border-t border-border">
             <button
               onClick={handleLoadExamples}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-500 hover:bg-yellow-600 text-white transition-colors"
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary-light0 hover:bg-primary/90 text-white transition-colors"
             >
               📦 โหลดไฟล์ตัวอย่าง
             </button>
             {loadedCount > 0 && (
               <button
                 onClick={onClear}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-yellow-300 text-yellow-700 hover:bg-yellow-100 transition-colors"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-primary-border text-foreground hover:bg-surface-alt transition-colors"
               >
                 🗑 ล้างข้อมูล
               </button>
             )}
-            <span className="text-xs text-yellow-600 ml-auto">
+            <span className="text-xs text-foreground-muted ml-auto">
               {loadedCount === 0
                 ? 'ยังไม่มีข้อมูล'
                 : `${loadedCount}/8 แท็บโหลดแล้ว`}

@@ -12,6 +12,8 @@ export async function submitScheduleJob(params: {
   student?: File | Blob;
   scout?: File | Blob;
   jobName?: string;
+  academicYear?: string;
+  semester?: number;
 }): Promise<SubmitJobResponse> {
   const form = new FormData();
   form.append('curriculum', params.curriculum, 'curriculum.csv');
@@ -25,6 +27,8 @@ export async function submitScheduleJob(params: {
   if (params.scout) form.append('scout', params.scout, 'scout.csv');
 
   if (params.jobName) form.append('job_name', params.jobName);
+  if (params.academicYear) form.append('academic_year', params.academicYear);
+  if (params.semester !== undefined) form.append('semester', String(params.semester));
 
   const res = await fetch(`${API_URL}/schedule`, { method: 'POST', body: form });
   if (!res.ok) {
@@ -50,4 +54,18 @@ export async function getJobResult(jobId: string): Promise<{ result: ScheduleRes
     throw new Error(err.error ?? 'Failed to get result');
   }
   return res.json();
+}
+
+export async function downloadScheduleZip(jobId: string): Promise<void> {
+  const res = await fetch(`${API_URL}/schedule/${jobId}/download`);
+  if (!res.ok) throw new Error('Failed to download schedule ZIP');
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `schedule_${jobId}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
 }

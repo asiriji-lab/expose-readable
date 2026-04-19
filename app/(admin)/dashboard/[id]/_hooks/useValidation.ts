@@ -47,7 +47,8 @@ export function useValidation(sheetData: SheetData) {
     setTabStates((prev) => ({ ...prev, [name]: { ...prev[name], ...state } }));
   }, []);
 
-  const runValidation = useCallback(async () => {
+  const runValidation = useCallback(async (data?: SheetData) => {
+    const source = data ?? sheetData;
     setIsRunning(true);
 
     // ── Phase 1 ── structural, run all 4 in parallel
@@ -64,8 +65,8 @@ export function useValidation(sheetData: SheetData) {
     type Phase1Tab = 'period' | 'room' | 'teacher' | 'student';
     const phase1Results: ValidationResult[] = await Promise.all(
       PHASE_1_TABS.map(async (tab) => {
-        const data = sheetData[tab] ?? [];
-        const result = phase1Validators[tab as Phase1Tab](data);
+        const tabData = source[tab] ?? [];
+        const result = phase1Validators[tab as Phase1Tab](tabData);
         setTabState(tab, { status: deriveStatus(result), result });
         return result;
       })
@@ -83,12 +84,12 @@ export function useValidation(sheetData: SheetData) {
     // preplace must be validated first so its slots are available in buildLookups
     for (const tab of PHASE_2_TABS) setTabState(tab, { status: 'validating' });
 
-    const preplaceStructural = validatePreplace(sheetData['preplace'] ?? []);
+    const preplaceStructural = validatePreplace(source['preplace'] ?? []);
     const lookups = buildLookups([...phase1Results, preplaceStructural]);
 
-    const scoutStructural = validateScout(sheetData['scout'] ?? []);
-    const electiveStructural = validateElective(sheetData['elective'] ?? []);
-    const curriculumStructural = validateCurriculum(sheetData['curriculum'] ?? []);
+    const scoutStructural = validateScout(source['scout'] ?? []);
+    const electiveStructural = validateElective(source['elective'] ?? []);
+    const curriculumStructural = validateCurriculum(source['curriculum'] ?? []);
 
     // Referential checks layered on top
     const studentPhase1 = phase1Results.find((r) => r.tabName === 'student')!;

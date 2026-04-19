@@ -85,7 +85,9 @@ export function validateTeacher(data: TabData): ValidationResult {
     for (const [colIdx, colName] of [[availIdx, 'available_slots'], [unavailIdx, 'unavailable_slots']] as [number, string][]) {
       if (colIdx === -1) continue;
       const slotVal = (row[colIdx] ?? '').trim();
-      if (!slotVal) continue;
+      if (!slotVal) {
+        continue;
+      }
       const invalid = getInvalidSlotTokens(slotVal);
       for (const token of invalid) {
         errors.push({

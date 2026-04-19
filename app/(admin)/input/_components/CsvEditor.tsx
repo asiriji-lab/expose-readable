@@ -256,7 +256,7 @@ export default function CsvEditor({ file, onClose, onSave, validationRules, catc
     const handleDownload = () => {
         const rows = getSheetData();
         const csvString = Papa.unparse(rows);
-        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob(['\uFEFF' + csvString], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement("a");
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
