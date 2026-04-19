@@ -68,6 +68,7 @@ function onOpen() {
     .createMenu('Schooldoo')
     .addItem('Validate All Tabs', 'runValidation')
     .addItem('Generate Skeleton', 'generateSkeleton')
+    .addItem('Fix Curriculum Headers', 'fixCurriculumHeaders')
     .addSeparator()
     .addItem('Debug: Show Tab Names', 'debugTabNames')
     .addToUi();
@@ -160,6 +161,49 @@ function lockHeaderRow_(sheet) {
   protection.removeEditors(protection.getEditors());
   if (protection.canDomainEdit()) {
     protection.setDomainEdit(false);
+  }
+}
+
+/**
+ * Renames legacy column headers in the curriculum tab so they match what the
+ * backend expects.  Specifically: 'รหัสวิชา 2' → 'คาบเรียน'.
+ * Run this once on existing sheets that were created before the skeleton was
+ * updated.
+ */
+function fixCurriculumHeaders() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+  var sheet = getSheetByAliases(ss, 'curriculum');
+
+  if (!sheet) {
+    ui.alert('Fix Curriculum Headers', 'ไม่พบแท็บ curriculum / หลักสูตร', ui.ButtonSet.OK);
+    return;
+  }
+
+  var lastCol = sheet.getLastColumn();
+  if (lastCol <= 0) {
+    ui.alert('Fix Curriculum Headers', 'แท็บ curriculum ว่างเปล่า', ui.ButtonSet.OK);
+    return;
+  }
+
+  var headerRange = sheet.getRange(1, 1, 1, lastCol);
+  var headers = headerRange.getValues()[0];
+  var fixed = 0;
+
+  var RENAMES = { 'รหัสวิชา 2': 'คาบเรียน' };
+
+  for (var i = 0; i < headers.length; i++) {
+    var h = String(headers[i]).trim();
+    if (RENAMES[h]) {
+      sheet.getRange(1, i + 1).setValue(RENAMES[h]);
+      fixed++;
+    }
+  }
+
+  if (fixed > 0) {
+    ui.alert('Fix Curriculum Headers', 'แก้ไข ' + fixed + ' คอลัมน์เรียบร้อยแล้ว', ui.ButtonSet.OK);
+  } else {
+    ui.alert('Fix Curriculum Headers', 'ไม่พบคอลัมน์ที่ต้องแก้ไข (อาจถูกแก้ไขแล้ว)', ui.ButtonSet.OK);
   }
 }
 
