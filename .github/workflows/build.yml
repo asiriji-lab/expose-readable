@@ -1,4 +1,4 @@
-name: build_ga_docker
+name: build_backend_docker
 on:
   schedule:
     - cron:
@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps: 
       - uses: actions/checkout@v3
-      - name: Build GA Docker Container
+      - name: Build Backend Docker Container
         env:
           SCHEDOOL_ACTION_TOKEN: ${{ secrets.SCHEDOOL_ACTION_TOKEN }}
         run: |
