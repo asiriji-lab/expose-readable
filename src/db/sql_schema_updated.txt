@@ -1,0 +1,72 @@
+-- public.organizations definition
+
+-- Drop table
+
+-- DROP TABLE public.organizations;
+
+CREATE TABLE public.organizations (
+	org_id uuid NOT NULL,
+	"name" varchar(255) NOT NULL,
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL,
+	CONSTRAINT organizations_name_key UNIQUE (name),
+	CONSTRAINT organizations_pkey PRIMARY KEY (org_id)
+);
+
+-- public.schedules definition
+
+-- Drop table
+
+-- DROP TABLE public.schedules;
+
+CREATE TABLE public.schedules (
+	schedule_id uuid NOT NULL,
+	org_id uuid NULL,
+	user_id uuid NULL,
+	job_name varchar(255) NULL,
+	academic_year varchar(10) NULL,
+	semester int4 NULL,
+	status varchar(50) NOT NULL,
+	progress float8 NOT NULL,
+	sheet_url text NULL,
+	"data" jsonb NULL,
+	ga_params jsonb NULL,
+	error text NULL,
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL,
+	CONSTRAINT schedules_pkey PRIMARY KEY (schedule_id)
+);
+
+
+-- public.schedules foreign keys
+
+ALTER TABLE public.schedules ADD CONSTRAINT schedules_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(org_id) ON DELETE SET NULL;
+ALTER TABLE public.schedules ADD CONSTRAINT schedules_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE SET NULL;
+
+-- public.users definition
+
+-- Drop table
+
+-- DROP TABLE public.users;
+
+CREATE TABLE public.users (
+	user_id uuid NOT NULL,
+	org_id uuid NULL,
+	email varchar(255) NOT NULL,
+	username varchar(255) NULL,
+	"role" varchar(50) NOT NULL,
+	first_name varchar(255) NULL,
+	last_name varchar(255) NULL,
+	"name" varchar(255) NULL,
+	password_hash varchar(255) NULL,
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL,
+	CONSTRAINT users_email_key UNIQUE (email),
+	CONSTRAINT users_pkey PRIMARY KEY (user_id),
+	CONSTRAINT users_username_key UNIQUE (username)
+);
+
+
+-- public.users foreign keys
+
+ALTER TABLE public.users ADD CONSTRAINT users_org_id_fkey FOREIGN KEY (org_id) REFERENCES public.organizations(org_id) ON DELETE SET NULL;

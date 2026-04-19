@@ -108,6 +108,10 @@ def list_organizations() -> List[Dict]:
 @_guard
 def create_user(
     email: str,
+    role: str,
+    username: Optional[str] = None,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
     name: Optional[str] = None,
     org_id: Optional[str] = None,
     password_hash: Optional[str] = None,
@@ -117,16 +121,23 @@ def create_user(
 
     Args:
         email:         Unique e-mail address.
-        name:          Display name (optional).
+        role:          Account role — 'admin', 'teacher', or 'student'.
+        username:      Unique username (optional).
+        first_name:    Given name (optional).
+        last_name:     Family name (optional).
+        name:          Legacy display name (optional).
         org_id:        UUID of the user's organization (optional).
         password_hash: Pre-hashed password string for auth (optional).
-                       Pass None for API-only accounts with no login.
 
     Returns:
         The newly created row as a dict (password_hash excluded), or None on error.
     """
     user = User(
         email=email,
+        role=role,
+        username=username or None,
+        first_name=first_name or None,
+        last_name=last_name or None,
         name=name or None,
         org_id=_parse_uuid(org_id),
         password_hash=password_hash,

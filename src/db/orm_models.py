@@ -81,6 +81,10 @@ class User(db.Model):
         nullable=True,
     )
     email         = Column(String(255), nullable=False, unique=True)
+    username      = Column(String(255), nullable=True,  unique=True)
+    role          = Column(String(50),  nullable=False)
+    first_name    = Column(String(255), nullable=True)
+    last_name     = Column(String(255), nullable=True)
     name          = Column(String(255), nullable=True)
     # Stores a Werkzeug/bcrypt hash; NULL means the account has no password (API-only)
     password_hash = Column(String(255), nullable=True)
@@ -97,6 +101,10 @@ class User(db.Model):
             'user_id':    str(self.user_id),
             'org_id':     str(self.org_id) if self.org_id else None,
             'email':      self.email,
+            'username':   self.username,
+            'role':       self.role,
+            'first_name': self.first_name,
+            'last_name':  self.last_name,
             'name':       self.name,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,

@@ -710,15 +710,29 @@ def create_user():
     if not database.is_available():
         return jsonify({"success": False, "error": "Database not configured"}), 400
 
-    data   = request.get_json() or {}
-    email  = (data.get('email') or '').strip()
-    name   = (data.get('name') or '').strip() or None
-    org_id = (data.get('org_id') or '').strip() or None
+    data       = request.get_json() or {}
+    email      = (data.get('email')      or '').strip()
+    role       = (data.get('role')       or '').strip().lower() or 'student'
+    username   = (data.get('username')   or '').strip() or None
+    first_name = (data.get('first_name') or '').strip() or None
+    last_name  = (data.get('last_name')  or '').strip() or None
+    name       = (data.get('name')       or '').strip() or None
+    org_id     = (data.get('org_id')     or '').strip() or None
 
     if not email:
         return jsonify({"success": False, "error": "'email' is required"}), 400
+    if role not in ('admin', 'teacher', 'student'):
+        role = 'student'
 
-    user = models.create_user(email=email, name=name, org_id=org_id)
+    user = models.create_user(
+        email=email,
+        role=role,
+        username=username,
+        first_name=first_name,
+        last_name=last_name,
+        name=name,
+        org_id=org_id,
+    )
     if user is None:
         return jsonify({"success": False,
                         "error": "Could not create user (email may already exist)"}), 409
@@ -1022,16 +1036,19 @@ def sync_user():
 
     data  = request.get_json() or {}
     email = (data.get('email') or '').strip()
+    role  = (data.get('role')  or '').strip().lower() or 'student'
     name  = (data.get('name')  or '').strip() or None
 
     if not email:
         return jsonify({"success": False, "error": "'email' is required"}), 400
+    if role not in ('admin', 'teacher', 'student'):
+        role = 'student'
 
     existing = models.get_user_by_email(email)
     if existing:
         return jsonify({"success": True, "user": existing, "created": False})
 
-    user = models.create_user(email=email, name=name)
+    user = models.create_user(email=email, role=role, name=name)
     if not user:
         return jsonify({"success": False, "error": "Could not create user"}), 500
 
@@ -1179,11 +1196,15 @@ def auth_register():
     if not database.is_available():
         return jsonify({"success": False, "error": "Database not configured"}), 400
 
-    data     = request.get_json() or {}
-    email    = (data.get('email')    or '').strip()
-    password = (data.get('password') or '').strip()
-    name     = (data.get('name')     or '').strip() or None
-    org_id   = (data.get('org_id')   or '').strip() or None
+    data       = request.get_json() or {}
+    email      = (data.get('email')      or '').strip()
+    password   = (data.get('password')   or '').strip()
+    username   = (data.get('username')   or '').strip() or None
+    role       = (data.get('role')       or '').strip().lower()
+    first_name = (data.get('first_name') or '').strip() or None
+    last_name  = (data.get('last_name')  or '').strip() or None
+    name       = (data.get('name')       or '').strip() or None
+    org_id     = (data.get('org_id')     or '').strip() or None
 
     if not email:
         return jsonify({"success": False, "error": "'email' is required"}), 400
@@ -1191,13 +1212,24 @@ def auth_register():
         return jsonify({"success": False, "error": "'password' is required"}), 400
     if len(password) < 8:
         return jsonify({"success": False, "error": "Password must be at least 8 characters"}), 400
+    if role not in ('admin', 'teacher', 'student'):
+        return jsonify({"success": False, "error": "'role' must be 'admin', 'teacher', or 'student'"}), 400
 
     # Check for existing account
     if models.get_user_by_email(email):
         return jsonify({"success": False, "error": "Email already registered"}), 409
 
     hashed = generate_password_hash(password)
-    user = models.create_user(email=email, name=name, org_id=org_id, password_hash=hashed)
+    user = models.create_user(
+        email=email,
+        role=role,
+        username=username,
+        first_name=first_name,
+        last_name=last_name,
+        name=name,
+        org_id=org_id,
+        password_hash=hashed,
+    )
     if not user:
         return jsonify({"success": False, "error": "Could not create account"}), 500
 
