@@ -196,13 +196,7 @@ export async function POST(req: NextRequest) {
     // Placeholder: set GOOGLE_APPS_SCRIPT_ID in .env.local to the deployed script ID
     // When configured, this attaches the existing script project to the new spreadsheet
     // via the Apps Script API so it runs automatically in context.
-    const scriptId = process.env.GOOGLE_APPS_SCRIPT_ID;
-    if (scriptId) {
-      // NOTE: Full programmatic binding requires the Apps Script API with
-      // projects.create({ parentId: spreadsheetId }). This placeholder logs the
-      // intent — implement with @googleapis/script when the script project is set up.
-      console.log(`[sheets/copy] TODO: bind script ${scriptId} to sheet ${spreadsheetId}`);
-    }
+    const scriptId = process.env.GOOGLE_APPS_SCRIPT_ID ?? null;
 
     return NextResponse.json({ spreadsheetId, spreadsheetUrl, scriptId: scriptId ?? null });
   } catch (err: any) {

@@ -93,10 +93,8 @@ export function Step10_Generate({
           `schedule_cache_${jobId}`,
           JSON.stringify(schedulePayload)
         );
-        console.log('[Step10] Schedule cached for job', jobId);
       } catch (fetchErr) {
         // Non-fatal — schedule page will fall back to its own fetch.
-        console.warn('[Step10] Could not pre-fetch result, schedule page will retry:', fetchErr);
       }
 
       // 4. Navigate to the schedule viewer

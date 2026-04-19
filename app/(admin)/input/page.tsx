@@ -61,7 +61,6 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
   // Placeholder for step-specific validation logic
   // Currently returns true for all steps, but can be expanded
   const validateStep = (step: number): boolean => {
-    console.log('Validating step', step);
     const newErrors: { [key: string]: string } = {};
 
     switch (step) {
@@ -76,15 +75,12 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
 
   // Handles navigation to the next step
   const handleNext = () => {
-    console.log('Validating step', currentStep);
     if (validateStep(currentStep)) {
-      console.log('Step', currentStep, 'is valid');
       if (currentStep < 10) {
         setCurrentStep(currentStep + 1);
         window.scrollTo(0, 0);
       }
     }
-    console.log("step", currentStep, "errors:", errors);
   };
 
   const handleBack = () => {
@@ -94,48 +90,28 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Handles schedule generation (Step 10)
-  // Includes "Guardrails" to prevent generation if steps 1-8 are incomplete
-  // Handles schedule generation (Step 10)
-  // Includes "Guardrails" to prevent generation if steps 1-8 are incomplete
-  // accepts an argument to distinguish between internal (Step10 component) and global (NavigationButtons) calls
   const handleGenerate = async (e?: any): Promise<boolean> => {
-    console.log("handleGenerate called. Completed steps:", completedSteps);
-
-    // Guardrail: Check if all required steps (1-8) are completed
     const requiredSteps = [1, 2, 3, 4, 5, 6, 7, 8];
     const missingSteps = requiredSteps.filter(step => !completedSteps.includes(step));
 
     if (missingSteps.length > 0) {
-      console.log("Missing steps:", missingSteps);
-      // Show toast notification with missing steps
       setToastMessage(`Please mark all steps (1-8) as done before generating. Missing steps: ${missingSteps.join(', ')}`);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 5000);
-      return false; // Prevent generation
+      return false;
     }
 
-    // Determine if called from Global button (has event arg) or Internal Step10 button (undefined arg)
-    // Step10 calls: await onGenerate(); -> arg is undefined
+    // Distinguish between the global nav button (has event) and the Step10 internal button (no event)
     const isGlobalButton = e && (e.preventDefault || e.target);
 
-    console.log("Generating schedule with data. Source:", isGlobalButton ? "Global Button" : "Internal Step10");
-
-    // If Global Button, we need to handle loading UI + Redirect here
     if (isGlobalButton) {
       setIsGenerating(true);
-
-      // Simulate generation delay for Global Button experience
       await new Promise(resolve => setTimeout(resolve, 2000));
-
-      console.log('Generating schedule:', formData);
-      // No alert, just redirect
       setIsGenerating(false);
       router.push('/schedule');
       return true;
     }
 
-    // If Internal Step10 Button, we return true immediately so Step10 can run its own animation/redirect logic
     return true;
   };
 
@@ -153,13 +129,7 @@ export default function InputPage({ children }: { children: React.ReactNode }) {
     setCurrentStep(step);
   };
 
-  let canProceed = false;
-  if (currentStep == 10) {
-    canProceed = true; // Enable the button on step 10 so it can trigger the check
-  } else if (currentStep >= 1 && currentStep <= 9) {
-    canProceed = true;
-  }
-
+  const canProceed = currentStep >= 1 && currentStep <= 10;
 
   const renderStep = () => {
     switch (currentStep) {

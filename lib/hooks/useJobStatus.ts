@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { getJobStatus } from '../api/scheduleApi';
-import type { JobDetail } from '../types/api';
+import { getJobStatus } from '@/api/schedule';
+import type { JobDetail } from '@/types/api';
 
 const TERMINAL_STATES = new Set(['completed', 'failed']);
 

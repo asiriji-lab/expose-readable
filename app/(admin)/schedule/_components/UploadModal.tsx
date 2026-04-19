@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
-import { submitScheduleJob } from '../../../../lib/api/scheduleApi';
-import { useJobStatus } from '../../../../lib/hooks/useJobStatus';
+import { submitScheduleJob } from '@/api/schedule';
+import { useJobStatus } from '@/lib/hooks/useJobStatus';
 
 interface UploadModalProps {
   onClose: () => void;

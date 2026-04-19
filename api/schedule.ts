@@ -82,20 +82,6 @@ export async function submitScheduleJob(params: {
   if (params.orgId)       form.append('org_id', params.orgId);
   if (params.userId)      form.append('user_id', params.userId);
 
-  if (typeof window !== 'undefined') {
-    console.log('[submitScheduleJob] Form keys:', Array.from(form.keys()));
-    (async () => {
-      console.log('--- CURRICULUM CSV ---');
-      console.log(await params.curriculum.text());
-      console.log('----------------------');
-      if (params.student) {
-        console.log('--- STUDENT CSV ---');
-        console.log(await params.student.text());
-        console.log('----------------------');
-      }
-    })();
-  }
-
   const res = await fetch(`${API_URL}/schedule`, {
     method: 'POST',
     body: form,

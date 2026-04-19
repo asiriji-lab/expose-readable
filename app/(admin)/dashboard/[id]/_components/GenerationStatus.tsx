@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useJobStatus } from '@/lib/hooks/useJobStatus';
-import { downloadScheduleZip } from '@/lib/api/scheduleApi';
+import { downloadScheduleZip } from '@/api/schedule';
 
 type GenerationState = 'idle' | 'generating' | 'completed' | 'failed';
 
