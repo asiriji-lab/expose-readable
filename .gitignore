@@ -59,4 +59,6 @@ Untitled/
 
 # graphify generated outputs
 .graphify_detect.json
+.graphify_cached.json
+.graphify_uncached.txt
 graphify-out/
