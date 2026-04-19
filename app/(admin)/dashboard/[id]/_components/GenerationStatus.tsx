@@ -41,8 +41,13 @@ export default function GenerationStatus({
     if (state !== 'generating' || !jobId) return;
 
     if (job?.status === 'completed') {
+      // Sync status to DB so the dashboard list reflects completion
+      fetch(`/api/schedule/sync-status?job_id=${encodeURIComponent(jobId)}`, { method: 'POST' })
+        .catch(() => { /* non-fatal */ });
       onCompleted();
     } else if (job?.status === 'failed') {
+      fetch(`/api/schedule/sync-status?job_id=${encodeURIComponent(jobId)}`, { method: 'POST' })
+        .catch(() => { /* non-fatal */ });
       onFailed(job?.error || error || 'สร้างตารางไม่สำเร็จ');
     } else if (error) {
       onFailed(error);

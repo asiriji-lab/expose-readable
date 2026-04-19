@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Download, Trash2, Sparkles, MoreHorizontal } from 'lucide-react';
+import { ChevronLeft, Download, Trash2, Sparkles, MoreHorizontal, Save } from 'lucide-react';
 import ViewModeToggle from './_components/ViewModeToggle';
 import TimetableGridV2 from './_components/TimetableGridV2';
 import TimetableGridSkeleton from './_components/TimetableGridSkeleton';
@@ -181,11 +181,45 @@ function SchedulePageContent() {
         if (!jobId) return;
         if (!confirm('Delete this schedule? This cannot be undone.')) return;
         try {
-            await fetch(`/api/schedule/delete?job_id=${encodeURIComponent(jobId)}`, { method: 'DELETE' });
+            const res = await fetch(`/api/schedule/delete?job_id=${encodeURIComponent(jobId)}`, { method: 'DELETE' });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data?.error ?? 'Delete failed');
+            }
             router.push('/dashboard');
+            router.refresh();
         } catch (e) {
             console.error('Delete error:', e);
             alert('Failed to delete schedule.');
+        }
+    };
+
+    const handleSaveSchedule = async () => {
+        const params = new URLSearchParams(window.location.search);
+        const jobId  = params.get('job_id');
+        if (!jobId || !dataset) return;
+
+        try {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dev.winscloud.net/api/v1';
+            const exportData = {
+                config: { academic_year: '2026', semester: 1 },
+                teachers: dataset.teachers,
+                classes:  dataset.classes,
+                rooms:    dataset.rooms,
+            };
+            const res = await fetch(`${API_URL}/schedules/${encodeURIComponent(jobId)}`, {
+                method:  'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ data: exportData }),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data?.error ?? 'Save failed');
+            }
+            alert('Schedule saved successfully.');
+        } catch (e) {
+            console.error('Save error:', e);
+            alert('Failed to save schedule.');
         }
     };
 
@@ -368,6 +402,10 @@ function SchedulePageContent() {
                                 <>
                                     <div className="fixed inset-0 z-30" onClick={() => setActionsOpen(false)} />
                                     <div className="absolute right-0 top-full mt-1 z-40 w-48 bg-surface border border-border rounded-xl shadow-lg py-1">
+                                        <button onClick={() => { handleSaveSchedule(); setActionsOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors">
+                                            <Save className="w-4 h-4 text-foreground-muted" /> Save Schedule
+                                        </button>
+                                        <div className="my-1 border-t border-border" />
                                         <button onClick={() => { handleExportClick(); setActionsOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors">
                                             <Download className="w-4 h-4 text-foreground-muted" /> Export JSON
                                         </button>

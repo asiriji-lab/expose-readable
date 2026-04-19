@@ -78,7 +78,6 @@ function validateRoom(data) {
   if (errors.length) return { valid: false, errors: errors, warnings: warnings };
 
   var roomIdx = headers.indexOf('ห้องทั้งหมด');
-  var noteIdx = headers.indexOf('หมายเหตุ');
   var seen = {};
 
   for (var r = 1; r < data.length; r++) {
@@ -86,6 +85,7 @@ function validateRoom(data) {
     var sheetRow = r + 1;
     var roomId   = _str(row[roomIdx]);
     if (!roomId && _isEmptyRow(row)) continue;
+    if (isMarkerRow(row)) continue; // skip marker/section-header rows
     if (!roomId) {
       errors.push(_err(sheetRow, roomIdx + 1, 'ห้องทั้งหมด: ต้องระบุรหัสห้อง'));
       continue;
@@ -95,8 +95,7 @@ function validateRoom(data) {
     } else {
       seen[roomId] = sheetRow;
     }
-    if (noteIdx !== -1 && !_str(row[noteIdx]))
-      warnings.push(_warn(sheetRow, noteIdx + 1, 'หมายเหตุ: ไม่ได้ระบุหมายเหตุ'));
+    // หมายเหตุ is optional — no warning for empty
   }
   return { valid: errors.length === 0, errors: errors, warnings: warnings };
 }
@@ -126,6 +125,7 @@ function validateTeacher(data) {
 
     if (_isEmptyRow(row)) continue;
     if (isSkipRow(idVal)) continue;
+    if (isMarkerRow(row)) continue; // skip marker/section-header rows
 
     if (!isValidTeacherId(idVal))
       errors.push(_err(sheetRow, idIdx + 1, 'teacher_id: ต้องเป็น T### หรือ E### — ได้รับ "' + idVal + '"'));
@@ -137,16 +137,14 @@ function validateTeacher(data) {
       seen[idVal] = sheetRow;
     }
 
+    // available_slots / unavailable_slots are optional — only validate format when non-empty
     var slotCols = [[availIdx, 'available_slots'], [unavailIdx, 'unavailable_slots']];
     for (var s = 0; s < slotCols.length; s++) {
       var colIdx  = slotCols[s][0];
       var colName = slotCols[s][1];
       if (colIdx === -1) continue;
       var slotVal = _str(row[colIdx]);
-      if (!slotVal) {
-        warnings.push(_warn(sheetRow, colIdx + 1, colName + ': ไม่ได้ระบุคาบว่าง'));
-        continue;
-      }
+      if (!slotVal) continue; // optional — skip empty
       var invalid = getInvalidSlotTokens(slotVal);
       for (var t = 0; t < invalid.length; t++) {
         errors.push(_err(sheetRow, colIdx + 1, colName + ': รูปแบบ slot ไม่ถูกต้อง "' + invalid[t] + '"'));
@@ -181,6 +179,7 @@ function validateStudent(data) {
     var section  = _str(row[sectionIdx]);
 
     if (_isEmptyRow(row)) continue;
+    if (isMarkerRow(row)) continue; // skip marker/section-header rows
 
     if (classId && !isValidClassId(classId))
       errors.push(_err(sheetRow, classIdx + 1, 'นักเรียน: ต้องเป็นรูปแบบ G/S เช่น 1/1 — ได้รับ "' + classId + '"'));
@@ -189,10 +188,7 @@ function validateStudent(data) {
     if (section && (!/^\d+$/.test(section) || parseInt(section) <= 0))
       errors.push(_err(sheetRow, sectionIdx + 1, 'ห้อง: ต้องเป็นจำนวนเต็มบวก — ได้รับ "' + section + '"'));
 
-    if (roomIdx !== -1 && !_str(row[roomIdx]))
-      warnings.push(_warn(sheetRow, roomIdx + 1, 'ห้องประจำ: ไม่ได้ระบุห้องประจำ'));
-    if (currIdx !== -1 && !_str(row[currIdx]))
-      warnings.push(_warn(sheetRow, currIdx + 1, 'หลักสูตร: ไม่ได้ระบุหลักสูตร'));
+    // ห้องประจำ and หลักสูตร are optional — no warnings for empty values
   }
   return { valid: errors.length === 0, errors: errors, warnings: warnings };
 }
@@ -216,6 +212,7 @@ function validatePreplace(data) {
     var row      = data[r];
     var sheetRow = r + 1;
     if (_isEmptyRow(row)) continue;
+    if (isMarkerRow(row)) continue;
 
     var slotName = _str(row[nameIdx]);
     var period   = _str(row[slotIdx]);
@@ -260,10 +257,8 @@ function validateElective(data) {
     var row      = data[r];
     var sheetRow = r + 1;
     if (_isEmptyRow(row)) continue;
-    if (teacherIdx !== -1 && !_str(row[teacherIdx]))
-      warnings.push(_warn(sheetRow, teacherIdx + 1, 'ครูผู้สอน: ไม่ได้ระบุครูผู้สอน'));
-    if (roomIdx !== -1 && !_str(row[roomIdx]))
-      warnings.push(_warn(sheetRow, roomIdx + 1, 'ห้องเรียน: ไม่ได้ระบุห้องเรียน'));
+    if (isMarkerRow(row)) continue;
+    // ครูผู้สอน and ห้องเรียน are optional — no warnings for empty values
   }
   return { valid: errors.length === 0, errors: errors, warnings: warnings };
 }
@@ -289,16 +284,14 @@ function validateCurriculum(data) {
     var sheetRow = r + 1;
     if (_isEmptyRow(row)) continue;
     var firstCell = _str(row[0]);
-    if (isGradeHeader(firstCell)) continue;
+    if (isGradeHeader(firstCell)) continue; // grade marker rows (ม.1, ม.2, …)
+    if (isMarkerRow(row)) continue; // other marker/section-header rows
     var subject = _str(row[subjectIdx]);
     var periods = _str(row[periodsIdx]);
     if (!subject) continue;
     if (periods && (!/^\d+(\.\d+)?$/.test(periods) || parseFloat(periods) <= 0))
       errors.push(_err(sheetRow, periodsIdx + 1, 'คาบ/สัปดาห์: ต้องเป็นจำนวนบวก — ได้รับ "' + periods + '"'));
-    if (roomIdx !== -1 && !_str(row[roomIdx]))
-      warnings.push(_warn(sheetRow, roomIdx + 1, 'ห้องเรียน: ไม่ได้ระบุห้องเรียน'));
-    if (blockIdx !== -1 && !_str(row[blockIdx]))
-      warnings.push(_warn(sheetRow, blockIdx + 1, 'การแบ่งคาบสอน: ไม่ได้ระบุการแบ่งคาบ'));
+    // ห้องเรียน and การแบ่งคาบสอน are optional — no warnings for empty values
   }
   return { valid: errors.length === 0, errors: errors, warnings: warnings };
 }

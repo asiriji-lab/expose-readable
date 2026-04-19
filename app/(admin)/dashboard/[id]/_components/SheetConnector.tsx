@@ -67,10 +67,15 @@ export default function SheetConnector({
           {!connectedSheetId && (
             <>
               <button
-                onClick={() => { onCreateSkeleton(); setMode('import'); }}
-                className="flex items-center gap-1.5 text-xs text-foreground-muted hover:text-foreground transition-colors"
+                onClick={onCreateSkeleton}
+                disabled={isCreatingSheet}
+                className="flex items-center gap-1.5 text-xs text-foreground-muted hover:text-foreground transition-colors disabled:opacity-50"
               >
-                <FileSpreadsheet size={12} /> สร้าง Google Sheet (คัดลอกแบบฟอร์ม)
+                {isCreatingSheet ? (
+                  <><Loader2 size={12} className="animate-spin" /> กำลังสร้าง...</>
+                ) : (
+                  <><FileSpreadsheet size={12} /> สร้าง Google Sheet (คัดลอกแบบฟอร์ม)</>
+                )}
               </button>
 
               {fetchError && (

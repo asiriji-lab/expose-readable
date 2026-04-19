@@ -97,6 +97,33 @@ export const TAB_ALIASES: Record<TabName, string[]> = {
   curriculum: ['curriculum', 'หลักสูตร', 'Curriculum'],
 };
 
+/**
+ * Returns true if a row is a "Marker Cell" — a human-readability section
+ * divider that should not be included in the exported data.
+ *
+ * A marker row has content only in the first cell and either looks like a
+ * grade header (ม.1–ม.6) or a label ending with ":".
+ */
+export function isMarkerRow(row: string[]): boolean {
+  if (!row || row.length === 0) return false;
+  const first = (row[0] ?? '').trim();
+  if (!first) return false;
+  const restEmpty = row.slice(1).every((c) => !(c ?? '').trim());
+  if (!restEmpty) return false;
+  if (/^ม\.[1-6]$/.test(first)) return true;
+  if (/:\s*$/.test(first)) return true;
+  return false;
+}
+
+/**
+ * Strips marker rows from a tab's data, keeping the header row (index 0)
+ * and all non-marker data rows.
+ */
+export function stripMarkerRows(rows: string[][]): string[][] {
+  if (!rows || rows.length === 0) return rows;
+  return [rows[0], ...rows.slice(1).filter((r) => !isMarkerRow(r))];
+}
+
 /** Parse a raw CSV string into a 2-D string array using papaparse. */
 export function parseCSVText(text: string): string[][] {
   // Strip UTF-8 BOM (\uFEFF) that Google Sheets CSV export prepends — it corrupts the first header

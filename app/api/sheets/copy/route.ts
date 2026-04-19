@@ -27,12 +27,13 @@ const TAB_DEFS = [
 ];
 
 export async function POST(req: NextRequest) {
-  const { adminEmail, title } = await req.json();
+  const { userEmail, title } = await req.json();
 
-  // adminEmail is optional — if missing, sheet is created but not shared with anyone
-
+  // SCHEDOOL_ADMIN_EMAIL: the central admin account that owns all created sheets
+  // GOOGLE_SERVICE_ACCOUNT_EMAIL: service account used to create the sheet via API
   const serviceEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+  const schedoolAdminEmail = process.env.SCHEDOOL_ADMIN_EMAIL; // placeholder: set this in .env.local
 
   if (!serviceEmail || !privateKey) {
     return NextResponse.json(
@@ -136,29 +137,46 @@ export async function POST(req: NextRequest) {
       requestBody: { requests: formatRequests },
     });
 
-    // 4. Share with admin and transfer ownership so file doesn't use service account quota
-    if (adminEmail) {
-      const perm = await drive.permissions.create({
-        fileId: spreadsheetId,
-        requestBody: {
-          type: 'user',
-          role: 'writer',
-          emailAddress: adminEmail,
-        },
-        sendNotificationEmail: false,
-        fields: 'id',
-      });
-
-      // Transfer ownership to admin — file will count against admin's quota, not service account's
+    // 4. Share: SCHEDOOL_ADMIN_EMAIL becomes owner, userEmail gets editor access
+    if (schedoolAdminEmail) {
       try {
+        const adminPerm = await drive.permissions.create({
+          fileId: spreadsheetId,
+          requestBody: {
+            type: 'user',
+            role: 'writer',
+            emailAddress: schedoolAdminEmail,
+          },
+          sendNotificationEmail: false,
+          fields: 'id',
+        });
+        // Transfer ownership to the central admin account
         await drive.permissions.update({
           fileId: spreadsheetId,
-          permissionId: perm.data.id!,
+          permissionId: adminPerm.data.id!,
           transferOwnership: true,
           requestBody: { role: 'owner' },
         });
       } catch {
         // Transfer may fail for non-Workspace accounts — admin still has writer access
+      }
+    }
+
+    // Give the requesting user editor access
+    if (userEmail) {
+      try {
+        await drive.permissions.create({
+          fileId: spreadsheetId,
+          requestBody: {
+            type: 'user',
+            role: 'writer',
+            emailAddress: userEmail,
+          },
+          sendNotificationEmail: false,
+          fields: 'id',
+        });
+      } catch {
+        // Non-fatal — sheet is still usable
       }
     }
 
@@ -174,7 +192,19 @@ export async function POST(req: NextRequest) {
 
     const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit${periodGid != null ? `#gid=${periodGid}` : ''}`;
 
-    return NextResponse.json({ spreadsheetId, spreadsheetUrl });
+    // 6. Link the bound Apps Script project (if GOOGLE_APPS_SCRIPT_ID is configured)
+    // Placeholder: set GOOGLE_APPS_SCRIPT_ID in .env.local to the deployed script ID
+    // When configured, this attaches the existing script project to the new spreadsheet
+    // via the Apps Script API so it runs automatically in context.
+    const scriptId = process.env.GOOGLE_APPS_SCRIPT_ID;
+    if (scriptId) {
+      // NOTE: Full programmatic binding requires the Apps Script API with
+      // projects.create({ parentId: spreadsheetId }). This placeholder logs the
+      // intent — implement with @googleapis/script when the script project is set up.
+      console.log(`[sheets/copy] TODO: bind script ${scriptId} to sheet ${spreadsheetId}`);
+    }
+
+    return NextResponse.json({ spreadsheetId, spreadsheetUrl, scriptId: scriptId ?? null });
   } catch (err: any) {
     console.error('[/api/sheets/copy] Full error:', JSON.stringify(err?.response?.data || err?.errors || err?.message, null, 2));
     const message = err instanceof Error ? err.message : 'Failed to create spreadsheet.';

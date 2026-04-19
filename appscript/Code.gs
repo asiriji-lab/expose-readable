@@ -46,14 +46,121 @@ function getSheetByAliases(ss, tabName) {
   return null;
 }
 
+// Tab skeleton definitions — must stay in sync with /api/sheets/copy TAB_DEFS
+var TAB_DEFS = [
+  { name: 'period',     headers: ['คาบ', 'เวลา'] },
+  { name: 'room',       headers: ['ห้องทั้งหมด', 'หมายเหตุ', 'ประเภท'] },
+  { name: 'teacher',    headers: ['teacher_id', 'ตำแหน่ง', 'ชื่อ', 'กลุ่มสาระ', 'available_slots', 'unavailable_slots', 'หมายเหตุ'] },
+  { name: 'student',    headers: ['นักเรียน', 'ชั้น', 'ห้อง', 'ห้องประจำ', 'หลักสูตร'] },
+  { name: 'preplace',   headers: ['ชื่อ', 'คาบ', 'apply_to'] },
+  { name: 'scout',      headers: ['ลูกเสือม.1', 'ลูกเสือม.2', 'ลูกเสือม.3'] },
+  { name: 'elective',   headers: ['รหัสวิชา', 'ชื่อวิชา (เสรี)', 'ครูผู้สอน', 'ห้องเรียน', 'เสรีม.ต้น1', 'เสรีม.ต้น2', 'เสรีม.ปลาย1', 'เสรีม.ปลาย2', 'เสรีม.ปลาย3', 'เสรีม.ปลาย4', 'เสรีม.ปลาย5', 'เสรีม.ปลาย6'] },
+  { name: 'curriculum', headers: ['รหัสวิชา', 'ชื่อวิชา', 'คาบ/สัปดาห์', 'จำนวนห้อง', 'รวมคาบ', 'ครู', 'การแบ่งคาบสอน', 'ห้อง (นักเรียน) ที่สอน', 'หมายเหตุ', 'ห้องเรียน', 'คาบเรียน'] },
+  { name: 'constraints', headers: ['id', 'Name', 'Type', 'description', 'Note', 'parameters (example)', 'Example Constraints'] },
+];
+
+var COLOR_HEADER_BG = { red: 0.91, green: 0.92, blue: 0.96 }; // #E8EAF6
+
 // ─── Menu ────────────────────────────────────────────────────────────────────
 
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Schooldoo')
     .addItem('Validate All Tabs', 'runValidation')
+    .addItem('Generate Skeleton', 'generateSkeleton')
+    .addSeparator()
     .addItem('Debug: Show Tab Names', 'debugTabNames')
     .addToUi();
+
+  // Ensure an installable onOpen trigger exists so the menu appears on every open
+  createTriggerIfNeeded_();
+}
+
+/**
+ * Creates an installable onOpen trigger if none exists.
+ * Called automatically on first open via the simple onOpen trigger.
+ */
+function createTriggerIfNeeded_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var triggers = ScriptApp.getUserTriggers(ss);
+  var hasOpen = triggers.some(function(t) {
+    return t.getEventType() === ScriptApp.EventType.ON_OPEN;
+  });
+  if (!hasOpen) {
+    ScriptApp.newTrigger('onOpen')
+      .forSpreadsheet(ss)
+      .onOpen()
+      .create();
+  }
+}
+
+/**
+ * Generates the skeleton structure: creates missing tabs, writes headers,
+ * formats header rows, and protects them so only the spreadsheet owner can edit.
+ */
+function generateSkeleton() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ui = SpreadsheetApp.getUi();
+
+  for (var i = 0; i < TAB_DEFS.length; i++) {
+    var def = TAB_DEFS[i];
+    var sheet = getSheetByAliases(ss, def.name);
+
+    if (!sheet) {
+      sheet = ss.insertSheet(def.name);
+    }
+
+    // Write headers only if row 1 is empty
+    var headerRange = sheet.getRange(1, 1, 1, def.headers.length);
+    var existing = headerRange.getValues()[0];
+    var isEmpty = existing.every(function(c) { return !String(c).trim(); });
+    if (isEmpty) {
+      headerRange.setValues([def.headers]);
+    }
+
+    // Format header row
+    sheet.getRange(1, 1, 1, def.headers.length)
+      .setFontWeight('bold')
+      .setBackground('#E8EAF6');
+
+    // Freeze header row
+    sheet.setFrozenRows(1);
+
+    // Protect header row — only owner can edit
+    lockHeaderRow_(sheet);
+  }
+
+  ui.alert(
+    'Skeleton Generated',
+    'All tabs are ready. The header row of each tab is locked so only the owner can edit headers.',
+    ui.ButtonSet.OK
+  );
+}
+
+/**
+ * Protects row 1 of the given sheet so only the spreadsheet owner can edit it.
+ * Existing protections on row 1 are removed first to avoid duplicates.
+ */
+function lockHeaderRow_(sheet) {
+  // Remove existing row-1 protections to avoid accumulation
+  var protections = sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE);
+  for (var p = 0; p < protections.length; p++) {
+    var prot = protections[p];
+    var range = prot.getRange();
+    if (range.getRow() === 1 && range.getNumRows() === 1) {
+      prot.remove();
+    }
+  }
+
+  // Create new protection for the header row
+  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn() || 1);
+  var protection = headerRow.protect().setDescription('Header — owner only');
+
+  // Remove all editors except the owner (the account running this script)
+  protection.removeEditors(protection.getEditors());
+  if (protection.canDomainEdit()) {
+    protection.setDomainEdit(false);
+  }
 }
 
 function debugTabNames() {
@@ -81,15 +188,31 @@ var COLOR_HEADER = '#E8EAF6';  // header row (unchanged)
  * Applies row-level highlighting to a data sheet based on validation results.
  * - Error rows   → red
  * - Warning rows → yellow (unless also has an error)
+ * - Marker rows  → no colour change (left as-is)
  * - Clean rows   → green
  */
-function applyHighlights(sheet, dataRowCount, errors, warnings) {
+function applyHighlights(sheet, dataRowCount, errors, warnings, rawData) {
   if (dataRowCount <= 0) return;
   var lastCol = sheet.getLastColumn();
   if (lastCol <= 0) return;
 
-  // 1. Reset all data rows to green (optimistic default)
-  sheet.getRange(2, 1, dataRowCount, lastCol).setBackground(COLOR_GREEN);
+  // Build set of 1-based marker row indices (skip row 1 = header)
+  var markerRows = {};
+  if (rawData) {
+    for (var m = 1; m < rawData.length; m++) {
+      var firstCell = _str(rawData[m][0]);
+      if (isGradeHeader(firstCell) || isMarkerRow(rawData[m])) {
+        markerRows[m + 1] = true; // convert to 1-based sheet row
+      }
+    }
+  }
+
+  // 1. Reset all non-marker data rows to green (optimistic default)
+  for (var dr = 2; dr <= dataRowCount + 1; dr++) {
+    if (!markerRows[dr]) {
+      sheet.getRange(dr, 1, 1, lastCol).setBackground(COLOR_GREEN);
+    }
+  }
 
   // 2. Build row → worst status map
   var rowStatus = {};
@@ -101,11 +224,12 @@ function applyHighlights(sheet, dataRowCount, errors, warnings) {
     rowStatus[errors[e].row] = 'error';
   }
 
-  // 3. Color rows by worst status
+  // 3. Color rows by worst status (skip marker rows)
   var rows = Object.keys(rowStatus);
   for (var i = 0; i < rows.length; i++) {
-    var r      = parseInt(rows[i]);
-    var color  = rowStatus[r] === 'error' ? COLOR_RED : COLOR_YELLOW;
+    var r = parseInt(rows[i]);
+    if (markerRows[r]) continue; // don't color marker rows
+    var color = rowStatus[r] === 'error' ? COLOR_RED : COLOR_YELLOW;
     sheet.getRange(r, 1, 1, lastCol).setBackground(color);
   }
 }
@@ -169,7 +293,8 @@ function runValidation() {
     var result = validator(data);
 
     // ── Highlight cells in the actual data sheet ─────────────────────────────
-    applyHighlights(sheet, data.length - 1, result.errors, result.warnings);
+    // Pass marker rows so they remain uncolored (neither green nor red)
+    applyHighlights(sheet, data.length - 1, result.errors, result.warnings, data);
 
     // ── Write summary row to Validation Results ──────────────────────────────
     var errCount  = result.errors.length;
