@@ -1,52 +1,50 @@
 import React, { useState, useEffect } from 'react';
-import { ScheduleItem } from '../_utils/dummyData';
-import {
-    TEACHER_CODES,
-    TEACHER_META,
-    CLASS_CODES,
-    ROOM_CODES,
-    ROOM_META,
-    SUBJECTS,
-} from '../_utils/dummyData';
+import type { ScheduleItem, EntityMeta } from '../_types/schedule.types';
 
 interface EditOverlayProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (data: Partial<ScheduleItem>) => void;
     initialData?: ScheduleItem | null;
+    entityMeta?: EntityMeta | null;
 }
 
-export default function EditOverlay({ isOpen, onClose, onSave, initialData }: EditOverlayProps) {
-    const [teacher, setTeacher] = useState(TEACHER_CODES[0]);
-    const [classCode, setClassCode] = useState(CLASS_CODES[0]);
-    const [room, setRoom] = useState(ROOM_CODES[0]);
-    const [subjectCode, setSubjectCode] = useState(Object.keys(SUBJECTS)[0]);
+export default function EditOverlay({ isOpen, onClose, onSave, initialData, entityMeta }: EditOverlayProps) {
+    const teacherCodes = entityMeta?.teacher_codes ?? [];
+    const classCodes = entityMeta?.class_codes ?? [];
+    const roomCodes = entityMeta?.room_codes ?? [];
+    const subjectCodes = Object.keys(entityMeta?.subjects ?? {});
+
+    const [teacher, setTeacher] = useState(teacherCodes[0] ?? '');
+    const [classCode, setClassCode] = useState(classCodes[0] ?? '');
+    const [room, setRoom] = useState(roomCodes[0] ?? '');
+    const [subjectCode, setSubjectCode] = useState(subjectCodes[0] ?? '');
 
     // Sync to initialData when opened
     useEffect(() => {
         if (!isOpen) return;
         if (initialData) {
-            setTeacher(initialData.teacher || TEACHER_CODES[0]);
-            setClassCode(initialData.classCode || CLASS_CODES[0]);
-            setRoom(initialData.room || ROOM_CODES[0]);
-            setSubjectCode(initialData.subjectCode || Object.keys(SUBJECTS)[0]);
+            setTeacher(initialData.teacher || teacherCodes[0] || '');
+            setClassCode(initialData.classCode || classCodes[0] || '');
+            setRoom(initialData.room || roomCodes[0] || '');
+            setSubjectCode(initialData.subjectCode || subjectCodes[0] || '');
         } else {
-            setTeacher(TEACHER_CODES[0]);
-            setClassCode(CLASS_CODES[0]);
-            setRoom(ROOM_CODES[0]);
-            setSubjectCode(Object.keys(SUBJECTS)[0]);
+            setTeacher(teacherCodes[0] ?? '');
+            setClassCode(classCodes[0] ?? '');
+            setRoom(roomCodes[0] ?? '');
+            setSubjectCode(subjectCodes[0] ?? '');
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, initialData]);
 
     if (!isOpen) return null;
 
     // Derived auto-fill values
-    const tmeta = TEACHER_META[teacher];
-    const teacherName = tmeta ? `${tmeta.prefix} ${tmeta.firstName} ${tmeta.lastName}` : teacher;
-    const roomName = ROOM_META[room]?.name ?? room;
-    const subjectInfo = SUBJECTS[subjectCode];
+    const teacherName = entityMeta?.teacher_meta[teacher]?.name ?? teacher;
+    const roomName = entityMeta?.room_meta[room]?.name ?? room;
+    const subjectInfo = entityMeta?.subjects[subjectCode];
     const subject = subjectInfo?.name ?? subjectCode;
-    const variant = subjectInfo?.variant ?? 'green';
+    const variant = subjectInfo?.variant ?? '_activity';
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -79,7 +77,7 @@ export default function EditOverlay({ isOpen, onClose, onSave, initialData }: Ed
                                 onChange={e => setTeacher(e.target.value)}
                                 className="w-full border border-border-strong rounded px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none text-foreground bg-surface cursor-pointer"
                             >
-                                {TEACHER_CODES.map(c => <option key={c} value={c}>{c}</option>)}
+                                {teacherCodes.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
                         <div>
@@ -101,7 +99,7 @@ export default function EditOverlay({ isOpen, onClose, onSave, initialData }: Ed
                                 onChange={e => setSubjectCode(e.target.value)}
                                 className="w-full border border-border-strong rounded px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none text-foreground bg-surface cursor-pointer"
                             >
-                                {Object.keys(SUBJECTS).map(code => (
+                                {subjectCodes.map(code => (
                                     <option key={code} value={code}>{code}</option>
                                 ))}
                             </select>
@@ -121,7 +119,7 @@ export default function EditOverlay({ isOpen, onClose, onSave, initialData }: Ed
                             onChange={e => setClassCode(e.target.value)}
                             className="w-full border border-border-strong rounded px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none text-foreground bg-surface cursor-pointer"
                         >
-                            {CLASS_CODES.map(c => <option key={c} value={c}>{c}</option>)}
+                            {classCodes.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                     </div>
 
@@ -134,7 +132,7 @@ export default function EditOverlay({ isOpen, onClose, onSave, initialData }: Ed
                                 onChange={e => setRoom(e.target.value)}
                                 className="w-full border border-border-strong rounded px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none text-foreground bg-surface cursor-pointer"
                             >
-                                {ROOM_CODES.map(c => <option key={c} value={c}>{c}</option>)}
+                                {roomCodes.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
                         <div>

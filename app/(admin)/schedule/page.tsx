@@ -13,7 +13,7 @@ import FilterDropdown from './_components/FilterDropdown';
 import AdminHeader from '../_components/AdminHeader';
 import { computeOverlayData } from './_utils/overlayUtils';
 import { moveItem, hasConflict, removeItemFromDataset, autoEjectConflicts } from './_utils/scheduleLogic';
-import { FullDataset, ScheduleItem, ScheduleData, ViewMode, OverlayCellData, EntityType, DragPayload } from './_types/schedule.types';
+import { FullDataset, ScheduleItem, ScheduleData, ViewMode, OverlayCellData, EntityType, DragPayload, EntityMeta } from './_types/schedule.types';
 import OverlayInspectPopover from './_components/OverlayInspectPopover';
 import BandHoverTooltip from './_components/BandHoverTooltip';
 import { transformToFullDataset, getTeacherCodes, getClassCodes, getRoomCodes, emptyDataset, BackendSchedule } from '@/lib/api/transform';
@@ -26,6 +26,7 @@ function SchedulePageContent() {
     const [jobName, setJobName] = useState('ตารางสอน');
     const [loadError, setLoadError] = useState<string | null>(null);
     const [dataset, setDataset] = useState<FullDataset | null>(null);
+    const [entityMeta, setEntityMeta] = useState<EntityMeta | null>(null);
 
     // ─── Derived filter options ───────────────────────────────────────────────
     const teacherCodes = useMemo(() => dataset ? getTeacherCodes(dataset) : [], [dataset]);
@@ -62,12 +63,14 @@ function SchedulePageContent() {
             const loadSchedule = async () => {
                 try {
                     const cached = sessionStorage.getItem(`schedule_cache_${jobId}`);
+                    const cachedMeta = sessionStorage.getItem(`entity_meta_cache_${jobId}`);
                     if (cached) {
                         const raw = JSON.parse(cached) as BackendSchedule;
                         const transformed = transformToFullDataset(raw);
                         const { dataset: clean } = autoEjectConflicts(transformed);
                         setDataset(clean);
                         setJobName(raw.config?.academic_year || 'ตารางสอน');
+                        if (cachedMeta) setEntityMeta(JSON.parse(cachedMeta) as EntityMeta);
                         return;
                     }
 
@@ -78,12 +81,17 @@ function SchedulePageContent() {
                     if (!res.ok) throw new Error(data?.error ?? 'Backend error');
 
                     const raw: BackendSchedule | null = data.schedule?.data ?? null;
+                    const meta: EntityMeta | null = data.schedule?.entity_meta ?? null;
 
                     if (raw) {
                         const transformed = transformToFullDataset(raw);
                         const { dataset: clean } = autoEjectConflicts(transformed);
                         setDataset(clean);
                         sessionStorage.setItem(`schedule_cache_${jobId}`, JSON.stringify(raw));
+                        if (meta) {
+                            setEntityMeta(meta);
+                            sessionStorage.setItem(`entity_meta_cache_${jobId}`, JSON.stringify(meta));
+                        }
                         setJobName(data.schedule?.job_name || raw.config?.academic_year || 'ตารางสอน');
                     } else {
                         console.warn('[SchedulePage] Unexpected result shape:', data);
@@ -324,7 +332,7 @@ function SchedulePageContent() {
             roomName: data.roomName ?? '',
             subjectCode: data.subjectCode ?? '',
             subject: data.subject ?? '',
-            variant: data.variant ?? 'green',
+            variant: data.variant ?? '_activity',
         };
         setDataset(prev => {
             if (!prev) return prev;
@@ -366,13 +374,13 @@ function SchedulePageContent() {
 
                     <div className="flex items-center gap-2 shrink-0">
                         {viewMode === 'teacher' && teacherCodes.length > 0 && (
-                            <FilterDropdown label="T. code" value={tCode} options={teacherCodes} onChange={handleTCodeChange} labelClassName="text-primary font-semibold w-14" />
+                            <FilterDropdown label="T. code" value={tCode} options={teacherCodes} onChange={handleTCodeChange} labelClassName="text-primary font-semibold w-14" entityMeta={entityMeta} />
                         )}
                         {viewMode === 'class' && classCodes.length > 0 && (
-                            <FilterDropdown label="Class" value={classCode} options={classCodes} onChange={handleClassChange} labelClassName="text-primary font-semibold w-14" />
+                            <FilterDropdown label="Class" value={classCode} options={classCodes} onChange={handleClassChange} labelClassName="text-primary font-semibold w-14" entityMeta={entityMeta} />
                         )}
                         {viewMode === 'room' && roomCodes.length > 0 && (
-                            <FilterDropdown label="Room" value={room} options={roomCodes} onChange={handleRoomChange} labelClassName="text-primary font-semibold w-14" />
+                            <FilterDropdown label="Room" value={room} options={roomCodes} onChange={handleRoomChange} labelClassName="text-primary font-semibold w-14" entityMeta={entityMeta} />
                         )}
                         {viewMode !== 'all' && <div className="h-5 w-px bg-border hidden sm:block" />}
                         <ViewModeToggle activeMode={viewMode} onChange={setViewMode} />
@@ -433,6 +441,7 @@ function SchedulePageContent() {
                                 options={teacherCodes}
                                 onChange={handleTCodeChange}
                                 labelClassName={activeEntity === 'teacher' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
+                                entityMeta={entityMeta}
                             />
                         )}
                         {classCodes.length > 0 && (
@@ -442,6 +451,7 @@ function SchedulePageContent() {
                                 options={classCodes}
                                 onChange={handleClassChange}
                                 labelClassName={activeEntity === 'class' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
+                                entityMeta={entityMeta}
                             />
                         )}
                         {roomCodes.length > 0 && (
@@ -451,6 +461,7 @@ function SchedulePageContent() {
                                 options={roomCodes}
                                 onChange={handleRoomChange}
                                 labelClassName={activeEntity === 'room' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
+                                entityMeta={entityMeta}
                             />
                         )}
                         {!dataset && <span className="text-xs text-foreground-muted">กำลังโหลดข้อมูล...</span>}
@@ -486,6 +497,7 @@ function SchedulePageContent() {
                             <PaletteSidebar
                                 teacherCode={tCode}
                                 dataset={dataset}
+                                entityMeta={entityMeta}
                             />
                         )}
                     </div>
@@ -499,6 +511,7 @@ function SchedulePageContent() {
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleModalSave}
                 initialData={editingItem}
+                entityMeta={entityMeta}
             />
             {hoverTooltip && (
                 <BandHoverTooltip

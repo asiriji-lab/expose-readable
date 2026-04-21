@@ -15,7 +15,7 @@
  *  10: คาบเรียน          (pinned slots)
  */
 
-import type { WorkloadEntry } from './dummyData';
+import type { WorkloadEntry } from '../_types/schedule.types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -90,10 +90,9 @@ function normalizeDay(raw: string): string {
 }
 
 
-function subjectVariant(subjectId: string): 'green' | 'red' {
-  let h = 0;
-  for (let i = 0; i < subjectId.length; i++) h = (h * 31 + subjectId.charCodeAt(i)) | 0;
-  return Math.abs(h) % 2 === 0 ? 'green' : 'red';
+function subjectVariant(subjectId: string): string {
+  if (!subjectId) return '_activity';
+  return subjectId[0];
 }
 
 /** Safely extract [slotLabel, cell] from a column entry `{"1": {...}}`. */
@@ -115,9 +114,13 @@ function parseColumn(entry: Record<string, BackendCell | null>): [number, Backen
 /**
  * Convert the backend's completed schedule JSON into a FullDataset.
  *
- * All three entity maps (teachers / classes / rooms) are built from the
- * teacher perspective, which is the only perspective that contains both the
- * class code AND the room code in every cell.
+ * Each entity map is built from its own perspective in the backend JSON:
+ *   teachers  → schedule.teachers cells  { subject_id, class, room }
+ *   classes   → schedule.students cells  { subject_id, teacher(name), room }
+ *   rooms     → schedule.rooms cells     { subject_id, teacher(name), class }
+ *
+ * This gives each individual view the correct cross-entity fields directly
+ * (e.g. class view gets teacherName from the student cell, not teacher metadata).
  */
 export function transformToFullDataset(schedule: BackendSchedule): FullDataset {
   const teachers: FullDataset['teachers'] = {};
@@ -130,6 +133,7 @@ export function transformToFullDataset(schedule: BackendSchedule): FullDataset {
     roomNameMap[r.id] = r.name || r.id;
   }
 
+  // ── Teachers map (from teacher-perspective cells) ──────────────────────────
   for (const teacher of schedule.teachers ?? []) {
     const tid   = teacher.id;
     const tName = teacher.name || tid;
@@ -137,7 +141,7 @@ export function transformToFullDataset(schedule: BackendSchedule): FullDataset {
     teachers[tid] ??= {};
 
     for (const row of teacher.rows ?? []) {
-      const day = normalizeDay(row.day);   // MON → Monday, TUE → Tuesday, …
+      const day = normalizeDay(row.day);
       teachers[tid][day] ??= {};
 
       for (const colEntry of row.columns ?? []) {
@@ -145,35 +149,81 @@ export function transformToFullDataset(schedule: BackendSchedule): FullDataset {
         if (!parsed) continue;
         const [slot, cell] = parsed;
 
-        const classCode = cell.class  || '';
-        const roomCode  = cell.room   || '';
+        const classCode = cell.class || '';
+        const roomCode  = cell.room  || '';
 
-        const item: ScheduleItem = {
-          teacher:      tid,
-          teacherName:  tName,
+        teachers[tid][day][slot] = {
+          teacher:     tid,
+          teacherName: tName,
           classCode,
-          room:         roomCode,
-          roomName:     roomNameMap[roomCode] || roomCode,
-          subjectCode:  cell.subject_id   || '',
-          subject:      cell.subject_name || '',
-          variant:      subjectVariant(cell.subject_id || ''),
+          room:        roomCode,
+          roomName:    roomNameMap[roomCode] || roomCode,
+          subjectCode: cell.subject_id   || '',
+          subject:     cell.subject_name || '',
+          variant:     subjectVariant(cell.subject_id || ''),
         };
+      }
+    }
+  }
 
-        teachers[tid][day][slot] = item;
+  // ── Classes map (from student-perspective cells) ───────────────────────────
+  // Student cells: { subject_id, subject_name, teacher (name), room }
+  for (const student of schedule.students ?? []) {
+    const cid = student.id;
 
-        // Populate the class map.
-        if (classCode) {
-          classes[classCode]       ??= {};
-          classes[classCode][day]  ??= {};
-          classes[classCode][day][slot] = item;
-        }
+    classes[cid] ??= {};
 
-        // Populate the room map.
-        if (roomCode) {
-          rooms[roomCode]       ??= {};
-          rooms[roomCode][day]  ??= {};
-          rooms[roomCode][day][slot] = item;
-        }
+    for (const row of student.rows ?? []) {
+      const day = normalizeDay(row.day);
+      classes[cid][day] ??= {};
+
+      for (const colEntry of row.columns ?? []) {
+        const parsed = parseColumn(colEntry);
+        if (!parsed) continue;
+        const [slot, cell] = parsed;
+
+        const roomCode = cell.room || '';
+
+        classes[cid][day][slot] = {
+          teacher:     '',          // teacher code not in student cells
+          teacherName: cell.teacher || '',
+          classCode:   cid,
+          room:        roomCode,
+          roomName:    roomNameMap[roomCode] || roomCode,
+          subjectCode: cell.subject_id   || '',
+          subject:     cell.subject_name || '',
+          variant:     subjectVariant(cell.subject_id || ''),
+        };
+      }
+    }
+  }
+
+  // ── Rooms map (from room-perspective cells) ────────────────────────────────
+  // Room cells: { subject_id, subject_name, teacher (name), class }
+  for (const room of schedule.rooms ?? []) {
+    const rid = room.id;
+
+    rooms[rid] ??= {};
+
+    for (const row of room.rows ?? []) {
+      const day = normalizeDay(row.day);
+      rooms[rid][day] ??= {};
+
+      for (const colEntry of row.columns ?? []) {
+        const parsed = parseColumn(colEntry);
+        if (!parsed) continue;
+        const [slot, cell] = parsed;
+
+        rooms[rid][day][slot] = {
+          teacher:     '',          // teacher code not in room cells
+          teacherName: cell.teacher || '',
+          classCode:   cell.class  || '',
+          room:        rid,
+          roomName:    roomNameMap[rid] || rid,
+          subjectCode: cell.subject_id   || '',
+          subject:     cell.subject_name || '',
+          variant:     subjectVariant(cell.subject_id || ''),
+        };
       }
     }
   }

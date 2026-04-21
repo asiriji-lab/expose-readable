@@ -3,8 +3,7 @@
 import { useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { ScheduleItem, ScheduleData, OverlayData, OverlayCellData, DragPayload, EntityType } from '../_types/schedule.types';
-import UnifiedScheduleCell, { buildRowsForMode, ROW_HEIGHT } from './UnifiedScheduleCell';
-import ThreeBandCell from './ThreeBandCell';
+import ThreeBandCell, { BAND_HEIGHT as ROW_HEIGHT } from './ThreeBandCell';
 import { useScheduleDnd } from './ScheduleDndProvider';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -61,6 +60,43 @@ function DroppableCell({ id, partiallyOccupied, children }: { id: string; partia
 // DraggableWrapper removed — drag is now self-managed inside ThreeBandCell's green band.
 // This keeps drag events isolated to the teacher band only.
 
+// ─── Helpers for individual entity views ─────────────────────────────────────
+
+const ALL_FREE_OVERLAY: OverlayCellData = {
+    teacherBand: { kind: 'free' },
+    classBand: { kind: 'free' },
+    roomBand: { kind: 'free' },
+    conflictCount: 0,
+    allFree: true,
+    partiallyOccupied: false,
+    isSynchronized: false,
+};
+
+function buildIndividualOverlay(item: ScheduleItem | undefined): OverlayCellData {
+    if (!item) return ALL_FREE_OVERLAY;
+    return {
+        teacherBand: { kind: 'busy', occupyingItem: item },
+        classBand:   { kind: 'busy', occupyingItem: item },
+        roomBand:    { kind: 'busy', occupyingItem: item },
+        teacher: item,
+        class:   item,
+        room:    item,
+        conflictCount: 0,
+        allFree: false,
+        partiallyOccupied: false,
+        isSynchronized: true,
+    };
+}
+
+function getBandTexts(
+    viewMode: 'teacher' | 'class' | 'room',
+    item: ScheduleItem,
+): [string | null, string | null, string | null] {
+    if (viewMode === 'teacher') return [item.subjectCode || null, item.classCode || null, item.room || null];
+    if (viewMode === 'class')   return [item.teacherName || null, item.subjectCode || null, item.room || null];
+    /* room */                  return [item.teacherName || null, item.classCode   || null, item.subjectCode || null];
+}
+
 // ─── Main Grid ───────────────────────────────────────────────────────────────
 
 export default function TimetableGridV2({
@@ -73,14 +109,13 @@ export default function TimetableGridV2({
     onBandHoverEnd,
     activeEntity,
 }: TimetableGridProps) {
-    const isOverlay = viewMode === 'all' && !!overlayData;
     const cellHeight = 3 * ROW_HEIGHT;
 
     const visibleLabels = useMemo(() => {
-        if (viewMode === 'all') return ['Teacher', 'Class', 'Room'];
-        if (viewMode === 'teacher') return ['Subject', 'Class', 'Room'];
-        if (viewMode === 'class') return ['Subject', 'Teacher', 'Room'];
-        if (viewMode === 'room') return ['Subject', 'Teacher', 'Class'];
+        if (viewMode === 'all')     return ['Teacher', 'Class', 'Room'];
+        if (viewMode === 'teacher') return ['Subject', 'Class',   'Room'];
+        if (viewMode === 'class')   return ['Teacher', 'Subject', 'Room'];
+        if (viewMode === 'room')    return ['Teacher', 'Class',   'Subject'];
         return ['Teacher', 'Class', 'Room'];
     }, [viewMode]);
 
@@ -136,11 +171,20 @@ export default function TimetableGridV2({
                                     const cellId = `cell-${day}-${slot}`;
                                     const cellData = scheduleData[day]?.[slot];
                                     const overlayCell = overlayData?.[day]?.[slot];
+                                    const isViewAll = viewMode === 'all';
 
-                                    // In View All mode the drag is self-managed by ThreeBandCell's
-                                    // green band — we just pass the id/payload down.
-                                    const teacherItem = overlayCell?.teacher ?? null;
+                                    // View All: use real overlay; individual: build synthetic overlay
+                                    const cellOverlay = isViewAll
+                                        ? (overlayCell ?? ALL_FREE_OVERLAY)
+                                        : buildIndividualOverlay(cellData);
 
+                                    // bandTexts only for individual views with data
+                                    const bandTexts = !isViewAll && cellData
+                                        ? getBandTexts(viewMode as 'teacher' | 'class' | 'room', cellData)
+                                        : undefined;
+
+                                    // Drag only in View All mode
+                                    const teacherItem = isViewAll ? (overlayCell?.teacher ?? null) : null;
                                     const dragPayload: DragPayload = {
                                         source: 'GRID',
                                         item: teacherItem ?? { teacher: '', teacherName: '', classCode: '', room: '', roomName: '', subjectCode: '', subject: '', variant: 'green' },
@@ -148,33 +192,23 @@ export default function TimetableGridV2({
                                         slot,
                                     };
 
-                                    const cellContent = isOverlay && overlayCell
-                                        ? (
-                                            <ThreeBandCell
-                                                data={overlayCell}
-                                                onBandClick={(entityType) =>
-                                                    onBandClick?.(day, slot, entityType, overlayCell)
-                                                }
-                                                onEmptyClick={() => onCellClick?.(day, slot)}
-                                                dragId={teacherItem ? cellId : undefined}
-                                                dragPayload={teacherItem ? dragPayload : undefined}
-                                                onBandHover={onBandHover}
-                                                onBandHoverEnd={onBandHoverEnd}
-                                                activeEntity={activeEntity}
-                                            />
-                                        )
-                                        : (
-                                            <UnifiedScheduleCell
-                                                mode="individual"
-                                                rows={buildRowsForMode(viewMode, cellData)}
-                                                variant={cellData?.variant}
-                                            />
-                                        );
-
                                     return (
                                         <td key={slot} className={`p-0 relative ${si < SLOTS.length - 1 ? 'border-r border-border/30' : ''}`}>
-                                            <DroppableCell id={cellId} partiallyOccupied={overlayCell?.partiallyOccupied}>
-                                                {cellContent}
+                                            <DroppableCell id={cellId} partiallyOccupied={cellOverlay.partiallyOccupied}>
+                                                <ThreeBandCell
+                                                    data={cellOverlay}
+                                                    onBandClick={(entityType) =>
+                                                        onBandClick?.(day, slot, entityType, cellOverlay)
+                                                    }
+                                                    onEmptyClick={() => onCellClick?.(day, slot)}
+                                                    dragId={teacherItem ? cellId : undefined}
+                                                    dragPayload={teacherItem ? dragPayload : undefined}
+                                                    onBandHover={isViewAll ? onBandHover : undefined}
+                                                    onBandHoverEnd={isViewAll ? onBandHoverEnd : undefined}
+                                                    activeEntity={activeEntity}
+                                                    bandTexts={bandTexts}
+                                                    individualMode={!isViewAll}
+                                                />
                                             </DroppableCell>
                                         </td>
                                     );

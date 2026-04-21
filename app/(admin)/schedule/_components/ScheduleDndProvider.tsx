@@ -16,6 +16,7 @@ import {
 } from '@dnd-kit/core';
 import { DragPayload, ScheduleItem } from '../_types/schedule.types';
 import UnifiedScheduleCell, { buildRowsForMode, ROW_HEIGHT } from './UnifiedScheduleCell';
+import { variantPalette } from '../_utils/variantColors';
 import { BAND_HEIGHT } from './ThreeBandCell';
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -123,7 +124,7 @@ export default function ScheduleDndProvider({
 
         if (viewMode === 'all') {
             // Render a 3-band ghost that matches the ThreeBandCell source visually
-            const teacherBg = item.variant === 'red' ? 'bg-rose-50 border-l-rose-400 text-rose-900' : 'bg-emerald-50 border-l-emerald-400 text-emerald-900';
+            const teacherBg = variantPalette(item.variant).ghostClasses;
             return (
                 <div
                     className="rounded-lg shadow-2xl border border-primary/30 overflow-hidden pointer-events-none opacity-90"

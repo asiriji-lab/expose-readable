@@ -3,14 +3,14 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useDroppable, useDraggable } from '@dnd-kit/core';
 import { CheckCircle, ChevronDown } from 'lucide-react';
-import { FullDataset, DragPayload, ScheduleItem } from '../_types/schedule.types';
+import { FullDataset, DragPayload, ScheduleItem, EntityMeta } from '../_types/schedule.types';
 import {
     computePaletteData,
     computeGlobalPaletteData,
     PaletteSubjectGroup,
     PaletteClassItem,
 } from '../_utils/paletteUtils';
-import { TEACHER_META, ROOM_CODES, ROOM_META } from '../_utils/dummyData';
+import { variantPalette } from '../_utils/variantColors';
 
 // ─── Filter type ──────────────────────────────────────────────────────────────
 
@@ -21,6 +21,7 @@ type FilterMode = 'all' | 'remaining' | 'done';
 interface PaletteSidebarProps {
     teacherCode: string;
     dataset: FullDataset | null;
+    entityMeta: EntityMeta | null;
 }
 
 // ─── Drop Zone ────────────────────────────────────────────────────────────────
@@ -51,13 +52,15 @@ function ClassItemCard({
     variant,
     dragIndex,
     showTeacher,
+    entityMeta,
 }: {
     item: PaletteClassItem;
     subjectCode: string;
     subject: string;
-    variant: 'red' | 'green';
+    variant: string;
     dragIndex: number;
     showTeacher: boolean;
+    entityMeta: EntityMeta | null;
 }) {
     const [selectedRoom, setSelectedRoom] = useState(item.room);
 
@@ -68,7 +71,7 @@ function ClassItemCard({
         teacherName: item.teacherName,
         classCode: item.classCode,
         room: selectedRoom,
-        roomName: ROOM_META[selectedRoom]?.name ?? selectedRoom,
+        roomName: entityMeta?.room_meta[selectedRoom]?.name ?? selectedRoom,
         subjectCode,
         subject,
         variant,
@@ -91,13 +94,11 @@ function ClassItemCard({
                 'relative mx-3 mb-1.5 rounded-lg border overflow-hidden',
                 'cursor-grab active:cursor-grabbing select-none transition-opacity',
                 isDragging ? 'opacity-40' : '',
-                variant === 'green'
-                    ? 'bg-surface border-emerald-200 hover:border-emerald-400'
-                    : 'bg-surface border-red-200 hover:border-red-400',
+                `bg-surface ${variantPalette(variant).cardBorder}`,
             ].join(' ')}
         >
             {/* Variant accent */}
-            <div className={`absolute left-0 top-0 bottom-0 w-1 ${variant === 'green' ? 'bg-emerald-400' : 'bg-red-400'}`} />
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${variantPalette(variant).accent}`} />
 
             <div className="pl-3 pr-2 pt-2 pb-2">
                 {/* Class + placed badge */}
@@ -120,9 +121,9 @@ function ClassItemCard({
                     onPointerDown={e => e.stopPropagation()}
                     className="w-full text-[9px] border border-border rounded px-1.5 py-0.5 bg-surface-alt text-foreground cursor-pointer mb-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
                 >
-                    {ROOM_CODES.map(r => (
+                    {(entityMeta?.room_codes ?? []).map(r => (
                         <option key={r} value={r}>
-                            {r} — {ROOM_META[r]?.name ?? r}
+                            {r} — {entityMeta?.room_meta[r]?.name ?? r}
                         </option>
                     ))}
                 </select>
@@ -148,13 +149,15 @@ function CompletedClassCard({
     variant,
     dragIndex,
     showTeacher,
+    entityMeta,
 }: {
     item: PaletteClassItem;
     subjectCode: string;
     subject: string;
-    variant: 'red' | 'green';
+    variant: string;
     dragIndex: number;
     showTeacher: boolean;
+    entityMeta: EntityMeta | null;
 }) {
     const [selectedRoom, setSelectedRoom] = useState(item.room);
     useEffect(() => { setSelectedRoom(item.room); }, [item.room]);
@@ -164,7 +167,7 @@ function CompletedClassCard({
         teacherName: item.teacherName,
         classCode: item.classCode,
         room: selectedRoom,
-        roomName: ROOM_META[selectedRoom]?.name ?? selectedRoom,
+        roomName: entityMeta?.room_meta[selectedRoom]?.name ?? selectedRoom,
         subjectCode,
         subject,
         variant,
@@ -222,11 +225,13 @@ function SubjectGroupAccordion({
     dragOffset,
     showTeacher,
     filterMode,
+    entityMeta,
 }: {
     group: PaletteSubjectGroup;
     dragOffset: number;
     showTeacher: boolean;
     filterMode: FilterMode;
+    entityMeta: EntityMeta | null;
 }) {
     const allDone = group.totalRemaining === 0;
     const [expanded, setExpanded] = useState(!allDone);
@@ -263,7 +268,7 @@ function SubjectGroupAccordion({
                     ) : (
                         <span className={[
                             'w-1.5 h-1.5 rounded-full flex-shrink-0',
-                            group.variant === 'green' ? 'bg-emerald-500' : 'bg-red-400',
+                            variantPalette(group.variant).dot,
                         ].join(' ')} />
                     )}
                     <span className={[
@@ -299,6 +304,7 @@ function SubjectGroupAccordion({
                             variant={group.variant}
                             dragIndex={dragOffset + i}
                             showTeacher={showTeacher}
+                            entityMeta={entityMeta}
                         />
                     ))}
 
@@ -317,6 +323,7 @@ function SubjectGroupAccordion({
                             variant={group.variant}
                             dragIndex={dragOffset + activeClasses.length + i}
                             showTeacher={showTeacher}
+                            entityMeta={entityMeta}
                         />
                     ))}
                 </>
@@ -335,18 +342,18 @@ const FILTER_OPTIONS: { key: FilterMode; label: string }[] = [
 
 // ─── Main Sidebar ─────────────────────────────────────────────────────────────
 
-export default function PaletteSidebar({ teacherCode, dataset }: PaletteSidebarProps) {
+export default function PaletteSidebar({ teacherCode, dataset, entityMeta }: PaletteSidebarProps) {
     const [activeTab, setActiveTab] = useState<'teacher' | 'all'>('teacher');
     const [filterMode, setFilterMode] = useState<FilterMode>('all');
 
     const teacherData = useMemo(
-        () => computePaletteData(teacherCode, dataset),
-        [teacherCode, dataset],
+        () => computePaletteData(teacherCode, dataset, entityMeta),
+        [teacherCode, dataset, entityMeta],
     );
 
     const globalData = useMemo(
-        () => computeGlobalPaletteData(dataset),
-        [dataset],
+        () => computeGlobalPaletteData(dataset, entityMeta),
+        [dataset, entityMeta],
     );
 
     const activeData = activeTab === 'teacher' ? teacherData : globalData;
@@ -354,8 +361,7 @@ export default function PaletteSidebar({ teacherCode, dataset }: PaletteSidebarP
     const totalPeriods   = activeData.reduce((s, g) => s + g.totalPeriods, 0);
     const totalPlaced    = activeData.reduce((s, g) => s + g.totalPlaced, 0);
 
-    const meta = TEACHER_META[teacherCode];
-    const teacherDisplayName = meta ? meta.firstName : teacherCode;
+    const teacherDisplayName = entityMeta?.teacher_meta[teacherCode]?.name ?? teacherCode;
 
     // Pre-compute cumulative drag offsets (includes ALL items, not just active)
     const dragOffsets = useMemo(() => {
@@ -452,6 +458,7 @@ export default function PaletteSidebar({ teacherCode, dataset }: PaletteSidebarP
                             dragOffset={dragOffsets[i]}
                             showTeacher={activeTab === 'all'}
                             filterMode={filterMode}
+                            entityMeta={entityMeta}
                         />
                     ))
                 )}

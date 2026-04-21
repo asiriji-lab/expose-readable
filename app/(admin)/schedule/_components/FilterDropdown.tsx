@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { TEACHER_META, CLASS_META, ROOM_META } from '../_utils/dummyData';
+import type { EntityMeta } from '../_types/schedule.types';
 
 interface FilterDropdownProps {
     label: string;
@@ -9,6 +9,7 @@ interface FilterDropdownProps {
     options: string[];
     onChange: (value: string) => void;
     labelClassName?: string;
+    entityMeta?: EntityMeta | null;
 }
 
 interface SearchRecord {
@@ -16,7 +17,7 @@ interface SearchRecord {
     fields: Record<string, string>;
 }
 
-export default function FilterDropdown({ label, value, options, onChange, labelClassName = "w-14" }: FilterDropdownProps) {
+export default function FilterDropdown({ label, value, options, onChange, labelClassName = "w-14", entityMeta }: FilterDropdownProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchText, setSearchText] = useState('');
 
@@ -40,12 +41,12 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
     const records = useMemo<SearchRecord[]>(() => {
         if (label.toLowerCase().includes('t.')) {
             return options.map((code) => {
-                const meta = TEACHER_META[code];
+                const meta = entityMeta?.teacher_meta[code];
                 return {
                     value: code,
                     fields: {
                         "Code": code,
-                        "Name": meta?.firstName || code,
+                        "Name": meta?.name || code,
                     },
                 };
             });
@@ -53,7 +54,7 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
 
         if (label.toLowerCase().includes('room')) {
             return options.map((code) => {
-                const meta = ROOM_META[code];
+                const meta = entityMeta?.room_meta[code];
                 return {
                     value: code,
                     fields: {
@@ -66,7 +67,7 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
         }
 
         return options.map((code) => {
-            const meta = CLASS_META[code];
+            const meta = entityMeta?.class_meta[code];
             return {
                 value: code,
                 fields: {
@@ -76,7 +77,7 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
                 },
             };
         });
-    }, [label, options]);
+    }, [label, options, entityMeta]);
 
     const filteredRecords = useMemo(() => {
         const keyword = searchText.trim().toLowerCase();
@@ -106,15 +107,15 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
     // Display label for the button — show name alongside code for teachers
     const displayLabel = useMemo(() => {
         if (label.toLowerCase().includes('t.')) {
-            const meta = TEACHER_META[value];
-            return meta ? `${value} — ${meta.firstName}` : value;
+            const name = entityMeta?.teacher_meta[value]?.name;
+            return name ? `${value} — ${name}` : value;
         }
         if (label.toLowerCase().includes('room')) {
-            const meta = ROOM_META[value];
-            return meta?.name && meta.name !== value ? `${value} — ${meta.name}` : value;
+            const name = entityMeta?.room_meta[value]?.name;
+            return name && name !== value ? `${value} — ${name}` : value;
         }
         return value;
-    }, [label, value]);
+    }, [label, value, entityMeta]);
 
     return (
         <div className="flex items-center gap-2">

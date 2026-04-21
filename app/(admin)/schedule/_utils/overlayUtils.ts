@@ -13,13 +13,14 @@ function computeBandStatus(
     return { kind: 'busy', occupyingItem: entityItem };
 }
 
-/** Returns true when two items represent the exact same lesson. */
+/** Returns true when two items represent the exact same lesson.
+ *  Compares by subjectCode+classCode+room only — class/room cells don't store teacher code. */
 function sameLessonItem(
     a: import('../_types/schedule.types').ScheduleItem | undefined,
     b: import('../_types/schedule.types').ScheduleItem | undefined,
 ): boolean {
     if (!a || !b) return false;
-    return a.teacher === b.teacher && a.classCode === b.classCode && a.room === b.room && a.subjectCode === b.subjectCode;
+    return a.subjectCode === b.subjectCode && a.classCode === b.classCode && a.room === b.room;
 }
 
 /**

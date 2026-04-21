@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { OverlayCellData, ScheduleItem } from '../_types/schedule.types';
+import { variantPalette } from '../_utils/variantColors';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -11,6 +12,8 @@ export interface CellRow {
     label: string;        // 'Subject' | 'Teacher' | 'Class' | 'Room'
     value: string | null; // display text, null → shows dash
     weight: 'primary' | 'secondary' | 'tertiary';
+    /** Entity color band — matches ThreeBandCell's emerald/pink/amber scheme */
+    colorKey?: 'teacher' | 'class' | 'room';
 }
 
 interface UnifiedScheduleCellProps {
@@ -18,8 +21,8 @@ interface UnifiedScheduleCellProps {
     mode: CellMode;
     /** Rows to render, ordered top→bottom */
     rows: CellRow[];
-    /** Variant color for individual mode */
-    variant?: 'red' | 'green' | null;
+    /** Variant color for individual mode (first char of subjectCode, or '_activity') */
+    variant?: string | null;
     /** Conflict count for overlay mode (0-3) */
     conflictCount?: number;
     /** Whether all entities are free (overlay mode) */
@@ -44,14 +47,18 @@ const ROW_HEIGHT = 32; // px per row — tighter than before (was 40)
 
 function getWeightStyles(weight: CellRow['weight']): string {
     switch (weight) {
-        case 'primary':
-            return 'font-semibold text-foreground text-[11px]';
-        case 'secondary':
-            return 'font-medium text-foreground text-[10px]';
-        case 'tertiary':
-            return 'text-foreground-muted text-[10px]';
+        case 'primary':   return 'font-semibold text-[11px]';
+        case 'secondary': return 'font-medium text-[10px]';
+        case 'tertiary':  return 'text-[10px]';
     }
 }
+
+// Band styles matching ThreeBandCell
+const BAND_STYLES: Record<string, { bg: string; border: string; text: string }> = {
+    teacher: { bg: 'bg-emerald-50', border: 'border-l-[3px] border-l-emerald-300', text: 'text-emerald-700' },
+    class:   { bg: 'bg-pink-50',    border: 'border-l-[3px] border-l-pink-300',    text: 'text-pink-700'    },
+    room:    { bg: 'bg-amber-50',   border: 'border-l-[3px] border-l-amber-300',   text: 'text-amber-700'   },
+};
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
@@ -94,16 +101,18 @@ export default function UnifiedScheduleCell({
             borderClass = 'border-l-[3px] border-l-emerald-400';
         }
     } else {
-        // Individual mode
+        // Individual mode — bands handle their own bg/border when colorKey is set
+        const hasBands = rows.some(r => r.colorKey);
         if (!hasContent) {
             bgClass = 'bg-surface';
             borderClass = 'border border-dashed border-border';
-        } else if (variant === 'red') {
-            bgClass = 'bg-pink-50';
-            borderClass = 'border-l-[3px] border-l-pink-400';
-        } else if (variant === 'green') {
-            bgClass = 'bg-emerald-50';
-            borderClass = 'border-l-[3px] border-l-emerald-400';
+        } else if (hasBands) {
+            bgClass = '';      // each row has its own band background
+            borderClass = '';
+        } else if (variant) {
+            const pal = variantPalette(variant);
+            bgClass = pal.cellBg;
+            borderClass = pal.cellBorderL;
         } else {
             bgClass = 'bg-surface';
         }
@@ -145,32 +154,42 @@ export default function UnifiedScheduleCell({
 
             {/* Variant dot (individual mode) */}
             {mode === 'individual' && hasContent && variant && (
-                <span className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${variant === 'red' ? 'bg-pink-400' : 'bg-emerald-400'}`} />
+                <span className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${variantPalette(variant ?? '').accent}`} />
             )}
 
             {/* Rows */}
             <AnimatePresence mode="popLayout">
-                {rows.map((row, i) => (
-                    <motion.div
-                        key={row.label}
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        transition={{ duration: 0.15, delay: i * 0.03 }}
-                        className={[
-                            'flex items-center justify-center px-1.5 overflow-hidden',
-                            getWeightStyles(row.weight),
-                            i > 0 ? 'border-t border-border/50' : '',
-                        ].join(' ')}
-                        style={{ height: `${ROW_HEIGHT}px` }}
-                    >
-                        <span className="truncate w-full text-center leading-tight">
-                            {row.value ?? (
-                                <span className="text-foreground-muted/40">—</span>
-                            )}
-                        </span>
-                    </motion.div>
-                ))}
+                {rows.map((row, i) => {
+                    const band = row.colorKey ? BAND_STYLES[row.colorKey] : null;
+                    return (
+                        <motion.div
+                            key={row.label}
+                            initial={{ opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            transition={{ duration: 0.15, delay: i * 0.03 }}
+                            className={band
+                                ? [
+                                    'flex items-center justify-center px-1.5 overflow-hidden w-full',
+                                    band.bg, band.border, band.text,
+                                    getWeightStyles(row.weight),
+                                  ].join(' ')
+                                : [
+                                    'flex items-center justify-center px-1.5 overflow-hidden',
+                                    getWeightStyles(row.weight),
+                                    i > 0 ? 'border-t border-border/50' : '',
+                                  ].join(' ')
+                            }
+                            style={{ height: `${ROW_HEIGHT}px` }}
+                        >
+                            <span className="truncate w-full text-center leading-tight">
+                                {row.value ?? (
+                                    <span className={band ? `${band.text} opacity-30` : 'text-foreground-muted/40'}>—</span>
+                                )}
+                            </span>
+                        </motion.div>
+                    );
+                })}
             </AnimatePresence>
 
             {/* Empty state center text */}
@@ -190,36 +209,36 @@ export default function UnifiedScheduleCell({
 export function buildOverlayRows(data: OverlayCellData): CellRow[] {
     const item = data.teacher; // teacher's lesson is the primary source
     return [
-        { label: 'Subject', value: item?.subjectCode ?? null, weight: 'primary' },
-        { label: 'Class', value: item?.classCode ?? null, weight: 'secondary' },
-        { label: 'Room', value: item?.room ?? null, weight: 'tertiary' },
+        { label: 'Subject', value: item?.subjectCode || null, weight: 'primary' },
+        { label: 'Class',   value: item?.classCode   || null, weight: 'secondary' },
+        { label: 'Room',    value: item?.room         || null, weight: 'tertiary' },
     ];
 }
 
-/** Build rows for individual Teacher view */
+/** Build rows for individual Teacher view — emerald=subject/teacher, pink=class, amber=room */
 export function buildTeacherRows(item: ScheduleItem | undefined): CellRow[] {
     return [
-        { label: 'Subject', value: item?.subjectCode ?? null, weight: 'primary' },
-        { label: 'Class', value: item?.classCode ?? null, weight: 'secondary' },
-        { label: 'Room', value: item?.room ?? null, weight: 'tertiary' },
+        { label: 'Subject', value: item?.subjectCode || null, weight: 'primary',   colorKey: 'teacher' },
+        { label: 'Class',   value: item?.classCode   || null, weight: 'secondary', colorKey: 'class'   },
+        { label: 'Room',    value: item?.room         || null, weight: 'tertiary',  colorKey: 'room'    },
     ];
 }
 
-/** Build rows for individual Class view */
+/** Build rows for individual Class view — pink=subject/class, emerald=teacher, amber=room */
 export function buildClassRows(item: ScheduleItem | undefined): CellRow[] {
     return [
-        { label: 'Subject', value: item?.subjectCode ?? null, weight: 'primary' },
-        { label: 'Teacher', value: item?.teacherName ?? null, weight: 'secondary' },
-        { label: 'Room', value: item?.room ?? null, weight: 'tertiary' },
+        { label: 'Subject', value: item?.subjectCode || null, weight: 'primary',   colorKey: 'class'   },
+        { label: 'Teacher', value: item?.teacherName || null, weight: 'secondary', colorKey: 'teacher' },
+        { label: 'Room',    value: item?.room         || null, weight: 'tertiary',  colorKey: 'room'    },
     ];
 }
 
-/** Build rows for individual Room view */
+/** Build rows for individual Room view — amber=subject/room, emerald=teacher, pink=class */
 export function buildRoomRows(item: ScheduleItem | undefined): CellRow[] {
     return [
-        { label: 'Subject', value: item?.subjectCode ?? null, weight: 'primary' },
-        { label: 'Teacher', value: item?.teacherName ?? null, weight: 'secondary' },
-        { label: 'Class', value: item?.classCode ?? null, weight: 'tertiary' },
+        { label: 'Subject', value: item?.subjectCode || null, weight: 'primary',   colorKey: 'room'    },
+        { label: 'Teacher', value: item?.teacherName || null, weight: 'secondary', colorKey: 'teacher' },
+        { label: 'Class',   value: item?.classCode   || null, weight: 'tertiary',  colorKey: 'class'   },
     ];
 }
 

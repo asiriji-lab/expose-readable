@@ -1,12 +1,4 @@
-import type { FullDataset } from '../_types/schedule.types';
-import {
-    TEACHER_WORKLOAD,
-    TEACHER_CODES,
-    TEACHER_META,
-    CLASS_META,
-    ROOM_META,
-    SUBJECT_ROOM_MAP,
-} from './dummyData';
+import type { FullDataset, EntityMeta } from '../_types/schedule.types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
@@ -16,19 +8,19 @@ export interface PaletteClassItem {
     teacherCode: string;
     teacherName: string;
     classCode: string;
-    room: string;           // resolved default room
+    room: string;
     roomName: string;
     periodsPerWeek: number;
     placed: number;
     remaining: number;
-    /** Short placement summary e.g. "จ.1,2 · อ.4" — only populated when placed > 0 */
+    /** Short placement summary e.g. "จ.1,2 · อ.4" */
     placementSummary: string;
 }
 
 export interface PaletteSubjectGroup {
     subjectCode: string;
     subject: string;
-    variant: 'red' | 'green';
+    variant: string;
     classes: PaletteClassItem[];
     totalPeriods: number;
     totalPlaced: number;
@@ -38,13 +30,19 @@ export interface PaletteSubjectGroup {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Returns the best default room: specialist room first, then class homeroom. */
-export function resolveDefaultRoom(subjectCode: string, classCode: string): string {
-    return SUBJECT_ROOM_MAP[subjectCode] ?? CLASS_META[classCode]?.defaultRoom ?? '';
+export function resolveDefaultRoom(
+    subjectCode: string,
+    classCode: string,
+    entityMeta: EntityMeta | null,
+): string {
+    if (!entityMeta) return '';
+    return entityMeta.subject_room_map[subjectCode]
+        ?? entityMeta.class_meta[classCode]?.defaultRoom
+        ?? '';
 }
 
-function buildTeacherName(teacherCode: string): string {
-    const meta = TEACHER_META[teacherCode];
-    return meta ? `${meta.firstName} ${meta.lastName}` : teacherCode;
+function buildTeacherName(teacherCode: string, entityMeta: EntityMeta | null): string {
+    return entityMeta?.teacher_meta[teacherCode]?.name ?? teacherCode;
 }
 
 const DAY_ABBREV: Record<string, string> = {
@@ -53,7 +51,6 @@ const DAY_ABBREV: Record<string, string> = {
 
 interface PlacementInfo {
     count: number;
-    /** e.g. "จ.1,2 · อ.4" */
     summary: string;
 }
 
@@ -95,29 +92,27 @@ function getPlacementInfo(
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-/**
- * Compute palette data for a single teacher.
- * Returns subject groups with their class items (including placed/remaining counts).
- */
 export function computePaletteData(
     teacherCode: string,
     dataset: FullDataset | null,
+    entityMeta: EntityMeta | null,
 ): PaletteSubjectGroup[] {
-    const workload = TEACHER_WORKLOAD[teacherCode] ?? [];
-    const teacherName = buildTeacherName(teacherCode);
+    if (!entityMeta) return [];
+    const workload = entityMeta.teacher_workload[teacherCode] ?? [];
+    const teacherName = buildTeacherName(teacherCode, entityMeta);
 
     return workload.map(entry => {
         const classes: PaletteClassItem[] = entry.assignments.map(a => {
             const info = dataset
                 ? getPlacementInfo(teacherCode, entry.subjectCode, a.classCode, dataset)
                 : { count: 0, summary: '' };
-            const room = resolveDefaultRoom(entry.subjectCode, a.classCode);
+            const room = resolveDefaultRoom(entry.subjectCode, a.classCode, entityMeta);
             return {
                 teacherCode,
                 teacherName,
                 classCode: a.classCode,
                 room,
-                roomName: ROOM_META[room]?.name ?? room,
+                roomName: entityMeta.room_meta[room]?.name ?? room,
                 periodsPerWeek: a.periodsPerWeek,
                 placed: info.count,
                 remaining: a.periodsPerWeek - info.count,
@@ -140,19 +135,16 @@ export function computePaletteData(
     });
 }
 
-/**
- * Compute palette data across ALL teachers.
- * Merges items under shared subject codes; each PaletteClassItem carries
- * its own teacherCode so drag payloads remain correct.
- */
 export function computeGlobalPaletteData(
     dataset: FullDataset | null,
+    entityMeta: EntityMeta | null,
 ): PaletteSubjectGroup[] {
+    if (!entityMeta) return [];
     const subjectMap = new Map<string, PaletteSubjectGroup>();
 
-    for (const teacherCode of TEACHER_CODES) {
-        const workload = TEACHER_WORKLOAD[teacherCode] ?? [];
-        const teacherName = buildTeacherName(teacherCode);
+    for (const teacherCode of entityMeta.teacher_codes) {
+        const workload = entityMeta.teacher_workload[teacherCode] ?? [];
+        const teacherName = buildTeacherName(teacherCode, entityMeta);
 
         for (const entry of workload) {
             let group = subjectMap.get(entry.subjectCode);
@@ -173,13 +165,13 @@ export function computeGlobalPaletteData(
                 const info = dataset
                     ? getPlacementInfo(teacherCode, entry.subjectCode, a.classCode, dataset)
                     : { count: 0, summary: '' };
-                const room = resolveDefaultRoom(entry.subjectCode, a.classCode);
+                const room = resolveDefaultRoom(entry.subjectCode, a.classCode, entityMeta);
                 group.classes.push({
                     teacherCode,
                     teacherName,
                     classCode: a.classCode,
                     room,
-                    roomName: ROOM_META[room]?.name ?? room,
+                    roomName: entityMeta.room_meta[room]?.name ?? room,
                     periodsPerWeek: a.periodsPerWeek,
                     placed: info.count,
                     remaining: a.periodsPerWeek - info.count,

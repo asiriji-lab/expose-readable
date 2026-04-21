@@ -8,7 +8,56 @@ export interface ScheduleItem {
     roomName: string;       // e.g. "Computer room"
     subjectCode: string;    // e.g. "อ21345"
     subject: string;        // Thai subject name
-    variant: 'red' | 'green';
+    variant: string;        // first char of subjectCode, or '_activity'
+}
+
+// ─── Entity Metadata (computed from input CSVs, stored in DB) ────────────────
+
+export interface TeacherMetaEntry {
+    name: string;
+    department: string;
+}
+
+export interface ClassMetaEntry {
+    defaultRoom: string;
+    level: string;
+}
+
+export interface RoomMetaEntry {
+    name: string;
+    type: 'homeroom' | 'specialist';
+}
+
+export interface SubjectInfo {
+    code: string;
+    name: string;
+    variant: string;
+}
+
+export interface WorkloadAssignment {
+    classCode: string;
+    room: string;
+    periodsPerWeek: number;
+}
+
+export interface WorkloadEntry {
+    subjectCode: string;
+    subject: string;
+    variant: string;
+    assignments: WorkloadAssignment[];
+    totalPeriods: number;
+}
+
+export interface EntityMeta {
+    teacher_codes: string[];
+    teacher_meta: Record<string, TeacherMetaEntry>;
+    class_codes: string[];
+    class_meta: Record<string, ClassMetaEntry>;
+    room_codes: string[];
+    room_meta: Record<string, RoomMetaEntry>;
+    subjects: Record<string, SubjectInfo>;
+    subject_room_map: Record<string, string>;
+    teacher_workload: Record<string, WorkloadEntry[]>;
 }
 
 // ─── Schedule Maps ───────────────────────────────────────────────────────────
