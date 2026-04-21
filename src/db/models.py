@@ -255,13 +255,15 @@ def update_schedule_status(
 
 
 @_guard
-def complete_schedule(schedule_id: str, data: Dict) -> None:
+def complete_schedule(schedule_id: str, data: Dict,
+                      entity_meta: Optional[Dict] = None) -> None:
     """
     Mark the schedule as completed and store the full schedule JSON output.
 
     Args:
         schedule_id: The job UUID.
         data:        The schedule output dict (content of schedule.json).
+        entity_meta: Entity metadata computed from input CSVs (optional).
     """
     sched = db.session.get(Schedule, uuid.UUID(schedule_id))
     if not sched:
@@ -269,6 +271,8 @@ def complete_schedule(schedule_id: str, data: Dict) -> None:
     sched.status = 'completed'
     sched.progress = 100.0
     sched.data = data
+    if entity_meta is not None:
+        sched.entity_meta = entity_meta
     db.session.commit()
 
 

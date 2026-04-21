@@ -23,6 +23,7 @@ from typing import Dict, Optional, Callable
 
 from src.logger import create_job_logger
 from src.data_cleaning.data_cleaning import clean_input_data
+from src.data_cleaning.entity_meta import compute_entity_meta
 from src.preschedule.scheduleManager import ScheduleManager
 from src.preschedule.prescheduleProcessor import PrescheduleProcessor
 from .island_ga import IslandGeneticAlgorithm
@@ -181,6 +182,7 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
         log.info("  Loaded %d input file(s): %s", len(raw_data), list(raw_data.keys()))
 
         cleaned_data = clean_input_data(raw_data)
+        entity_meta = compute_entity_meta(cleaned_data)
 
         curriculum_df = cleaned_data.get('curriculum')
         room_df       = cleaned_data.get('room')
@@ -328,6 +330,7 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
         'json_path':      json_path,
         'log_path':       log_path,
         'success':        True,
+        'entity_meta':    entity_meta,
     }
 
     if job_manager:

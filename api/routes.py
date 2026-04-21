@@ -49,8 +49,9 @@ def _run_job_background(app, job_id, job_folder, params, academic_year, semester
             # Persist completed schedule to the database when available
             if database.is_available():
                 schedule_json = result.get('schedule_json')
+                entity_meta = result.get('entity_meta')
                 if result.get('success') and schedule_json:
-                    models.complete_schedule(job_id, schedule_json)
+                    models.complete_schedule(job_id, schedule_json, entity_meta)
                 else:
                     err = result.get('error', 'Unknown error')
                     models.fail_schedule(job_id, err)

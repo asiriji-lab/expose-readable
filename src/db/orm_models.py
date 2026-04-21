@@ -148,6 +148,8 @@ class Schedule(db.Model):
     sheet_url     = Column(Text, nullable=True)
     # Full schedule output (schedule.json content); populated on completion
     data          = Column(JSONB, nullable=True)
+    # Entity metadata (teacher/class/room/subject info) computed from input CSVs
+    entity_meta   = Column(JSONB, nullable=True)
     # GA configuration used for this run
     ga_params     = Column(JSONB, nullable=True)
     error         = Column(Text, nullable=True)
@@ -184,4 +186,5 @@ class Schedule(db.Model):
         }
         if include_data:
             d['data'] = self.data
+            d['entity_meta'] = self.entity_meta
         return d
