@@ -48,19 +48,31 @@ def _run_job_background(app, job_id, job_folder, params, academic_year, semester
                 academic_year=academic_year,
                 semester=semester,
             )
-            # Persist completed schedule to the database when available
+            # Write to DB first so data is always present before job_manager
+            # signals 'completed' to pollers (get_job_status / get_job_result).
             if database.is_available():
                 schedule_json = result.get('schedule_json')
-                entity_meta = result.get('entity_meta')
+                entity_meta   = result.get('entity_meta')
                 if result.get('success') and schedule_json:
                     models.complete_schedule(job_id, schedule_json, entity_meta)
                 else:
                     err = result.get('error', 'Unknown error')
                     models.fail_schedule(job_id, err)
+
+            # Now mark the job as completed in the file-based job manager.
+            stored_result = {k: v for k, v in result.items() if k != 'schedule_json'}
+            if result.get('success'):
+                job_manager.update_job_status(job_id, 'completed', result=stored_result)
+            else:
+                job_manager.update_job_status(
+                    job_id, 'failed',
+                    result=stored_result,
+                    error=result.get('error', 'Unknown error'),
+                )
         except Exception as e:
-            job_manager.update_job_status(job_id, 'failed', error=str(e))
             if database.is_available():
                 models.fail_schedule(job_id, str(e))
+            job_manager.update_job_status(job_id, 'failed', error=str(e))
 
 
 # =============================================================================
@@ -387,31 +399,46 @@ def get_job_result(job_id):
     job_manager = JobManager(current_app.config['JOBS_FOLDER'])
     job = job_manager.get_job(job_id)
 
-    if not job:
+    # ── Primary path: job manager knows this job ──────────────────────────────
+    if job:
+        if job['status'] != 'completed':
+            return jsonify({
+                "success": False,
+                "error": f"Result not available. Current status: {job['status']}"
+            }), 400
+
+        result   = job.get('result') or {}
+        schedule = None
+        json_path = result.get('json_path')
+        if json_path and os.path.exists(json_path):
+            with open(json_path, 'r', encoding='utf-8') as f:
+                schedule = json.load(f)
+
+        # File missing but DB has the data (e.g. container rebuilt, disk cleaned)
+        if schedule is None and database.is_available():
+            db_record = models.get_schedule(job_id)
+            if db_record:
+                schedule = db_record.get('data')
+
         return jsonify({
-            "success": False,
-            "error": "Job not found"
-        }), 404
+            "success":  True,
+            "job_id":   job['job_id'],
+            "result":   result,
+            "schedule": schedule,
+        })
 
-    if job['status'] != 'completed':
-        return jsonify({
-            "success": False,
-            "error": f"Result not available. Current status: {job['status']}"
-        }), 400
+    # ── Fallback: job manager state lost (rebuild / restart) — try DB ─────────
+    if database.is_available():
+        db_record = models.get_schedule(job_id)
+        if db_record and db_record.get('data'):
+            return jsonify({
+                "success":  True,
+                "job_id":   job_id,
+                "result":   {},
+                "schedule": db_record['data'],
+            })
 
-    result = job.get('result') or {}
-    schedule = None
-    json_path = result.get('json_path')
-    if json_path and os.path.exists(json_path):
-        with open(json_path, 'r', encoding='utf-8') as f:
-            schedule = json.load(f)
-
-    return jsonify({
-        "success":  True,
-        "job_id":   job['job_id'],
-        "result":   result,
-        "schedule": schedule,
-    })
+    return jsonify({"success": False, "error": "Job not found"}), 404
 
 
 @api_bp.route('/schedule/<job_id>/sync-status', methods=['POST'])
@@ -1119,20 +1146,54 @@ def update_schedule_record(schedule_id):
 @api_bp.route('/schedules/<schedule_id>/refresh-meta', methods=['POST'])
 def refresh_schedule_meta(schedule_id):
     """
-    Re-compute entity_meta from the original uploaded CSVs for this job.
+    Re-compute entity_meta from freshly supplied CSV files (typically fetched
+    from Google Sheets by the frontend).
 
-    Useful when the admin has made minor changes to the input files and wants
-    updated teacher/class/room/subject metadata without re-running the full GA.
-    The uploaded CSV files must still exist on disk (inside the job's uploads/ folder).
+    Accepts the same multipart/form-data file keys as POST /api/v1/schedule.
+    Only 'curriculum' is required; the other seven are optional but recommended.
     ---
     tags:
       - Schedules
+    consumes:
+      - multipart/form-data
     parameters:
       - name: schedule_id
         in: path
         type: string
         required: true
         description: Schedule UUID (same as the API job_id)
+      - name: curriculum
+        in: formData
+        type: file
+        required: true
+      - name: room
+        in: formData
+        type: file
+        required: false
+      - name: teacher
+        in: formData
+        type: file
+        required: false
+      - name: student
+        in: formData
+        type: file
+        required: false
+      - name: period
+        in: formData
+        type: file
+        required: false
+      - name: preplace
+        in: formData
+        type: file
+        required: false
+      - name: elective
+        in: formData
+        type: file
+        required: false
+      - name: scout
+        in: formData
+        type: file
+        required: false
     responses:
       200:
         description: entity_meta recomputed and persisted; returns the new value
@@ -1141,46 +1202,42 @@ def refresh_schedule_meta(schedule_id):
           properties:
             success:     {type: boolean}
             entity_meta: {type: object}
-      404:
-        description: Schedule not found or uploads folder missing
       400:
-        description: Database not configured or no CSV files found
+        description: No CSV files provided or curriculum missing
+      404:
+        description: Schedule not found
     """
-    # Locate the uploads folder for this job
-    job_folder     = get_job_folder(current_app.config['JOBS_FOLDER'], schedule_id)
-    uploads_folder = os.path.join(job_folder, 'uploads')
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
 
-    if not os.path.isdir(uploads_folder):
-        return jsonify({
-            "success": False,
-            "error": "Uploads folder not found — the original input files may have been deleted",
-        }), 404
+    sched = models.get_schedule(schedule_id)
+    if not sched:
+        return jsonify({"success": False, "error": "Schedule not found"}), 404
 
-    # Load whichever CSV files are present (mirrors _load_raw_data in scheduler.py)
-    _INPUT_FILES = {
-        'curriculum': 'curriculum.csv',
-        'elective':   'elective.csv',
-        'teacher':    'teacher.csv',
-        'period':     'period.csv',
-        'preplace':   'preplace.csv',
-        'room':       'room.csv',
-        'student':    'student.csv',
-        'scout':      'scout.csv',
-    }
+    _FILE_KEYS = ['curriculum', 'elective', 'teacher', 'period',
+                  'preplace', 'room', 'student', 'scout']
+
     try:
         import pandas as pd
         raw_data = {}
-        for key, filename in _INPUT_FILES.items():
-            path = os.path.join(uploads_folder, filename)
-            if os.path.exists(path):
-                raw_data[key] = pd.read_csv(path, encoding='utf-8-sig')
+        for key in _FILE_KEYS:
+            fobj = request.files.get(key)
+            if not fobj or fobj.filename == '':
+                continue
+            try:
+                raw_data[key] = pd.read_csv(fobj, encoding='utf-8-sig')
+            except Exception as exc:
+                return jsonify({"success": False,
+                                "error": f"Could not read '{key}.csv': {exc}"}), 400
     except Exception as exc:
-        return jsonify({"success": False, "error": f"Failed to read CSV files: {exc}"}), 500
+        return jsonify({"success": False, "error": f"Failed to process files: {exc}"}), 500
 
     if not raw_data:
-        return jsonify({"success": False, "error": "No input CSV files found in uploads folder"}), 400
+        return jsonify({"success": False, "error": "No CSV files provided"}), 400
 
-    # Re-compute entity_meta using the same pipeline as the scheduler
+    if 'curriculum' not in raw_data:
+        return jsonify({"success": False, "error": "'curriculum' CSV is required"}), 400
+
     try:
         cleaned_data = clean_input_data(raw_data)
         entity_meta  = compute_entity_meta(cleaned_data)
@@ -1188,9 +1245,7 @@ def refresh_schedule_meta(schedule_id):
         current_app.logger.error('[refresh_schedule_meta] Compute failed for %s: %s', schedule_id, exc)
         return jsonify({"success": False, "error": f"Metadata computation failed: {exc}"}), 500
 
-    # Persist to database if available; proceed regardless (caller can use the response)
-    if database.is_available():
-        models.update_entity_meta(schedule_id, entity_meta)
+    models.update_entity_meta(schedule_id, entity_meta)
 
     return jsonify({"success": True, "entity_meta": entity_meta})
 

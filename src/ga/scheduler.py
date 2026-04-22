@@ -333,8 +333,12 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
         'entity_meta':    entity_meta,
     }
 
-    if job_manager:
-        job_manager.update_job_status(job_id, 'completed', result=stored_result)
+    # NOTE: job_manager status is updated here (inside scheduler) for progress
+    # tracking only.  The authoritative DB write happens in _run_job_background
+    # AFTER this function returns, so the DB is always written before the
+    # job_manager signals 'completed' to pollers.
+    # We intentionally do NOT set 'completed' here — that is done in
+    # _run_job_background after models.complete_schedule() succeeds.
     log.info("  Export complete — outputs saved to %s", outputs_folder)
 
     return {**stored_result, 'schedule_json': schedule_json}
