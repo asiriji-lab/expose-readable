@@ -333,10 +333,11 @@ export function autoEjectConflicts(dataset: FullDataset): {
 
     for (const day of DAYS) {
         for (const slot of SLOTS) {
-            // Snapshot items at this (day, slot) across all teachers before any ejection
+            // Snapshot items at this (day, slot) across all teachers before any ejection.
+            // Skip preplace items: they share empty classCode/room and would falsely conflict.
             const items: ScheduleItem[] = Object.values(current.teachers)
                 .map(s => s[day]?.[slot])
-                .filter((x): x is ScheduleItem => !!x);
+                .filter((x): x is ScheduleItem => !!x && !x.isPreplace);
 
             for (const item of items) {
                 const roomKey  = `${day}-${slot}-room-${item.room}`;

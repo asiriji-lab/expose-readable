@@ -35,6 +35,7 @@ interface BackendCell {
   room?:         string | null;
   teacher?:      string | null;   // only in room cells
   teaching_type?: 'team' | 'split' | null;  // set by json_exporter post-pass
+  slot_type?:    'preplace' | null;          // set for pre-placed activity slots
 }
 
 interface BackendRow {
@@ -165,6 +166,7 @@ export function transformToFullDataset(schedule: BackendSchedule): { dataset: Fu
           subjectCode: cell.subject_id   || '',
           subject:     cell.subject_name || '',
           variant:     subjectVariant(cell.subject_id || ''),
+          ...(cell.slot_type === 'preplace' ? { isPreplace: true } : {}),
         };
       }
     }
@@ -197,6 +199,7 @@ export function transformToFullDataset(schedule: BackendSchedule): { dataset: Fu
           subjectCode: cell.subject_id   || '',
           subject:     cell.subject_name || '',
           variant:     subjectVariant(cell.subject_id || ''),
+          ...(cell.slot_type === 'preplace' ? { isPreplace: true } : {}),
         };
       }
     }
@@ -227,6 +230,7 @@ export function transformToFullDataset(schedule: BackendSchedule): { dataset: Fu
           subjectCode: cell.subject_id   || '',
           subject:     cell.subject_name || '',
           variant:     subjectVariant(cell.subject_id || ''),
+          ...(cell.slot_type === 'preplace' ? { isPreplace: true } : {}),
         };
       }
     }

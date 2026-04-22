@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Download, Trash2, Sparkles, MoreHorizontal, Save, RefreshCw } from 'lucide-react';
+import { ChevronLeft, Download, Trash2, Sparkles, MoreHorizontal, Save, RefreshCw, Sheet } from 'lucide-react';
 import ViewModeToggle from './_components/ViewModeToggle';
 import TimetableGridV2 from './_components/TimetableGridV2';
 import TimetableGridSkeleton from './_components/TimetableGridSkeleton';
@@ -15,6 +15,7 @@ import { computeOverlayData } from './_utils/overlayUtils';
 import { moveItem, hasConflict, removeItemFromDataset, autoEjectConflicts } from './_utils/scheduleLogic';
 import { FullDataset, ScheduleItem, ScheduleData, ViewMode, OverlayCellData, EntityType, DragPayload, EntityMeta, GroupedSlots } from './_types/schedule.types';
 import OverlayInspectPopover from './_components/OverlayInspectPopover';
+import UpdateSourcePanel from './_components/UpdateSourcePanel';
 import BandHoverTooltip from './_components/BandHoverTooltip';
 import { transformToFullDataset, getTeacherCodes, getClassCodes, getRoomCodes, emptyDataset, deriveEntityMetaFromSchedule, BackendSchedule } from '@/lib/api/transform';
 
@@ -28,6 +29,8 @@ function SchedulePageContent() {
     const [dataset, setDataset] = useState<FullDataset | null>(null);
     const [groupedSlots, setGroupedSlots] = useState<GroupedSlots>({});
     const [entityMeta, setEntityMeta] = useState<EntityMeta | null>(null);
+    const [sheetUrl, setSheetUrl] = useState<string | null>(null);
+    const [isSourcePanelOpen, setIsSourcePanelOpen] = useState(false);
 
     // ─── Derived filter options ───────────────────────────────────────────────
     const teacherCodes = useMemo(() => dataset ? getTeacherCodes(dataset) : [], [dataset]);
@@ -65,6 +68,7 @@ function SchedulePageContent() {
                 try {
                     const cached = sessionStorage.getItem(`schedule_cache_${jobId}`);
                     const cachedMeta = sessionStorage.getItem(`entity_meta_cache_${jobId}`);
+                    const cachedSheetUrl = sessionStorage.getItem(`sheet_url_cache_${jobId}`);
                     if (cached) {
                         const raw = JSON.parse(cached) as BackendSchedule;
                         const { dataset: transformed, groupedSlots: gs } = transformToFullDataset(raw);
@@ -73,6 +77,7 @@ function SchedulePageContent() {
                         setGroupedSlots(gs);
                         setJobName(raw.config?.academic_year || 'ตารางสอน');
                         if (cachedMeta) setEntityMeta(JSON.parse(cachedMeta) as EntityMeta);
+                        if (cachedSheetUrl) setSheetUrl(cachedSheetUrl);
                         return;
                     }
 
@@ -106,6 +111,11 @@ function SchedulePageContent() {
                             }).catch(() => { /* non-fatal */ });
                         }
                         setJobName(data.schedule?.job_name || raw.config?.academic_year || 'ตารางสอน');
+                        const fetchedSheetUrl = data.schedule?.sheet_url ?? null;
+                        setSheetUrl(fetchedSheetUrl);
+                        if (fetchedSheetUrl) {
+                            sessionStorage.setItem(`sheet_url_cache_${jobId}`, fetchedSheetUrl);
+                        }
                     } else {
                         console.warn('[SchedulePage] Unexpected result shape:', data);
                         setDataset(emptyDataset());
@@ -243,31 +253,12 @@ function SchedulePageContent() {
         }
     };
 
-    const [isRefreshingMeta, setIsRefreshingMeta] = useState(false);
-
-    const handleRefreshMeta = async () => {
+    const handleMetaRefreshed = (newMeta: EntityMeta) => {
         const params = new URLSearchParams(window.location.search);
         const jobId = params.get('job_id');
-        if (!jobId) return;
-
-        setIsRefreshingMeta(true);
-        try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dev.winscloud.net/api/v1';
-            const res = await fetch(`${API_URL}/schedules/${encodeURIComponent(jobId)}/refresh-meta`, {
-                method: 'POST',
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data?.error ?? 'Refresh failed');
-
-            const newMeta = data.entity_meta as EntityMeta;
-            setEntityMeta(newMeta);
+        setEntityMeta(newMeta);
+        if (jobId) {
             sessionStorage.setItem(`entity_meta_cache_${jobId}`, JSON.stringify(newMeta));
-            alert('Metadata refreshed successfully.');
-        } catch (e) {
-            console.error('Refresh meta error:', e);
-            alert(`Failed to refresh metadata: ${(e as Error).message}`);
-        } finally {
-            setIsRefreshingMeta(false);
         }
     };
 
@@ -454,12 +445,10 @@ function SchedulePageContent() {
                                             <Save className="w-4 h-4 text-foreground-muted" /> Save Schedule
                                         </button>
                                         <button
-                                            onClick={() => { handleRefreshMeta(); setActionsOpen(false); }}
-                                            disabled={isRefreshingMeta}
-                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors disabled:opacity-50"
+                                            onClick={() => { setIsSourcePanelOpen(true); setActionsOpen(false); }}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors"
                                         >
-                                            <RefreshCw className={`w-4 h-4 text-foreground-muted ${isRefreshingMeta ? 'animate-spin' : ''}`} />
-                                            {isRefreshingMeta ? 'Refreshing...' : 'Refresh Metadata'}
+                                            <Sheet className="w-4 h-4 text-foreground-muted" /> Update Google Sheet
                                         </button>
                                         <div className="my-1 border-t border-border" />
                                         <button onClick={() => { handleExportClick(); setActionsOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors">
@@ -579,6 +568,13 @@ function SchedulePageContent() {
                 data={bandInspect?.data ?? null}
                 focusedEntity={bandInspect?.entityType ?? activeEntity}
                 groupedSlots={groupedSlots}
+            />
+            <UpdateSourcePanel
+                isOpen={isSourcePanelOpen}
+                onClose={() => setIsSourcePanelOpen(false)}
+                jobId={new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('job_id') ?? ''}
+                sheetUrl={sheetUrl}
+                onMetaRefreshed={handleMetaRefreshed}
             />
         </div>
     );

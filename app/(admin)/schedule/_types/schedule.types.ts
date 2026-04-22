@@ -18,6 +18,8 @@ export interface ScheduleItem {
     variant: string;        // first char of subjectCode, or '_activity'
     /** Populated by the transform post-pass when multiple teachers share a slot. */
     teachingType?: TeachingType;
+    /** True for pre-placed activity slots (Homeroom, Lunch, Bridging, ลูกเสือ, etc.). */
+    isPreplace?: boolean;
 }
 
 // ─── Entity Metadata (computed from input CSVs, stored in DB) ────────────────

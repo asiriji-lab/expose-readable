@@ -26,6 +26,10 @@ function sameLessonItem(
     b: import('../_types/schedule.types').ScheduleItem | undefined,
 ): boolean {
     if (!a || !b) return false;
+    // Preplace pairs are "the same" when they share the activity name, regardless of classCode/room.
+    if (a.isPreplace && b.isPreplace) {
+        return a.subjectCode === b.subjectCode;
+    }
     const isGrouped = a.teachingType === 'team' || a.teachingType === 'split'
                    || b.teachingType === 'team' || b.teachingType === 'split';
     if (isGrouped) {

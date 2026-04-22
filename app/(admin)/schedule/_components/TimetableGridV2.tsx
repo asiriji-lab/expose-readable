@@ -60,6 +60,32 @@ function DroppableCell({ id, partiallyOccupied, children }: { id: string; partia
 // DraggableWrapper removed — drag is now self-managed inside ThreeBandCell's green band.
 // This keeps drag events isolated to the teacher band only.
 
+// ─── Preplace cell ───────────────────────────────────────────────────────────
+
+function PreplaceCellWidget({ label, bandHeight }: { label: string; bandHeight: number }) {
+    return (
+        <div
+            style={{ height: bandHeight * 3 }}
+            className="w-full flex flex-col overflow-hidden border-l-[3px] border-l-violet-400 bg-violet-50 relative select-none"
+        >
+            <span className="absolute top-1 right-1 z-10 text-violet-400 pointer-events-none">
+                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+            </span>
+            <div style={{ height: bandHeight }} className="flex items-center justify-center border-b border-violet-200 bg-violet-100 px-4">
+                <span className="text-[10px] font-semibold text-violet-700 truncate">{label}</span>
+            </div>
+            <div style={{ height: bandHeight }} className="flex items-center justify-center border-b border-violet-100 px-1">
+                <span className="text-[9px] text-violet-400 truncate">{label}</span>
+            </div>
+            <div style={{ height: bandHeight }} className="flex items-center justify-center px-1">
+                <span className="text-[9px] text-violet-300 truncate">{label}</span>
+            </div>
+        </div>
+    );
+}
+
 // ─── Helpers for individual entity views ─────────────────────────────────────
 
 const ALL_FREE_OVERLAY: OverlayCellData = {
@@ -172,6 +198,24 @@ export default function TimetableGridV2({
                                     const cellData = scheduleData[day]?.[slot];
                                     const overlayCell = overlayData?.[day]?.[slot];
                                     const isViewAll = viewMode === 'all';
+
+                                    // ── Preplace detection ────────────────────────────────────────────────
+                                    const preplaceLabel = isViewAll
+                                        ? (overlayCell?.teacher?.isPreplace ? overlayCell.teacher.subjectCode
+                                           : overlayCell?.class?.isPreplace ? overlayCell.class.subjectCode
+                                           : overlayCell?.room?.isPreplace  ? overlayCell.room.subjectCode
+                                           : null)
+                                        : (cellData?.isPreplace ? cellData.subjectCode : null);
+
+                                    if (preplaceLabel !== null) {
+                                        return (
+                                            <td key={slot} className={`p-0 relative ${si < SLOTS.length - 1 ? 'border-r border-border/30' : ''}`}>
+                                                <PreplaceCellWidget label={preplaceLabel} bandHeight={ROW_HEIGHT} />
+                                            </td>
+                                        );
+                                    }
+
+                                    // ── Regular cell ──────────────────────────────────────────────────────
 
                                     // View All: use real overlay; individual: build synthetic overlay
                                     const cellOverlay = isViewAll
