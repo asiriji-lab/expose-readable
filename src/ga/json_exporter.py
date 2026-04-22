@@ -15,11 +15,13 @@ from collections import defaultdict
 from .models import Lesson, Chromosome
 
 
-# Cell values that represent blocked/non-lesson slots (should appear as null).
-_SPECIAL_KEYWORDS = [
-    'UNAVAILABLE', 'Homeroom', 'Morning Break', 'Afternoon Break',
-    'Lunch', 'ลูกเสือ', 'ชุมนุม', 'เสรี', 'Bridging', 'preplace',
-    'scout', 'elective', 'constraint',
+# Truly blocked slots — teacher constraints, not visible lessons.
+_BLOCKED_KEYWORDS = ['UNAVAILABLE']
+
+# Pre-placed activity slots (from preschedule phase) — exported with slot_type "preplace".
+_PREPLACE_KEYWORDS = [
+    'Homeroom', 'Morning Break', 'Afternoon Break',
+    'Lunch', 'ลูกเสือ', 'ชุมนุม', 'เสรี', 'Bridging',
 ]
 
 
@@ -130,14 +132,19 @@ class ScheduleJsonExporter:
         return total
 
     def _is_special(self, value: Any) -> bool:
-        """Return True if the cell value is a blocked/special slot, not a real lesson."""
+        """Return True if the cell value is a truly blocked slot (UNAVAILABLE)."""
         if value is None:
             return True
         s = str(value).strip()
         if not s or s in ('nan', 'None'):
             return True
         lower = s.lower()
-        return any(kw.lower() in lower for kw in _SPECIAL_KEYWORDS)
+        return any(kw.lower() in lower for kw in _BLOCKED_KEYWORDS)
+
+    def _is_preplace_activity(self, subject_id: str) -> bool:
+        """Return True if subject_id matches a pre-placed activity keyword."""
+        lower = subject_id.lower()
+        return any(kw.lower() in lower for kw in _PREPLACE_KEYWORDS)
 
     # =========================================================================
     # MANAGER GRID CELL PARSERS
@@ -146,7 +153,8 @@ class ScheduleJsonExporter:
     def _parse_teacher_cell(self, cell_value) -> Optional[Dict]:
         """
         Teacher grid stores: "{class_id} ({subject_id}) at {room_id}"
-        Returns {"subject_id", "subject_name", "class", "room"} or None for blocked slots.
+        Returns a cell dict or None for blocked slots.
+        Preplace cells return slot_type "preplace" with null class/room.
         """
         if self._is_special(cell_value):
             return None
@@ -156,29 +164,54 @@ class ScheduleJsonExporter:
             class_id   = m.group(1).strip()
             subject_id = m.group(2).strip()
             room_id    = m.group(3).strip()
+            if self._is_preplace_activity(subject_id):
+                return {
+                    "subject_id":   subject_id,
+                    "subject_name": subject_id,
+                    "class":        None,
+                    "room":         None,
+                    "slot_type":    "preplace",
+                }
             return {
                 "subject_id":   subject_id,
                 "subject_name": self._subject_name(subject_id),
                 "class":        class_id,
                 "room":         room_id,
             }
-        # Fallback: treat entire string as subject
+        if self._is_preplace_activity(s):
+            return {
+                "subject_id":   s,
+                "subject_name": s,
+                "class":        None,
+                "room":         None,
+                "slot_type":    "preplace",
+            }
         return {"subject_id": s, "subject_name": s, "class": None, "room": None}
 
     def _parse_student_cell(self, cell_value) -> Optional[Dict]:
         """
         Student grid stores: "{subject_id}"
-        Returns {"subject_id", "subject_name", "teacher", "room"} or None for blocked slots.
+        Returns a cell dict or None for blocked slots.
+        Preplace cells return slot_type "preplace".
         """
         if self._is_special(cell_value):
             return None
         s = str(cell_value).strip()
+        if self._is_preplace_activity(s):
+            return {
+                "subject_id":   s,
+                "subject_name": s,
+                "teacher":      None,
+                "room":         None,
+                "slot_type":    "preplace",
+            }
         return {"subject_id": s, "subject_name": self._subject_name(s), "teacher": None, "room": None}
 
     def _parse_room_cell(self, cell_value) -> Optional[Dict]:
         """
         Room grid stores: "{class_id} ({subject_id}) with {teacher_id}"
-        Returns {"subject_id", "subject_name", "teacher", "class"} or None for blocked slots.
+        Returns a cell dict or None for blocked slots.
+        Preplace cells return slot_type "preplace".
         """
         if self._is_special(cell_value):
             return None
@@ -188,11 +221,27 @@ class ScheduleJsonExporter:
             class_id   = m.group(1).strip()
             subject_id = m.group(2).strip()
             teacher_id = m.group(3).strip()
+            if self._is_preplace_activity(subject_id):
+                return {
+                    "subject_id":   subject_id,
+                    "subject_name": subject_id,
+                    "teacher":      None,
+                    "class":        None,
+                    "slot_type":    "preplace",
+                }
             return {
                 "subject_id":   subject_id,
                 "subject_name": self._subject_name(subject_id),
                 "teacher":      self._teacher_name(teacher_id),
                 "class":        class_id,
+            }
+        if self._is_preplace_activity(s):
+            return {
+                "subject_id":   s,
+                "subject_name": s,
+                "teacher":      None,
+                "class":        None,
+                "slot_type":    "preplace",
             }
         return {"subject_id": s, "subject_name": s, "teacher": None, "class": None}
 
