@@ -126,7 +126,7 @@ def resolve_room_to_ids(raw_room_value: Any, room_lookup: Dict[str, List[str]]) 
     if len(resolved_rooms) == 1:
         return resolved_rooms.pop()
     elif len(resolved_rooms) > 1:
-        return sorted(list(resolved_rooms))
+        return sorted(str(r) for r in resolved_rooms)
     else:
         return None
 
@@ -164,7 +164,7 @@ def get_grade_sections(df_student: pd.DataFrame) -> Dict[str, List[int]]:
     for grade_num, sections in grouped.items():
         formatted_grade = f"ม.{grade_num}"
         # Convert NumPy array of sections to a sorted list of integers
-        section_map[formatted_grade] = sorted(sections.tolist())
+        section_map[formatted_grade] = sorted(int(s) for s in sections)
         
     print(f"✅ Generated Grade Section Map: {section_map}")
     return section_map

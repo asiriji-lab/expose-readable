@@ -1242,8 +1242,10 @@ def refresh_schedule_meta(schedule_id):
         cleaned_data = clean_input_data(raw_data)
         entity_meta  = compute_entity_meta(cleaned_data)
     except Exception as exc:
-        current_app.logger.error('[refresh_schedule_meta] Compute failed for %s: %s', schedule_id, exc)
-        return jsonify({"success": False, "error": f"Metadata computation failed: {exc}"}), 500
+        import traceback as _tb
+        tb_str = _tb.format_exc()
+        current_app.logger.error('[refresh_schedule_meta] Compute failed for %s: %s\n%s', schedule_id, exc, tb_str)
+        return jsonify({"success": False, "error": f"Metadata computation failed: {exc}", "traceback": tb_str}), 500
 
     models.update_entity_meta(schedule_id, entity_meta)
 
