@@ -269,8 +269,9 @@ def clean_student(df_student: pd.DataFrame) -> pd.DataFrame:
         
     print("\n--- Starting Student Data Cleaning ---")
     
-    # Simply ensure grade is string format (assume CSV already has "ม.1" format)
-    df_student['grade'] = df_student['grade'].astype(str).str.strip()
+    # Simply ensure grade is string format (assume CSV already has "ม.1" format).
+    # fillna('') first because some pandas versions leave NaN as float in astype(str).
+    df_student['grade'] = df_student['grade'].fillna('').astype(str).str.strip()
     
     # Ensure section is numeric
     df_student['section'] = pd.to_numeric(df_student['section'], errors='coerce').fillna(-1).astype(int)
