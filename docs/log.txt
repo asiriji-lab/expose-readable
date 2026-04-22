@@ -1,0 +1,434 @@
+// =============================================================================
+// GOOGLE APPS SCRIPT: MASTER CONSOLIDATED WORKSPACE SYSTEM
+// =============================================================================
+// This monolithic script handles the entire Schooldoo workflow:
+// 1. GENERATION: API for Next.js to clone the Master Template.
+// 2. PROTECTION: Force-syncs header locks in new copies via Sheets API.
+// 3. VALIDATION: Professional-grade data checks (Atomic & Referential).
+// =============================================================================
+
+// === CONFIGURATION ===
+const TEMPLATE_SPREADSHEET_ID = '14hgR1XI-RgqPjc6pKhfdPxR7DbX8Gejrbl4P68PrOgE';
+const TARGET_FOLDER_ID = '1aoaMJ-kTwciYEvg1EQvfQHj3O2milpBf';
+const BOT_EMAIL = 'sheet-bot@absolute-runner-331411.iam.gserviceaccount.com';
+const REDIRECT_BASE_URL = 'http://localhost:3000/dashboard/new';
+// =====================
+
+// ─── 1. THE GENERATOR (API Endpoint) ────────────────────────────────────────
+
+/**
+ * Main entry point for Next.js to trigger sheet creation via HTTP POST.
+ */
+function doPost(e) {
+  try {
+    const requestData = JSON.parse(e.postData.contents);
+    const userEmail = requestData.userEmail;
+    const title = requestData.title || `Schedule - ${new Date().toLocaleDateString('en-GB')}`;
+
+    if (!userEmail) return response_({ success: false, error: 'userEmail is required' });
+
+    // Step A: Duplicate the template file into the target folder
+    const templateFile = DriveApp.getFileById(TEMPLATE_SPREADSHEET_ID);
+    const destFolder = DriveApp.getFolderById(TARGET_FOLDER_ID);
+    const newFile = templateFile.makeCopy(title, destFolder);
+    const newId = newFile.getId();
+
+    // Step B: Re-lock headers using Sheets API (DriveApp.makeCopy loses range locks)
+    copyProtectionsFromTemplate(TEMPLATE_SPREADSHEET_ID, newId);
+
+    // Step C: Share with User and Bot
+    newFile.addEditor(userEmail);
+    newFile.addEditor(BOT_EMAIL);
+    
+    // Set editor sharing so bot can read/write data via API immediately
+    newFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+
+    return response_({
+      success: true,
+      spreadsheetId: newId,
+      url: newFile.getUrl()
+    });
+
+  } catch (error) {
+    return response_({ success: false, error: error.toString() });
+  }
+}
+
+function response_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ─── 2. THE UI & MENU ────────────────────────────────────────────────────────
+
+/**
+ * Automatically creates the "Schooldoo" menu when the spreadsheet is opened.
+ */
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('Schooldoo')
+    .addItem('Validate All Tabs', 'runValidation')
+    .addToUi();
+}
+
+// ─── 3. THE VALIDATOR ORCHESTRATOR ───────────────────────────────────────────
+
+// Tab name → validator function mapping
+const TAB_VALIDATORS = {
+  'period':      validatePeriod,
+  'room':        validateRoom,
+  'teacher':     validateTeacher,
+  'student':     validateStudent,
+  'preplace':    validatePreplace,
+  'scout':       validateScout,
+  'elective':    validateElective,
+  'curriculum':  validateCurriculum,
+  'constraints': validateConstraints,
+};
+
+// Phase mapping for referential checks
+const REF_VALIDATORS = {
+  'curriculum': validateCurriculumRefs,
+  'elective':   validateElectiveRefs,
+  'student':    validateStudentRefs,
+  'scout':      validateScoutRefs,
+};
+
+// Aliases for Thai/English tab lookups
+const TAB_ALIASES = {
+  'period':      ['period', 'Period', 'คาบ'],
+  'room':        ['room',   'Room',   'ห้อง'],
+  'teacher':     ['teacher','Teacher','ครู'],
+  'student':     ['student','Student','นักเรียน'],
+  'preplace':    ['preplace','Preplace','ตรึงคาบ'],
+  'scout':       ['scout',  'Scout',  'ลูกเสือ'],
+  'elective':    ['elective','Elective','วิชาเสรี'],
+  'curriculum':  ['curriculum','Curriculum','หลักสูตร'],
+  'constraints': ['constraints','Constraints'],
+};
+
+/**
+ * Main validation runner. Orchestrates Phase 1 (Structural) and Phase 2 (Referential).
+ */
+function runValidation() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  const resultSheet = ss.getSheetByName('Validation Results') || ss.insertSheet('Validation Results');
+  
+  resultSheet.clearContents().clearFormats();
+  resultSheet.getRange(1, 1, 1, 3).setValues([['Tab', 'Status', 'Issues']]).setFontWeight('bold').setBackground('#E8EAF6');
+
+  let allValid = true;
+  let resultRow = 2;
+  const allData = {};
+  const sheets = {};
+  const structuralResults = {};
+
+  // Phase 1: Structural Scan
+  Object.keys(TAB_VALIDATORS).forEach(function(tabName) {
+    const sheet = getSheetByAliases(ss, tabName);
+    if (!sheet) return;
+    sheets[tabName] = sheet;
+    const data = sheet.getDataRange().getValues().map(function(r) {
+      return r.map(function(c) { return (c instanceof Date) ? (c.getMonth() + 1) + '/' + c.getDate() : String(c); });
+    });
+    allData[tabName] = data;
+    structuralResults[tabName] = TAB_VALIDATORS[tabName](data);
+  });
+
+  // Phase 2: Build Lookups & Referential Check
+  const lookups = buildGASLookups(allData);
+  Object.keys(TAB_VALIDATORS).forEach(function(tabName) {
+    const structural = structuralResults[tabName];
+    const sheet = sheets[tabName];
+    if (!sheet) {
+      if (tabName !== 'constraints') {
+        resultSheet.getRange(resultRow, 1, 1, 2).setValues([[tabName, 'MISSING']]).setBackground('#FFCDD2');
+        allValid = false; resultRow++;
+      }
+      return;
+    }
+
+    let errors = structural.errors;
+    let warnings = structural.warnings;
+    if (REF_VALIDATORS[tabName]) {
+      const refResult = REF_VALIDATORS[tabName](allData[tabName], lookups);
+      errors = errors.concat(refResult.errors);
+      warnings = warnings.concat(refResult.warnings);
+    }
+
+    applyHighlights(sheet, allData[tabName].length - 1, errors, warnings, allData[tabName]);
+    
+    const issueText = errors.map(e => "Row " + e.row + ": " + e.message).concat(warnings.map(w => "Row " + w.row + ": " + w.message)).join('\n');
+    const status = errors.length > 0 ? 'ERRORS' : (warnings.length > 0 ? 'WARNINGS' : 'PASSED');
+    const color = errors.length > 0 ? '#FFCDD2' : (warnings.length > 0 ? '#FFF9C4' : '#C8E6C9');
+    
+    resultSheet.getRange(resultRow, 1, 1, 3).setValues([[tabName, status, issueText]]);
+    resultSheet.getRange(resultRow, 2).setBackground(color);
+    if (errors.length > 0) allValid = false;
+    resultRow++;
+  });
+
+  resultSheet.autoResizeColumns(1, 3);
+  ss.setActiveSheet(resultSheet);
+  ui.alert(allValid ? 'Validation Finished' : 'Validation Failed', 'Check the Results tab for details.', ui.ButtonSet.OK);
+}
+
+// ─── 4. TAB VALIDATORS (Phase 1: Structural) ────────────────────────────────
+
+function validatePeriod(data) {
+  var errors = [], warnings = [], h = data[0].map(sanitize);
+  if (h.indexOf('คาบ') === -1 || h.indexOf('เวลา') === -1) return {valid:false, errors:[_err(1,1,'Missing คาบ/เวลา')]};
+  for (var r=1; r<data.length; r++) {
+    var p=sanitize(data[r][h.indexOf('คาบ')]), t=sanitize(data[r][h.indexOf('เวลา')]);
+    if (!p && !t) continue; if (isMarkerRow(data[r])) continue;
+    if (!p) errors.push(_err(r+1, h.indexOf('คาบ')+1, 'คาบ: Required'));
+    if (t && !isValidTimeFormat(t)) errors.push(_err(r+1, h.indexOf('เวลา')+1, 'เวลา: HH.MM-HH.MM required'));
+  }
+  return {valid: errors.length===0, errors:errors, warnings:warnings};
+}
+
+function validateRoom(data) {
+  var e = [], seen = {}, h = data[0].map(sanitize), idx = h.indexOf('ห้องทั้งหมด');
+  for (var r=1; r<data.length; r++) {
+    var id=sanitize(data[r][idx]); if (!id && _isEmptyRow(data[r])) continue; if (isMarkerRow(data[r])) continue;
+    if (!id) { e.push(_err(r+1, idx+1, 'Room ID required')); continue; }
+    if (seen[id]) e.push(_err(r+1, idx+1, 'Duplicate ID: ' + id)); else seen[id]=true;
+  }
+  return {valid: e.length===0, errors:e, warnings:[]};
+}
+
+function validateTeacher(data) {
+  var e = [], seen = {}, h = data[0].map(sanitize);
+  var idIdx=h.indexOf('teacher_id'), nameIdx=h.indexOf('ชื่อ');
+  for (var r=1; r<data.length; r++) {
+    var id=sanitize(data[r][idIdx]), name=sanitize(data[r][nameIdx]);
+    if (_isEmptyRow(data[r]) || isMarkerRow(data[r]) || isSkipRow(id)) continue;
+    if (!isValidTeacherId(id)) e.push(_err(r+1, idIdx+1, 'Invalid teacher_id format'));
+    if (!name) e.push(_err(r+1, nameIdx+1, 'ชื่อ required'));
+    if (seen[id]) e.push(_err(r+1, idIdx+1, 'Duplicate ID')); else seen[id]=true;
+  }
+  return {valid: e.length===0, errors:e, warnings:[]};
+}
+
+function validateStudent(data) {
+  var e = [], h = data[0].map(sanitize);
+  var cIdx=h.indexOf('นักเรียน'), gIdx=h.indexOf('ชั้น');
+  for (var r=1; r<data.length; r++) {
+    if (_isEmptyRow(data[r]) || isMarkerRow(data[r])) continue;
+    if (!isValidClassId(data[r][cIdx])) e.push(_err(r+1, cIdx+1, 'Invalid นักเรียน format (e.g. 1/1)'));
+    if (!isGradeHeader(data[r][gIdx])) e.push(_err(r+1, gIdx+1, 'Invalid ชั้น (e.g. ม.1)'));
+  }
+  return {valid: e.length===0, errors:e, warnings:[]};
+}
+
+function validatePreplace(data) {
+  var e = [], h = data[0].map(sanitize);
+  var nIdx=h.indexOf('ชื่อ');
+  for (var r=1; r<data.length; r++) {
+    if (_isEmptyRow(data[r]) || isMarkerRow(data[r])) continue;
+    if (!sanitize(data[r][nIdx])) e.push(_err(r+1, nIdx+1, 'ชื่อ required'));
+  }
+  return {valid: e.length===0, errors:e, warnings:[]};
+}
+
+function validateScout(data) { return {valid:true, errors:[], warnings:[]}; }
+function validateElective(data) { return {valid:true, errors:[], warnings:[]}; }
+
+function validateCurriculum(data) {
+  var e = [], h = data[0].map(sanitize), sIdx=h.indexOf('รหัสวิชา'), pIdx=h.indexOf('คาบ/สัปดาห์');
+  for (var r=1; r<data.length; r++) {
+    if (_isEmptyRow(data[r]) || isMarkerRow(data[r])) continue;
+    var sub=sanitize(data[r][sIdx]), per=sanitize(data[r][pIdx]);
+    if (sub && per && !/^\d+(\.\d+)?$/.test(per)) e.push(_err(r+1, pIdx+1, 'Invalid คาบ/สัปดาห์'));
+  }
+  return {valid: e.length===0, errors:e, warnings:[]};
+}
+
+function validateConstraints(data) { return {valid:true, errors:[], warnings:[]}; }
+
+// ─── 5. REFERENTIAL LOGIC (Phase 2 & 3) ──────────────────────────────────────
+
+function buildGASLookups(allData) {
+  const l = { roomIds: {}, roomNotes: {}, teacherNames: {}, gradeToSections: {} };
+  
+  if (allData.room) {
+    const h=allData.room[0].map(sanitize), idIdx=h.indexOf('ห้องทั้งหมด'), noteIdx=h.indexOf('หมายเหตุ');
+    allData.room.slice(1).forEach(r => {
+      if (isMarkerRow(r)) return;
+      const id=sanitize(r[idIdx]), note=sanitize(r[noteIdx]);
+      if (id) l.roomIds[id]=true; if (note) l.roomNotes[note]=true;
+    });
+  }
+  
+  if (allData.teacher) {
+    const h=allData.teacher[0].map(sanitize), nameIdx=h.indexOf('ชื่อ');
+    allData.teacher.slice(1).forEach(r => {
+      if (isMarkerRow(r) || isSkipRow(r[0])) return;
+      const name=sanitize(r[nameIdx]); if (name) l.teacherNames[name]=true;
+    });
+  }
+
+  if (allData.student) {
+    const h=allData.student[0].map(sanitize), gIdx=h.indexOf('ชั้น'), sIdx=h.indexOf('ห้อง');
+    allData.student.slice(1).forEach(r => {
+      if (isMarkerRow(r)) return;
+      const g=sanitize(r[gIdx]), s=parseInt(sanitize(r[sIdx]), 10);
+      if (g && !isNaN(s)) { if (!l.gradeToSections[g]) l.gradeToSections[g] = {}; l.gradeToSections[g][s]=true; }
+    });
+  }
+  
+  return l;
+}
+
+function _resolveRoom(ref, l) { const v=sanitize(ref); return l.roomIds[v] || l.roomNotes[v]; }
+
+function validateCurriculumRefs(data, l) {
+  var e = [], h = data[0].map(sanitize), tIdx=h.indexOf('ครู'), rIdx=h.indexOf('ห้องเรียน'), cIdx=h.indexOf('ห้อง (นักเรียน) ที่สอน');
+  var curG = '';
+  for (var r=1; r<data.length; r++) {
+    if (_isEmptyRow(data[r])) continue;
+    if (isGradeHeader(data[r][0])) { curG = sanitize(data[r][0]); continue; }
+    if (isMarkerRow(data[r])) continue;
+
+    splitAndSanitize(data[r][tIdx]).forEach(t => { if(!l.teacherNames[t]) e.push(_err(r+1, tIdx+1, 'Teacher "'+t+'" not found')); });
+    splitAndSanitize(data[r][rIdx]).forEach(rm => { if(!_resolveRoom(rm, l)) e.push(_err(r+1, rIdx+1, 'Room "'+rm+'" not found')); });
+    
+    var classRange = sanitize(data[r][cIdx]);
+    if (classRange && curG && l.gradeToSections[curG]) {
+      parseStudentClassString(classRange).forEach(s => { if(!l.gradeToSections[curG][s]) e.push(_err(r+1, cIdx+1, 'Section /'+s+' not found in grade ' + curG)); });
+    }
+  }
+  return {valid: e.length===0, errors:e, warnings:[]};
+}
+
+function validateElectiveRefs(data, l) {
+  var e = [], h = data[0].map(sanitize), tIdx=h.indexOf('ครูผู้สอน'), rIdx=h.indexOf('ห้องเรียน');
+  for (var r=1; r<data.length; r++) {
+    if (_isEmptyRow(data[r]) || isMarkerRow(data[r])) continue;
+    splitAndSanitize(data[r][tIdx]).forEach(t => { if(!l.teacherNames[t]) e.push(_err(r+1, tIdx+1, 'Teacher "'+t+'" not found')); });
+    splitAndSanitize(data[r][rIdx]).forEach(rm => { if(!_resolveRoom(rm, l)) e.push(_err(r+1, rIdx+1, 'Room "'+rm+'" not found')); });
+  }
+  return {valid: e.length===0, errors:e, warnings:[]};
+}
+
+function validateStudentRefs(data, l) {
+  var e = [], h = data[0].map(sanitize), rIdx=h.indexOf('ห้องประจำ');
+  for (var r=1; r<data.length; r++) {
+    if (_isEmptyRow(data[r]) || isMarkerRow(data[r])) continue;
+    splitAndSanitize(data[r][rIdx]).forEach(rm => { if(!_resolveRoom(rm, l)) e.push(_err(r+1, rIdx+1, 'Homeroom "'+rm+'" not found')); });
+  }
+  return {valid: e.length===0, errors:e, warnings:[]};
+}
+
+function validateScoutRefs(data, l) {
+  var e = [];
+  for (var r=1; r<data.length; r++) {
+    if (_isEmptyRow(data[r]) || isMarkerRow(data[r])) continue;
+    data[r].forEach(function(cell, cIdx) {
+      splitAndSanitize(cell).forEach(t => { if(!l.teacherNames[t]) e.push(_err(r+1, cIdx+1, 'Scout Leader "'+t+'" not found')); });
+    });
+  }
+  return {valid: e.length===0, errors:e, warnings:[]};
+}
+
+// ─── 6. CORE HELPERS (Parsers) ───────────────────────────────────────────────
+
+function sanitize(val) {
+  if (val == null) return '';
+  var s = String(val).trim().replace(/[\u0000-\u001F\u00A0\u200B\u200C\u200D\u2060\uFEFF]/g, '');
+  return s.replace(/[,;]+$/, '').trim();
+}
+
+function splitAndSanitize(input) {
+  if (!input) return [];
+  var parts = String(input).split(/[,;\n\r]|\s+\/\s+/);
+  var result = [];
+  for (var i = 0; i < parts.length; i++) {
+    var s = sanitize(parts[i]);
+    if (s.length > 0) result.push(s);
+  }
+  return result;
+}
+
+function isMarkerRow(row) {
+  if (!row || row.length === 0) return false;
+  var first = sanitize(row[0]);
+  if (!first) return false;
+  var restEmpty = true;
+  for (var i = 1; i < row.length; i++) { if (sanitize(row[i])) { restEmpty = false; break; } }
+  if (!restEmpty) return false;
+  return isGradeHeader(first) || /:\s*$/.test(first);
+}
+
+function isGradeHeader(v) { return /^ม\.([1-6])$/.test(sanitize(v)); }
+function isValidTimeFormat(v) { var t=sanitize(v); return /^\d+$/.test(t) || /^\d{2}\.\d{2}-\d{2}\.\d{2}$/.test(t); }
+function isValidTeacherId(v) { return /^[TE]\d{3,}$/.test(sanitize(v)); }
+function isValidClassId(v) { return /^\d+\/\d+$/.test(sanitize(v)); }
+function isSkipRow(v) { return ['ครูในโรงเรียน', 'อาจารย์นอก', 'teacher_id', ''].indexOf(sanitize(v)) !== -1; }
+
+function parseStudentClassString(value) {
+  var v = sanitize(value); if (!v) return [];
+  var sections = {};
+  var elements = v.replace(/\s/g, '').split(',').filter(Boolean);
+  for (var i = 0; i < elements.length; i++) {
+    var el = elements[i];
+    var rangeMatch = el.match(/^\/(\d+)-(\d+)$/);
+    if (rangeMatch) {
+      var start = parseInt(rangeMatch[1], 10), end = parseInt(rangeMatch[2], 10);
+      for (var s = start; s <= end; s++) sections[s] = true;
+      continue;
+    }
+    var singleMatch = el.match(/^\/(\d+)$/);
+    if (singleMatch) sections[parseInt(singleMatch[1], 10)] = true;
+  }
+  return Object.keys(sections).map(Number).sort(function(a, b) { return a - b; });
+}
+
+// ─── 7. SYSTEM UTILITIES ─────────────────────────────────────────────────────
+
+function copyProtectionsFromTemplate(srcId, dstId) {
+  const src = Sheets.Spreadsheets.get(srcId, { fields: "sheets(protectedRanges,properties(sheetId,title))" });
+  const dst = Sheets.Spreadsheets.get(dstId, { fields: "sheets(properties(sheetId,title))" });
+  const dstSheetMap = {};
+  dst.sheets.forEach(s => dstSheetMap[s.properties.title] = s.properties.sheetId);
+  const requests = [];
+  src.sheets.forEach(sheet => {
+    if (sheet.protectedRanges) {
+      sheet.protectedRanges.forEach(prot => {
+        const newProt = JSON.parse(JSON.stringify(prot));
+        delete newProt.protectedRangeId;
+        newProt.range.sheetId = dstSheetMap[sheet.properties.title];
+        newProt.editors = { users: [Session.getEffectiveUser().getEmail(), BOT_EMAIL], domainUsersCanEdit: false };
+        requests.push({ addProtectedRange: { protectedRange: newProt } });
+      });
+    }
+  });
+  if (requests.length > 0) Sheets.Spreadsheets.batchUpdate({ requests: requests }, dstId);
+}
+
+function getSheetByAliases(ss, tabName) {
+  var aliases = TAB_ALIASES[tabName] || [tabName];
+  var allSheets = ss.getSheets();
+  for (var i = 0; i < allSheets.length; i++) {
+    var name = allSheets[i].getName().trim();
+    for (var j = 0; j < aliases.length; j++) if (name === aliases[j]) return allSheets[i];
+  }
+  return null;
+}
+
+function applyHighlights(sheet, rowCount, errors, warnings, rawData) {
+  var lastCol = sheet.getLastColumn();
+  if (rowCount <= 0 || lastCol <= 0) return;
+  var rowStatus = {};
+  warnings.forEach(w => rowStatus[w.row] = 'warning');
+  errors.forEach(e => rowStatus[e.row] = 'error');
+  for (var dr = 2; dr <= rowCount + 1; dr++) {
+    if (isMarkerRow(rawData[dr - 1])) { sheet.getRange(dr, 1, 1, lastCol).setBackground(null); continue; }
+    var color = rowStatus[dr] === 'error' ? '#FFCDD2' : (rowStatus[dr] === 'warning' ? '#FFF9C4' : '#C8E6C9');
+    sheet.getRange(dr, 1, 1, lastCol).setBackground(color);
+  }
+}
+
+function _err(r, c, m) { return { row: r, col: c, message: m }; }
+function _isEmptyRow(row) { return row.every(function(c) { return !sanitize(c); }); }

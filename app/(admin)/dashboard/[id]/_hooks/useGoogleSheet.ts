@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { SheetData, TabName } from '../../../validators/types';
-import { ALL_TAB_NAMES, fetchAllPublicTabs } from '../_utils/csvHelpers';
+import { ALL_TAB_NAMES, fetchAllSheetTabs } from '../_utils/csvHelpers';
 
 export type FetchStatus = 'idle' | 'fetching' | 'success' | 'error';
 
@@ -28,7 +28,7 @@ export function useGoogleSheet(): UseGoogleSheetReturn {
     setFetchError(null);
 
     try {
-      const { data, missingTabs } = await fetchAllPublicTabs(spreadsheetId);
+      const { data, missingTabs } = await fetchAllSheetTabs(spreadsheetId);
       setSheetData(data);
       setMissingTabs(missingTabs);
       setFetchStatus('success');
@@ -37,7 +37,7 @@ export function useGoogleSheet(): UseGoogleSheetReturn {
       setFetchError(
         err instanceof Error
           ? err.message
-          : 'ดึงข้อมูลไม่สำเร็จ — ตรวจสอบว่าชีทถูกตั้งค่าเป็น "ทุกคนที่มีลิงก์"',
+          : 'ดึงข้อมูลไม่สำเร็จ — ตรวจสอบว่าแชร์ชีทกับระบบ หรือเพิ่ม email ในระบบแล้วหรือยัง',
       );
       setFetchStatus('error');
       return null;

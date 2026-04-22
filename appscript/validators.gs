@@ -1,29 +1,20 @@
 // ─── validators.gs ───────────────────────────────────────────────────────────
 // Each function takes a 2D string array and returns:
 //   { valid: boolean,
-//     errors:   [{ row: number, col: number, message: string }],
+//     errors:   [{ row: number, col: number, message: string, suggestion: string }],
 //     warnings: [{ row: number, col: number, message: string }] }
 // row/col are 1-based sheet coordinates (row 1 = header row).
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function _str(val) {
-  var s = (val == null ? '' : String(val)).trim();
-  // Strip invisible/zero-width characters that Google Sheets sometimes inserts
-  // (BOM U+FEFF, zero-width space U+200B, non-breaking space U+00A0, etc.)
-  s = s.replace(/[\u0000-\u001F\u00A0\u200B\u200C\u200D\u2060\uFEFF]/g, '');
-  return s.trim();
-}
-
 function _isEmptyRow(row) {
-  return row.every(function(c) { return !_str(c); });
+  return row.every(function(c) { return !sanitize(c); });
 }
 
 /** Returns structured errors for any required headers that are missing. */
 function _checkRequiredHeaders(headers, required) {
   var errors = [];
-  // Normalize required column names the same way as the parsed headers
   var normRequired = required.map(function(r) {
     return r.normalize ? r.normalize('NFC') : r;
   });
@@ -35,8 +26,12 @@ function _checkRequiredHeaders(headers, required) {
   return errors;
 }
 
-function _err(row, col, message)  { return { row: row, col: col, message: message }; }
-function _warn(row, col, message) { return { row: row, col: col, message: message }; }
+function _err(row, col, message, suggestion) { 
+  return { row: row, col: col, message: message, suggestion: suggestion || '' }; 
+}
+function _warn(row, col, message) { 
+  return { row: row, col: col, message: message }; 
+}
 
 // ─── 1. Period ───────────────────────────────────────────────────────────────
 
@@ -45,7 +40,7 @@ function validatePeriod(data) {
   if (!data || data.length === 0)
     return { valid: false, errors: [_err(1, 1, 'Tab "period" is empty.')], warnings: [] };
 
-  var headers = data[0].map(function(h) { return _str(h); });
+  var headers = data[0].map(function(h) { return sanitize(h); });
   errors = errors.concat(_checkRequiredHeaders(headers, ['คาบ', 'เวลา']));
   if (errors.length) return { valid: false, errors: errors, warnings: warnings };
 
@@ -55,9 +50,10 @@ function validatePeriod(data) {
   for (var r = 1; r < data.length; r++) {
     var row      = data[r];
     var sheetRow = r + 1;
-    var period   = _str(row[periodIdx]);
-    var time     = _str(row[timeIdx]);
+    var period   = sanitize(row[periodIdx]);
+    var time     = sanitize(row[timeIdx]);
     if (!period && !time) continue;
+    if (isMarkerRow(row)) continue;
     if (!period)
       errors.push(_err(sheetRow, periodIdx + 1, 'คาบ: ต้องระบุชื่อคาบ'));
     if (time && !isValidTimeFormat(time))
@@ -73,7 +69,7 @@ function validateRoom(data) {
   if (!data || data.length === 0)
     return { valid: false, errors: [_err(1, 1, 'Tab "room" is empty.')], warnings: [] };
 
-  var headers = data[0].map(function(h) { return _str(h); });
+  var headers = data[0].map(function(h) { return sanitize(h); });
   errors = errors.concat(_checkRequiredHeaders(headers, ['ห้องทั้งหมด']));
   if (errors.length) return { valid: false, errors: errors, warnings: warnings };
 
@@ -83,9 +79,9 @@ function validateRoom(data) {
   for (var r = 1; r < data.length; r++) {
     var row      = data[r];
     var sheetRow = r + 1;
-    var roomId   = _str(row[roomIdx]);
+    var roomId   = sanitize(row[roomIdx]);
     if (!roomId && _isEmptyRow(row)) continue;
-    if (isMarkerRow(row)) continue; // skip marker/section-header rows
+    if (isMarkerRow(row)) continue;
     if (!roomId) {
       errors.push(_err(sheetRow, roomIdx + 1, 'ห้องทั้งหมด: ต้องระบุรหัสห้อง'));
       continue;
@@ -95,7 +91,6 @@ function validateRoom(data) {
     } else {
       seen[roomId] = sheetRow;
     }
-    // หมายเหตุ is optional — no warning for empty
   }
   return { valid: errors.length === 0, errors: errors, warnings: warnings };
 }
@@ -107,7 +102,7 @@ function validateTeacher(data) {
   if (!data || data.length === 0)
     return { valid: false, errors: [_err(1, 1, 'Tab "teacher" is empty.')], warnings: [] };
 
-  var headers = data[0].map(function(h) { return _str(h); });
+  var headers = data[0].map(function(h) { return sanitize(h); });
   errors = errors.concat(_checkRequiredHeaders(headers, ['teacher_id', 'ชื่อ']));
   if (errors.length) return { valid: false, errors: errors, warnings: warnings };
 
@@ -120,12 +115,12 @@ function validateTeacher(data) {
   for (var r = 1; r < data.length; r++) {
     var row      = data[r];
     var sheetRow = r + 1;
-    var idVal    = _str(row[idIdx]);
-    var nameVal  = _str(row[nameIdx]);
+    var idVal    = sanitize(row[idIdx]);
+    var nameVal  = sanitize(row[nameIdx]);
 
     if (_isEmptyRow(row)) continue;
+    if (isMarkerRow(row)) continue;
     if (isSkipRow(idVal)) continue;
-    if (isMarkerRow(row)) continue; // skip marker/section-header rows
 
     if (!isValidTeacherId(idVal))
       errors.push(_err(sheetRow, idIdx + 1, 'teacher_id: ต้องเป็น T### หรือ E### — ได้รับ "' + idVal + '"'));
@@ -137,14 +132,13 @@ function validateTeacher(data) {
       seen[idVal] = sheetRow;
     }
 
-    // available_slots / unavailable_slots are optional — only validate format when non-empty
     var slotCols = [[availIdx, 'available_slots'], [unavailIdx, 'unavailable_slots']];
     for (var s = 0; s < slotCols.length; s++) {
       var colIdx  = slotCols[s][0];
       var colName = slotCols[s][1];
       if (colIdx === -1) continue;
-      var slotVal = _str(row[colIdx]);
-      if (!slotVal) continue; // optional — skip empty
+      var slotVal = sanitize(row[colIdx]);
+      if (!slotVal) continue;
       var invalid = getInvalidSlotTokens(slotVal);
       for (var t = 0; t < invalid.length; t++) {
         errors.push(_err(sheetRow, colIdx + 1, colName + ': รูปแบบ slot ไม่ถูกต้อง "' + invalid[t] + '"'));
@@ -161,25 +155,23 @@ function validateStudent(data) {
   if (!data || data.length === 0)
     return { valid: false, errors: [_err(1, 1, 'Tab "student" is empty.')], warnings: [] };
 
-  var headers = data[0].map(function(h) { return _str(h); });
+  var headers = data[0].map(function(h) { return sanitize(h); });
   errors = errors.concat(_checkRequiredHeaders(headers, ['นักเรียน', 'ชั้น', 'ห้อง']));
   if (errors.length) return { valid: false, errors: errors, warnings: warnings };
 
   var classIdx    = headers.indexOf('นักเรียน');
   var gradeIdx    = headers.indexOf('ชั้น');
   var sectionIdx  = headers.indexOf('ห้อง');
-  var roomIdx     = headers.indexOf('ห้องประจำ');
-  var currIdx     = headers.indexOf('หลักสูตร');
 
   for (var r = 1; r < data.length; r++) {
     var row      = data[r];
     var sheetRow = r + 1;
-    var classId  = _str(row[classIdx]);
-    var grade    = _str(row[gradeIdx]);
-    var section  = _str(row[sectionIdx]);
+    var classId  = sanitize(row[classIdx]);
+    var grade    = sanitize(row[gradeIdx]);
+    var section  = sanitize(row[sectionIdx]);
 
     if (_isEmptyRow(row)) continue;
-    if (isMarkerRow(row)) continue; // skip marker/section-header rows
+    if (isMarkerRow(row)) continue;
 
     if (classId && !isValidClassId(classId))
       errors.push(_err(sheetRow, classIdx + 1, 'นักเรียน: ต้องเป็นรูปแบบ G/S เช่น 1/1 — ได้รับ "' + classId + '"'));
@@ -187,8 +179,6 @@ function validateStudent(data) {
       errors.push(_err(sheetRow, gradeIdx + 1, 'ชั้น: ต้องเป็น ม.1–ม.6 — ได้รับ "' + grade + '"'));
     if (section && (!/^\d+$/.test(section) || parseInt(section) <= 0))
       errors.push(_err(sheetRow, sectionIdx + 1, 'ห้อง: ต้องเป็นจำนวนเต็มบวก — ได้รับ "' + section + '"'));
-
-    // ห้องประจำ and หลักสูตร are optional — no warnings for empty values
   }
   return { valid: errors.length === 0, errors: errors, warnings: warnings };
 }
@@ -200,7 +190,7 @@ function validatePreplace(data) {
   if (!data || data.length === 0)
     return { valid: false, errors: [_err(1, 1, 'Tab "preplace" is empty.')], warnings: [] };
 
-  var headers = data[0].map(function(h) { return _str(h); });
+  var headers = data[0].map(function(h) { return sanitize(h); });
   errors = errors.concat(_checkRequiredHeaders(headers, ['ชื่อ', 'คาบ', 'apply_to']));
   if (errors.length) return { valid: false, errors: errors, warnings: warnings };
 
@@ -214,9 +204,9 @@ function validatePreplace(data) {
     if (_isEmptyRow(row)) continue;
     if (isMarkerRow(row)) continue;
 
-    var slotName = _str(row[nameIdx]);
-    var period   = _str(row[slotIdx]);
-    var applyTo  = _str(row[applyIdx]);
+    var slotName = sanitize(row[nameIdx]);
+    var period   = sanitize(row[slotIdx]);
+    var applyTo  = sanitize(row[applyIdx]);
 
     if (!slotName)
       errors.push(_err(sheetRow, nameIdx + 1, 'ชื่อ: ต้องระบุชื่อ slot'));
@@ -246,19 +236,13 @@ function validateElective(data) {
   if (!data || data.length === 0)
     return { valid: false, errors: [_err(1, 1, 'Tab "elective" is empty.')], warnings: [] };
 
-  var headers = data[0].map(function(h) { return _str(h); });
+  var headers = data[0].map(function(h) { return sanitize(h); });
   errors = errors.concat(_checkRequiredHeaders(headers, ['รหัสวิชา', 'ชื่อวิชา (เสรี)', 'ครูผู้สอน', 'ห้องเรียน']));
   if (errors.length) return { valid: false, errors: errors, warnings: warnings };
 
-  var teacherIdx = headers.indexOf('ครูผู้สอน');
-  var roomIdx    = headers.indexOf('ห้องเรียน');
-
   for (var r = 1; r < data.length; r++) {
-    var row      = data[r];
-    var sheetRow = r + 1;
-    if (_isEmptyRow(row)) continue;
-    if (isMarkerRow(row)) continue;
-    // ครูผู้สอน and ห้องเรียน are optional — no warnings for empty values
+    if (_isEmptyRow(data[r])) continue;
+    if (isMarkerRow(data[r])) continue;
   }
   return { valid: errors.length === 0, errors: errors, warnings: warnings };
 }
@@ -270,35 +254,195 @@ function validateCurriculum(data) {
   if (!data || data.length === 0)
     return { valid: false, errors: [_err(1, 1, 'Tab "curriculum" is empty.')], warnings: [] };
 
-  var headers = data[0].map(function(h) { return _str(h); });
+  var headers = data[0].map(function(h) { return sanitize(h); });
   errors = errors.concat(_checkRequiredHeaders(headers, ['รหัสวิชา', 'ครู', 'คาบ/สัปดาห์']));
   if (errors.length) return { valid: false, errors: errors, warnings: warnings };
 
   var subjectIdx = headers.indexOf('รหัสวิชา');
   var periodsIdx = headers.indexOf('คาบ/สัปดาห์');
-  var roomIdx    = headers.indexOf('ห้องเรียน');
-  var blockIdx   = headers.indexOf('การแบ่งคาบสอน');
 
   for (var r = 1; r < data.length; r++) {
     var row      = data[r];
     var sheetRow = r + 1;
     if (_isEmptyRow(row)) continue;
-    var firstCell = _str(row[0]);
-    if (isGradeHeader(firstCell)) continue; // grade marker rows (ม.1, ม.2, …)
-    if (isMarkerRow(row)) continue; // other marker/section-header rows
-    var subject = _str(row[subjectIdx]);
-    var periods = _str(row[periodsIdx]);
+    if (isMarkerRow(row)) continue;
+    var subject = sanitize(row[subjectIdx]);
+    var periods = sanitize(row[periodsIdx]);
     if (!subject) continue;
     if (periods && (!/^\d+(\.\d+)?$/.test(periods) || parseFloat(periods) <= 0))
       errors.push(_err(sheetRow, periodsIdx + 1, 'คาบ/สัปดาห์: ต้องเป็นจำนวนบวก — ได้รับ "' + periods + '"'));
-    // ห้องเรียน and การแบ่งคาบสอน are optional — no warnings for empty values
   }
   return { valid: errors.length === 0, errors: errors, warnings: warnings };
 }
 
 // ─── 9. Constraints ──────────────────────────────────────────────────────────
-// This is a reference/documentation tab — no data validation required.
 
 function validateConstraints(data) {
   return { valid: true, errors: [], warnings: [] };
+}
+
+// ─── Phase 2: Referential Validation ─────────────────────────────────────────
+
+function buildGASLookups(allData) {
+  var lookups = {
+    roomIds: {},
+    roomNotes: {},
+    teacherNames: {},
+    gradeToSections: {} // grade -> map of section -> true
+  };
+
+  // 1. Room Lookups
+  var roomData = allData['room'];
+  if (roomData && roomData.length > 1) {
+    var h = roomData[0].map(function(c) { return sanitize(c); });
+    var idIdx   = h.indexOf('ห้องทั้งหมด');
+    var noteIdx = h.indexOf('หมายเหตุ');
+    for (var r = 1; r < roomData.length; r++) {
+      if (_isEmptyRow(roomData[r]) || isMarkerRow(roomData[r])) continue;
+      if (idIdx !== -1) { var id = sanitize(roomData[r][idIdx]); if (id) lookups.roomIds[id] = true; }
+      if (noteIdx !== -1) { var note = sanitize(roomData[r][noteIdx]); if (note) lookups.roomNotes[note] = true; }
+    }
+  }
+
+  // 2. Teacher Lookups
+  var teacherData = allData['teacher'];
+  if (teacherData && teacherData.length > 1) {
+    var h = teacherData[0].map(function(c) { return sanitize(c); });
+    var nameIdx = h.indexOf('ชื่อ');
+    for (var r = 1; r < teacherData.length; r++) {
+      if (_isEmptyRow(teacherData[r]) || isMarkerRow(teacherData[r]) || isSkipRow(sanitize(teacherData[r][0]))) continue;
+      if (nameIdx !== -1) { var name = sanitize(teacherData[r][nameIdx]); if (name) lookups.teacherNames[name] = true; }
+    }
+  }
+
+  // 3. Student Grade Lookups
+  var studentData = allData['student'];
+  if (studentData && studentData.length > 1) {
+    var h = studentData[0].map(function(c) { return sanitize(c); });
+    var gradeIdx = h.indexOf('ชั้น');
+    var sectIdx  = h.indexOf('ห้อง');
+    for (var r = 1; r < studentData.length; r++) {
+      if (_isEmptyRow(studentData[r]) || isMarkerRow(studentData[r])) continue;
+      var g = sanitize(studentData[r][gradeIdx]);
+      var s = parseInt(sanitize(studentData[r][sectIdx]));
+      if (g && !isNaN(s)) {
+        if (!lookups.gradeToSections[g]) lookups.gradeToSections[g] = {};
+        lookups.gradeToSections[g][s] = true;
+      }
+    }
+  }
+  return lookups;
+}
+
+function _resolveRoom(ref, lookups) {
+  var v = sanitize(ref);
+  return lookups.roomIds[v] || lookups.roomNotes[v];
+}
+
+function validateCurriculumRefs(data, lookups) {
+  var errors = [], warnings = [];
+  var headers = data[0].map(function(h) { return sanitize(h); });
+  var teacherIdx = headers.indexOf('ครู');
+  var roomIdx    = headers.indexOf('ห้องเรียน');
+
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var sheetRow = r + 1;
+    if (_isEmptyRow(row)) continue;
+    if (isGradeHeader(sanitize(row[0]))) continue;
+    if (isMarkerRow(row)) continue;
+
+    // Teachers (Atomic)
+    var teachers = splitAndSanitize(row[teacherIdx]);
+    for (var i = 0; i < teachers.length; i++) {
+      if (!lookups.teacherNames[teachers[i]]) {
+        errors.push(_err(sheetRow, teacherIdx + 1, 'ครู: ไม่พบชื่อครู "' + teachers[i] + '" ในแท็บ teacher'));
+      }
+    }
+    // Rooms (Atomic)
+    var rooms = splitAndSanitize(row[roomIdx]);
+    for (var i = 0; i < rooms.length; i++) {
+      if (!_resolveRoom(rooms[i], lookups)) {
+        errors.push(_err(sheetRow, roomIdx + 1, 'ห้องเรียน: ไม่พบห้อง "' + rooms[i] + '" ในแท็บ room'));
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors: errors, warnings: warnings };
+}
+
+function validateElectiveRefs(data, lookups) {
+  var errors = [], warnings = [];
+  var headers = data[0].map(function(h) { return sanitize(h); });
+  var teacherIdx = headers.indexOf('ครูผู้สอน');
+  var roomIdx    = headers.indexOf('ห้องเรียน');
+
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var sheetRow = r + 1;
+    if (_isEmptyRow(row) || isMarkerRow(row)) continue;
+
+    var teachers = splitAndSanitize(row[teacherIdx]);
+    if (teachers.length === 0) {
+      warnings.push(_warn(sheetRow, teacherIdx + 1, 'ครูผู้สอน: ไม่ได้ระบุครูผู้สอน'));
+    } else {
+      for (var i = 0; i < teachers.length; i++) {
+        if (!lookups.teacherNames[teachers[i]]) {
+          errors.push(_err(sheetRow, teacherIdx + 1, 'ครูผู้สอน: ไม่พบชื่อครู "' + teachers[i] + '" ในแท็บ teacher'));
+        }
+      }
+    }
+
+    var rooms = splitAndSanitize(row[roomIdx]);
+    if (rooms.length === 0) {
+      warnings.push(_warn(sheetRow, roomIdx + 1, 'ห้องเรียน: ไม่ได้ระบุห้องเรียน'));
+    } else {
+      for (var i = 0; i < rooms.length; i++) {
+        if (!_resolveRoom(rooms[i], lookups)) {
+          errors.push(_err(sheetRow, roomIdx + 1, 'ห้องเรียน: ไม่พบห้อง "' + rooms[i] + '" ในแท็บ room'));
+        }
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors: errors, warnings: warnings };
+}
+
+function validateStudentRefs(data, lookups) {
+  var errors = [], warnings = [];
+  var headers = data[0].map(function(h) { return sanitize(h); });
+  var roomIdx = headers.indexOf('ห้องประจำ');
+
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var sheetRow = r + 1;
+    if (_isEmptyRow(row) || isMarkerRow(row)) continue;
+
+    var rooms = splitAndSanitize(row[roomIdx]);
+    for (var i = 0; i < rooms.length; i++) {
+      if (!_resolveRoom(rooms[i], lookups)) {
+        errors.push(_err(sheetRow, roomIdx + 1, 'ห้องประจำ: ไม่พบห้อง "' + rooms[i] + '" ในแท็บ room'));
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors: errors, warnings: warnings };
+}
+
+function validateScoutRefs(data, lookups) {
+  var errors = [], warnings = [];
+  var headers = data[0].map(function(h) { return sanitize(h); });
+
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var sheetRow = r + 1;
+    if (_isEmptyRow(row) || isMarkerRow(row)) continue;
+
+    for (var c = 0; c < row.length; c++) {
+      var teachers = splitAndSanitize(row[c]);
+      for (var i = 0; i < teachers.length; i++) {
+        if (!lookups.teacherNames[teachers[i]]) {
+          errors.push(_err(sheetRow, c + 1, headers[c] + ': ไม่พบชื่อครู "' + teachers[i] + '" ในแท็บ teacher'));
+        }
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors: errors, warnings: warnings };
 }

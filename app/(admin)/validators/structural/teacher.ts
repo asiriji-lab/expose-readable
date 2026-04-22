@@ -1,5 +1,5 @@
 import { TabData, ValidationError, ValidationResult } from '../types';
-import { isValidTeacherId, isSkipRow, getInvalidSlotTokens } from '../utils/parsers';
+import { isValidTeacherId, isSkipRow, getInvalidSlotTokens, isMarkerRow, sanitize } from '../utils/parsers';
 
 const REQUIRED_HEADERS = ['teacher_id', 'ชื่อ'];
 
@@ -26,7 +26,7 @@ export function validateTeacher(data: TabData): ValidationResult {
     };
   }
 
-  const headers = data[0].map((h) => h.trim());
+  const headers = data[0].map((h) => sanitize(h));
 
   // TC-1
   for (const req of REQUIRED_HEADERS) {
@@ -48,10 +48,11 @@ export function validateTeacher(data: TabData): ValidationResult {
   for (let r = 1; r < data.length; r++) {
     const row = data[r];
     const rowNum = r + 1;
-    const idVal = (row[idIdx] ?? '').trim();
-    const nameVal = (row[nameIdx] ?? '').trim();
+    const idVal = sanitize(row[idIdx]);
+    const nameVal = sanitize(row[nameIdx]);
 
-    if (row.every((c) => !c.trim())) continue;
+    if (row.every((c) => !sanitize(c))) continue;
+    if (isMarkerRow(row)) continue;
 
     // TC-2: skip header-repetition rows
     if (isSkipRow(idVal)) continue;
@@ -84,7 +85,7 @@ export function validateTeacher(data: TabData): ValidationResult {
     // TC-6: available_slots and unavailable_slots format
     for (const [colIdx, colName] of [[availIdx, 'available_slots'], [unavailIdx, 'unavailable_slots']] as [number, string][]) {
       if (colIdx === -1) continue;
-      const slotVal = (row[colIdx] ?? '').trim();
+      const slotVal = sanitize(row[colIdx]);
       if (!slotVal) {
         continue;
       }
@@ -99,7 +100,7 @@ export function validateTeacher(data: TabData): ValidationResult {
     }
 
     const rowMap: Record<string, string> = {};
-    headers.forEach((h, i) => { rowMap[h] = (row[i] ?? '').trim(); });
+    headers.forEach((h, i) => { rowMap[h] = sanitize(row[i]); });
     parsedRows.push(rowMap);
   }
 

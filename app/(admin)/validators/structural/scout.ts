@@ -1,4 +1,5 @@
 import { TabData, ValidationResult } from '../types';
+import { isMarkerRow, sanitize } from '../utils/parsers';
 
 /**
  * SC-1: No structural rules — scout is a sparse matrix.
@@ -18,14 +19,16 @@ export function validateScout(data: TabData): ValidationResult {
     };
   }
 
-  const headers = data[0].map((h) => h.trim());
+  const headers = data[0].map((h) => sanitize(h));
   const parsedRows: Record<string, string>[] = [];
 
   for (let r = 1; r < data.length; r++) {
     const row = data[r];
-    if (row.every((c) => !c.trim())) continue;
+    if (row.every((c) => !sanitize(c))) continue;
+    if (isMarkerRow(row)) continue;
+
     const rowMap: Record<string, string> = {};
-    headers.forEach((h, i) => { rowMap[h] = (row[i] ?? '').trim(); });
+    headers.forEach((h, i) => { rowMap[h] = sanitize(row[i]); });
     parsedRows.push(rowMap);
   }
 

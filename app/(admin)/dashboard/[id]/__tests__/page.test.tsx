@@ -45,7 +45,7 @@ describe('SessionDetailPage - Admin Flow', () => {
     render(<SessionDetailPage />);
 
     // Check for Title - be specific to avoid multiple headings issue
-    const headings = screen.getAllByRole('heading', { level: 1 });
+    const headings = screen.getAllByRole('heading', { level: 2 }); // Changed to level 2 since it was updated in page.tsx
     expect(headings.length).toBeGreaterThanOrEqual(1);
     
     // Check if SheetEmbed is rendered
@@ -72,10 +72,10 @@ describe('SessionDetailPage - Admin Flow', () => {
     expect(validateBtn).toBeDefined();
   });
 
-  it('displays the DevTestPanel in development environment', () => {
+  it('displays the DataCommandCenter in development environment', () => {
     render(<SessionDetailPage />);
     
-    // Look for Dev Test Panel root
+    // Look for Data Command Center root (using the dev-test-panel test id for compatibility)
     expect(screen.getAllByTestId('dev-test-panel')[0]).toBeDefined();
   });
 });

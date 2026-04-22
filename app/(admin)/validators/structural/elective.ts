@@ -1,4 +1,5 @@
 import { TabData, ValidationError, ValidationResult } from '../types';
+import { isMarkerRow, sanitize } from '../utils/parsers';
 
 const REQUIRED_HEADERS = ['รหัสวิชา', 'ชื่อวิชา (เสรี)', 'ครูผู้สอน', 'ห้องเรียน'];
 
@@ -25,7 +26,7 @@ export function validateElective(data: TabData): ValidationResult {
     };
   }
 
-  const headers = data[0].map((h) => h.trim());
+  const headers = data[0].map((h) => sanitize(h));
 
   // EL-1: Required headers
   for (const req of REQUIRED_HEADERS) {
@@ -42,15 +43,16 @@ export function validateElective(data: TabData): ValidationResult {
 
   for (let r = 1; r < data.length; r++) {
     const row = data[r];
-    if (row.every((c) => !c.trim())) continue;
+    if (row.every((c) => !sanitize(c))) continue;
+    if (isMarkerRow(row)) continue;
 
-    const subjectId = (row[subjectIdx] ?? '').trim();
+    const subjectId = sanitize(row[subjectIdx]);
 
     // EL-2: skip section header rows e.g. "เสรีม.ต้น"
     if (ELECTIVE_SECTION_HEADER.test(subjectId)) continue;
 
     const rowMap: Record<string, string> = {};
-    headers.forEach((h, i) => { rowMap[h] = (row[i] ?? '').trim(); });
+    headers.forEach((h, i) => { rowMap[h] = sanitize(row[i]); });
     parsedRows.push(rowMap);
   }
 

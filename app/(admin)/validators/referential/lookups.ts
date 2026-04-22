@@ -1,4 +1,5 @@
 import { LookupTables, ValidationResult } from '../types';
+import { sanitize } from '../utils/parsers';
 
 /**
  * Builds lookup tables from Phase 1 parsedRows.
@@ -16,18 +17,23 @@ export function buildLookups(phase1Results: ValidationResult[]): LookupTables {
   const roomNotes = new Set<string>();
   const roomTypes = new Set<string>();
   for (const row of roomResult?.parsedRows ?? []) {
-    if (row['ห้องทั้งหมด']) roomIds.add(row['ห้องทั้งหมด']);
-    if (row['หมายเหตุ'])    roomNotes.add(row['หมายเหตุ']);
-    if (row['ประเภท'])      roomTypes.add(row['ประเภท']);
+    const id = sanitize(row['ห้องทั้งหมด']);
+    const note = sanitize(row['หมายเหตุ']);
+    const type = sanitize(row['ประเภท']);
+    if (id) roomIds.add(id);
+    if (note) roomNotes.add(note);
+    if (type) roomTypes.add(type);
   }
 
   // ── Teacher lookups ─────────────────────────────────────────────────────
   const teacherIds  = new Set<string>();
   const teacherNames: string[] = [];
   for (const row of teacherResult?.parsedRows ?? []) {
-    if (row['teacher_id']) teacherIds.add(row['teacher_id']);
+    const id = sanitize(row['teacher_id']);
+    const name = sanitize(row['ชื่อ']);
+    if (id) teacherIds.add(id);
     // Other files cross-reference teachers by first name (ชื่อ) only
-    if (row['ชื่อ']) teacherNames.push(row['ชื่อ']);
+    if (name) teacherNames.push(name);
   }
 
   // ── Student class lookups ───────────────────────────────────────────────
@@ -35,9 +41,9 @@ export function buildLookups(phase1Results: ValidationResult[]): LookupTables {
   /** grade (e.g. "ม.1") → set of section numbers */
   const gradeToSections = new Map<string, Set<number>>();
   for (const row of studentResult?.parsedRows ?? []) {
-    const classId = row['นักเรียน'];  // e.g. "1/1"
-    const grade   = row['ชั้น'];      // e.g. "ม.1"
-    const section = parseInt(row['ห้อง'] ?? '', 10);
+    const classId = sanitize(row['นักเรียน']);  // e.g. "1/1"
+    const grade   = sanitize(row['ชั้น']);      // e.g. "ม.1"
+    const section = parseInt(sanitize(row['ห้อง'] ?? ''), 10);
     if (classId) classIds.add(classId);
     if (grade && !isNaN(section) && section > 0) {
       if (!gradeToSections.has(grade)) gradeToSections.set(grade, new Set());
@@ -48,13 +54,15 @@ export function buildLookups(phase1Results: ValidationResult[]): LookupTables {
   // ── Period labels ───────────────────────────────────────────────────────
   const periodLabels = new Set<string>();
   for (const row of periodResult?.parsedRows ?? []) {
-    if (row['คาบ']) periodLabels.add(row['คาบ']);
+    const p = sanitize(row['คาบ']);
+    if (p) periodLabels.add(p);
   }
 
   // ── Preplace slot names (ชื่อ column) ───────────────────────────────────
   const preplaceSlots = new Set<string>();
   for (const row of preplaceResult?.parsedRows ?? []) {
-    if (row['ชื่อ']) preplaceSlots.add(row['ชื่อ']);
+    const name = sanitize(row['ชื่อ']);
+    if (name) preplaceSlots.add(name);
   }
 
   return {
@@ -74,6 +82,6 @@ export function buildLookups(phase1Results: ValidationResult[]): LookupTables {
  * Resolves a room reference via 3-way lookup (room ID | alias/note | category/type).
  */
 export function resolveRoom(ref: string, lookups: LookupTables): boolean {
-  const v = ref.trim();
+  const v = sanitize(ref);
   return lookups.roomIds.has(v) || lookups.roomNotes.has(v) || lookups.roomTypes.has(v);
 }

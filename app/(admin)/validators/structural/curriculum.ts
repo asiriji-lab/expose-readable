@@ -1,5 +1,5 @@
 import { TabData, ValidationError, ValidationResult } from '../types';
-import { isGradeHeader } from '../utils/parsers';
+import { isGradeHeader, isMarkerRow, sanitize } from '../utils/parsers';
 
 const REQUIRED_HEADERS = ['รหัสวิชา', 'ครู', 'คาบ/สัปดาห์'];
 
@@ -24,7 +24,7 @@ export function validateCurriculum(data: TabData): ValidationResult {
     };
   }
 
-  const headers = data[0].map((h) => h.trim());
+  const headers = data[0].map((h) => sanitize(h));
 
   // CU-1: Required headers
   for (const req of REQUIRED_HEADERS) {
@@ -43,18 +43,20 @@ export function validateCurriculum(data: TabData): ValidationResult {
 
   for (let r = 1; r < data.length; r++) {
     const row = data[r];
-    if (row.every((c) => !c.trim())) continue;
+    if (row.every((c) => !sanitize(c))) continue;
 
-    const firstCell = (row[0] ?? '').trim();
+    const firstCell = sanitize(row[0]);
 
-    // CU-2: detect and skip grade header rows (e.g. "ม.1")
-    if (isGradeHeader(firstCell)) {
-      currentGrade = firstCell;
+    // CU-2: detect and skip grade header rows (e.g. "ม.1") or other marker rows
+    if (isGradeHeader(firstCell) || isMarkerRow(row)) {
+      if (isGradeHeader(firstCell)) {
+        currentGrade = firstCell;
+      }
       continue;
     }
 
-    const subject = (row[subjectIdx] ?? '').trim();
-    const periods = (row[periodsIdx] ?? '').trim();
+    const subject = sanitize(row[subjectIdx]);
+    const periods = sanitize(row[periodsIdx]);
 
     // Skip rows where subject is empty (forward-fill continuation rows — validated server-side)
     if (!subject) continue;
@@ -70,7 +72,7 @@ export function validateCurriculum(data: TabData): ValidationResult {
     }
 
     const rowMap: Record<string, string> = {};
-    headers.forEach((h, i) => { rowMap[h] = (row[i] ?? '').trim(); });
+    headers.forEach((h, i) => { rowMap[h] = sanitize(row[i]); });
     // Inject current grade for Phase 2 class-range validation
     rowMap['_grade'] = currentGrade;
     parsedRows.push(rowMap);

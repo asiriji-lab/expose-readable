@@ -1,5 +1,5 @@
 import { TabData, ValidationError, ValidationResult } from '../types';
-import { isValidTimeFormat } from '../utils/parsers';
+import { isMarkerRow, isValidTimeFormat, sanitize } from '../utils/parsers';
 
 const REQUIRED_HEADERS = ['คาบ', 'เวลา'];
 
@@ -23,7 +23,7 @@ export function validatePeriod(data: TabData): ValidationResult {
     };
   }
 
-  const headers = data[0].map((h) => h.trim());
+  const headers = data[0].map((h) => sanitize(h));
 
   // PR-1: Required headers
   for (const req of REQUIRED_HEADERS) {
@@ -50,11 +50,12 @@ export function validatePeriod(data: TabData): ValidationResult {
   for (let r = 1; r < data.length; r++) {
     const row = data[r];
     const rowNum = r + 1; // 1-based, 1 = header
-    const period = (row[periodIdx] ?? '').trim();
-    const time = (row[timeIdx] ?? '').trim();
+    const period = sanitize(row[periodIdx]);
+    const time = sanitize(row[timeIdx]);
 
     // skip fully empty rows
     if (!period && !time) continue;
+    if (isMarkerRow(row)) continue;
 
     // PR-2: period label required
     if (!period) {
@@ -74,7 +75,7 @@ export function validatePeriod(data: TabData): ValidationResult {
     }
 
     const rowMap: Record<string, string> = {};
-    headers.forEach((h, i) => { rowMap[h] = (row[i] ?? '').trim(); });
+    headers.forEach((h, i) => { rowMap[h] = sanitize(row[i]); });
     parsedRows.push(rowMap);
   }
 

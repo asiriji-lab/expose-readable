@@ -1,5 +1,5 @@
 import { TabData, ValidationError, ValidationResult } from '../types';
-import { isValidClassId } from '../utils/parsers';
+import { isValidClassId, isMarkerRow, sanitize } from '../utils/parsers';
 
 const REQUIRED_HEADERS = ['นักเรียน', 'ชั้น', 'ห้อง'];
 
@@ -24,7 +24,7 @@ export function validateStudent(data: TabData): ValidationResult {
     };
   }
 
-  const headers = data[0].map((h) => h.trim());
+  const headers = data[0].map((h) => sanitize(h));
 
   // ST-1
   for (const req of REQUIRED_HEADERS) {
@@ -44,11 +44,12 @@ export function validateStudent(data: TabData): ValidationResult {
   for (let r = 1; r < data.length; r++) {
     const row = data[r];
     const rowNum = r + 1;
-    const classId = (row[classIdx] ?? '').trim();
-    const grade = (row[gradeIdx] ?? '').trim();
-    const section = (row[sectionIdx] ?? '').trim();
+    const classId = sanitize(row[classIdx]);
+    const grade = sanitize(row[gradeIdx]);
+    const section = sanitize(row[sectionIdx]);
 
-    if (row.every((c) => !c.trim())) continue;
+    if (row.every((c) => !sanitize(c))) continue;
+    if (isMarkerRow(row)) continue;
 
     // ST-2: class ID format G/S (e.g. 1/1)
     // Fix Google Sheets Date Mangling: "1/1" -> "1/1/24" or "1-Jan"
@@ -87,7 +88,7 @@ export function validateStudent(data: TabData): ValidationResult {
 
     const rowMap: Record<string, string> = {};
     headers.forEach((h, i) => { 
-      let val = (row[i] ?? '').trim();
+      let val = sanitize(row[i]);
       // Apply the same cleanClassId patch to the exported parsedRows so Phase 2 gets the clean "1/1"
       if (i === classIdx && cleanClassId !== classId) {
         val = cleanClassId;

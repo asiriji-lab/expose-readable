@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 import AdminHeader from '../../_components/AdminHeader';
-import SheetConnector from './_components/SheetConnector';
+import DataCommandCenter from './_components/DataCommandCenter';
 import ValidationSection from './_components/ValidationSection';
 import ErrorPanel from './_components/ErrorPanel';
 import GenerationStatus from './_components/GenerationStatus';
@@ -12,8 +12,7 @@ import { useValidation } from './_hooks/useValidation';
 import { useGoogleSheet } from './_hooks/useGoogleSheet';
 import { TabName } from '../../validators/types';
 import SessionInfoCard, { SessionInfo } from './_components/SessionInfoCard';
-import DevTestPanel from './_components/DevTestPanel';
-import { submitScheduleJob, getJobStatus, getScheduleRecord } from '@/lib/api/scheduleApi';
+import { submitScheduleJob, getScheduleRecord } from '@/lib/api/scheduleApi';
 import { supabase } from '@/lib/supabase';
 import Papa from 'papaparse';
 import { stripMarkerRows } from './_utils/csvHelpers';
@@ -34,10 +33,9 @@ export default function SessionDetailPage() {
 
   const [connectedSheetId, setConnectedSheetId] = useState<string | null>(null);
   const [connectedSheetUrl, setConnectedSheetUrl] = useState<string | null>(null);
-  // Ref so handleSubmit always reads the latest URL regardless of closure timing
   const connectedSheetUrlRef = useRef<string | null>(null);
+  
   const setSheetUrl = useCallback((url: string | null) => {
-    console.log('[setSheetUrl] called with:', url);
     connectedSheetUrlRef.current = url;
     setConnectedSheetUrl(url);
   }, []);
@@ -49,9 +47,7 @@ export default function SessionDetailPage() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
-  const [isDev, setIsDev] = useState(false);
   const [isCreatingSheet, setIsCreatingSheet] = useState(false);
-  useEffect(() => { setIsDev(process.env.NODE_ENV === 'development'); }, []);
 
   // When navigating to an existing job (non-new), load status + sheet_url from DB
   useEffect(() => {
@@ -67,7 +63,6 @@ export default function SessionDetailPage() {
           setGenerationError(job.error ?? 'สร้างตารางไม่สำเร็จ');
           setGenerationState('failed');
         } else {
-          // generating or created — restore sheet URL from DB
           setJobId(id);
           setGenerationState('generating');
           if (job.sheet_url) {
@@ -78,8 +73,8 @@ export default function SessionDetailPage() {
           }
         }
       })
-      .catch(() => { /* job may not exist yet, show normal UI */ });
-  }, [id, fetchSheet]);
+      .catch(() => { /* ignore */ });
+  }, [id, fetchSheet, setSheetUrl]);
 
   const handleCreateSkeleton = useCallback(async () => {
     setIsCreatingSheet(true);
@@ -97,6 +92,14 @@ export default function SessionDetailPage() {
       });
 
       const body = await res.json().catch(() => ({}));
+      
+      // If it's a quota error, open the manual copy link instead of showing an error
+      if (res.status === 403 && body.fallbackUrl) {
+        window.open(body.fallbackUrl, '_blank');
+        setIsCreatingSheet(false);
+        return;
+      }
+
       if (!res.ok) throw new Error(body.error ?? 'สร้าง Google Sheet ไม่สำเร็จ');
 
       const sheetId = body.spreadsheetId as string | undefined;
@@ -105,36 +108,25 @@ export default function SessionDetailPage() {
 
       setConnectedSheetId(sheetId);
       setSheetUrl(sheetUrl);
+      // Immediately fetch data from the new sheet to update status cards
+      fetchSheet(sheetId);
       window.open(sheetUrl, '_blank');
     } catch (err) {
       console.error('[handleCreateSkeleton]', err);
-      const templateId = process.env.NEXT_PUBLIC_GOOGLE_TEMPLATE_SHEET_ID;
-      if (templateId) {
-        window.open(`https://docs.google.com/spreadsheets/d/${templateId}/copy`, '_blank');
-        return;
-      }
       window.alert('สร้าง Google Sheet ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
     } finally {
       setIsCreatingSheet(false);
     }
-  }, [sessionInfo.name]);
-
-  const handleConnectSkeleton = useCallback(() => {
-    if (!connectedSheetId) return;
-    clearSheet();
-    resetStates();
-    fetchSheet(connectedSheetId);
-  }, [connectedSheetId, clearSheet, resetStates, fetchSheet]);
+  }, [sessionInfo.name, setSheetUrl, fetchSheet]);
 
   const handleConnectImport = useCallback((sheetId: string) => {
     const url = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
     setConnectedSheetId(sheetId);
     setSheetUrl(url);
-    window.open(url, '_blank');
     clearSheet();
     resetStates();
     fetchSheet(sheetId);
-  }, [clearSheet, resetStates, fetchSheet]);
+  }, [clearSheet, resetStates, fetchSheet, setSheetUrl]);
 
   const handleValidate = useCallback(async () => {
     resetStates();
@@ -152,7 +144,6 @@ export default function SessionDetailPage() {
     setJobId(null);
     setDownloadUrl(null);
     try {
-      // Get the backend user_id for associating the job
       let backendUserId: string | undefined;
       try {
         const syncRes = await fetch('/api/user/sync', { method: 'POST' });
@@ -160,11 +151,10 @@ export default function SessionDetailPage() {
           const syncData = await syncRes.json();
           backendUserId = syncData.user_id ?? undefined;
         }
-      } catch { /* non-fatal */ }
+      } catch { /* ignore */ }
 
       const toFile = (rows: Array<string[]> | undefined, name: string) => {
         if (!rows || rows.length === 0) return undefined;
-        // Strip empty rows and marker rows before export
         let cleanRows = rows.filter(row => !row.every(c => !String(c).trim()));
         cleanRows = stripMarkerRows(cleanRows, name);
         if (cleanRows.length === 0) return undefined;
@@ -208,15 +198,12 @@ export default function SessionDetailPage() {
       if (sheetData.preplace?.length) submitParams.preplace = toFile(sheetData.preplace, 'preplace');
       if (sheetData.scout?.length) submitParams.scout = toFile(sheetData.scout, 'scout');
 
-      console.log('[submit] connectedSheetUrl state:', connectedSheetUrl);
-      console.log('[submit] connectedSheetUrlRef.current:', connectedSheetUrlRef.current);
-      console.log('[submit] submitParams.sheetUrl:', submitParams.sheetUrl);
       const res = await submitScheduleJob(submitParams);
       setJobId(res.job_id);
       setDownloadUrl(res.download_url ?? null);
     } catch (e: any) {
       console.error('[handleSubmit]', e);
-      setGenerationError(e?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์');
+      setGenerationError(e?.message || 'เกิดข้อผิดพลาดในการสร้างตาราง');
       setGenerationState('failed');
     } finally {
       setIsSubmitting(false);
@@ -224,7 +211,7 @@ export default function SessionDetailPage() {
   }, [sessionInfo, sheetData]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background text-foreground">
       <AdminHeader />
       <main className="max-w-4xl mx-auto px-6 py-8 space-y-6">
         <div className="mb-2">
@@ -233,43 +220,34 @@ export default function SessionDetailPage() {
             className="flex items-center gap-1 text-foreground-muted hover:text-foreground transition-colors mb-4"
           >
             <ChevronLeft className="w-4 h-4" />
-            <span className="text-sm font-medium">กลับไปแดชบอร์ด</span>
+            <span className="text-sm font-medium font-bold">กลับไปแดชบอร์ด</span>
           </button>
-          <h2 className="text-2xl font-bold text-foreground">สร้างตารางสอนใหม่</h2>
-          <p className="text-foreground-muted text-sm mt-1">เชื่อมต่อ Google Sheet กรอกข้อมูล แล้วตรวจสอบก่อนสร้างตาราง</p>
+          <h2 className="text-2xl font-bold text-foreground tracking-tight">จัดการข้อมูลตารางสอน</h2>
+          <p className="text-foreground-muted text-sm mt-1">ตั้งค่าพื้นที่ทำงาน Google Sheet และตรวจสอบข้อมูลก่อนประมวลผล</p>
         </div>
 
         <SessionInfoCard value={sessionInfo} onChange={setSessionInfo} />
 
-        <SheetConnector
-          fetchStatus={fetchStatus}
-          fetchError={fetchError}
+        {/* The New Command Center: Merges Sheet LifeCycle + Uploads + Stats */}
+        <DataCommandCenter
+          currentData={sheetData}
+          onDataLoaded={(data) => {
+            loadData(data);
+            resetStates();
+          }}
+          onClear={() => {
+            clearSheet();
+            resetStates();
+            setConnectedSheetId(null);
+            setSheetUrl(null);
+          }}
+          onSheetUrlConnected={handleConnectImport}
           connectedSheetId={connectedSheetId}
           connectedSheetUrl={connectedSheetUrl}
           isCreatingSheet={isCreatingSheet}
           onCreateSkeleton={handleCreateSkeleton}
-          onConnectImport={handleConnectImport}
-          onConnectSkeleton={handleConnectSkeleton}
+          onTabClick={setOpenTab}
         />
-
-        {isDev && (
-          <DevTestPanel
-            currentData={sheetData}
-            onDataLoaded={(data) => {
-              loadData(data);
-              resetStates();
-            }}
-            onClear={() => {
-              clearSheet();
-              resetStates();
-            }}
-            onSheetUrlConnected={(url) => {
-              setSheetUrl(url);
-              const sheetId = url.match(/\/spreadsheets\/d\/([\w-]+)/)?.[1] ?? null;
-              setConnectedSheetId(sheetId);
-            }}
-          />
-        )}
 
         {(generationState === 'idle' || generationState === 'generating') && (
           <ValidationSection

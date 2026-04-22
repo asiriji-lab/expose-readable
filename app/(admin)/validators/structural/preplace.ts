@@ -1,5 +1,5 @@
 import { TabData, ValidationError, ValidationResult } from '../types';
-import { isValidApplyTo, getInvalidPreplaceSlotTokens } from '../utils/parsers';
+import { isValidApplyTo, getInvalidPreplaceSlotTokens, isMarkerRow, sanitize } from '../utils/parsers';
 
 const REQUIRED_HEADERS = ['ชื่อ', 'คาบ', 'apply_to'];
 
@@ -24,7 +24,7 @@ export function validatePreplace(data: TabData): ValidationResult {
     };
   }
 
-  const headers = data[0].map((h) => h.trim());
+  const headers = data[0].map((h) => sanitize(h));
 
   // PP-1
   for (const req of REQUIRED_HEADERS) {
@@ -45,11 +45,12 @@ export function validatePreplace(data: TabData): ValidationResult {
     const row = data[r];
     const rowNum = r + 1;
 
-    if (row.every((c) => !c.trim())) continue;
+    if (row.every((c) => !sanitize(c))) continue;
+    if (isMarkerRow(row)) continue;
 
-    const slotName = (row[nameIdx] ?? '').trim();
-    const period = (row[slotIdx] ?? '').trim();
-    const applyTo = (row[applyIdx] ?? '').trim();
+    const slotName = sanitize(row[nameIdx]);
+    const period = sanitize(row[slotIdx]);
+    const applyTo = sanitize(row[applyIdx]);
 
     // PP-2: slot name required
     if (!slotName) {
@@ -78,7 +79,7 @@ export function validatePreplace(data: TabData): ValidationResult {
     }
 
     const rowMap: Record<string, string> = {};
-    headers.forEach((h, i) => { rowMap[h] = (row[i] ?? '').trim(); });
+    headers.forEach((h, i) => { rowMap[h] = sanitize(row[i]); });
     parsedRows.push(rowMap);
   }
 

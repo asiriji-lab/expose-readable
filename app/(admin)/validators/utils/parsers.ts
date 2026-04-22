@@ -1,3 +1,34 @@
+// ─── Sanitization ─────────────────────────────────────────────────────────────
+
+/**
+ * Strips zero-width characters (BOM, ZWSP, etc.) and trims whitespace.
+ * Matches the _str() helper used in Google Apps Script.
+ */
+export function sanitize(val: string | null | undefined): string {
+  if (val == null) return '';
+  let s = String(val).trim();
+  // Strip invisible/zero-width characters:
+  // BOM (U+FEFF), ZWSP (U+200B), NBSP (U+00A0), etc.
+  s = s.replace(/[\u0000-\u001F\u00A0\u200B\u200C\u200D\u2060\uFEFF]/g, '');
+  // Strip trailing punctuation commonly left by mistake (commas, semicolons)
+  s = s.replace(/[,;]+$/, '');
+  return s.trim();
+}
+
+/**
+ * Splits a string into an array of sanitized strings.
+ * Filters out any empty parts.
+ * Splits by comma, semicolon, newline, or a slash that is surrounded by spaces
+ * (to avoid splitting legitimate slashes in class IDs like "1/1").
+ */
+export function splitAndSanitize(input: string | null | undefined): string[] {
+  if (!input) return [];
+  return input
+    .split(/[,;\n\r]|\s+\/\s+/)
+    .map(sanitize)
+    .filter((s) => s.length > 0);
+}
+
 // ─── Time / Period Parsers ────────────────────────────────────────────────────
 
 /**
@@ -99,6 +130,81 @@ export const TEACHER_SKIP_MARKERS = new Set(['ครูในโรงเรี�
  */
 export function isSkipRow(firstCellValue: string): boolean {
   return TEACHER_SKIP_MARKERS.has(firstCellValue.trim());
+}
+
+/**
+ * Returns true if this row is a "Marker Cell" — a human-readability section
+ * divider that should not be included in validation or data export.
+ */
+export function isMarkerRow(row: string[]): boolean {
+  if (!row || row.length === 0) return false;
+  const first = sanitize(row[0]);
+  if (!first) return false;
+
+  // All non-first cells must be empty for this to be a marker row
+  const restEmpty = row.slice(1).every((c) => !sanitize(c));
+  if (!restEmpty) return false;
+
+  // Grade-header style: ม.1 – ม.6
+  if (isGradeHeader(first)) return true;
+
+  // Label ending with colon convention: e.g. "กลุ่มสาระ:"
+  if (/:\s*$/.test(first)) return true;
+
+  return false;
+}
+
+// ─── Fuzzy Matching ──────────────────────────────────────────────────────────
+
+/**
+ * Simple Levenshtein distance implementation for fuzzy matching names.
+ */
+function levenshtein(a: string, b: string): number {
+  const matrix = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
+/**
+ * Suggests a close match for a teacher name if it doesn't exist.
+ */
+export function fuzzyMatchTeacher(name: string, validNames: string[]): string | null {
+  const normalizedInput = sanitize(name).toLowerCase();
+  if (!normalizedInput) return null;
+
+  let bestMatch = null;
+  let minDistance = 3; // Max threshold for "closeness"
+
+  for (const validName of validNames) {
+    const normalizedValid = sanitize(validName).toLowerCase();
+    
+    // Check for exact substring match first (e.g. "สมชาย" in "สมชาย แซ่ดี")
+    if (normalizedValid.includes(normalizedInput) || normalizedInput.includes(normalizedValid)) {
+      return validName;
+    }
+
+    const dist = levenshtein(normalizedInput, normalizedValid);
+    if (dist < minDistance) {
+      minDistance = dist;
+      bestMatch = validName;
+    }
+  }
+
+  return bestMatch;
 }
 
 // ─── apply_to field parser ────────────────────────────────────────────────────

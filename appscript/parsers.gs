@@ -3,6 +3,38 @@
 // Keep in sync with the TypeScript version.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── Sanitization ─────────────────────────────────────────────────────────────
+
+/**
+ * Strips zero-width characters (BOM, ZWSP, etc.) and trims whitespace.
+ * Also strips trailing punctuation left by mistake (commas, semicolons).
+ */
+function sanitize(val) {
+  if (val == null) return '';
+  var s = String(val).trim();
+  // BOM U+FEFF, ZWSP U+200B, NBSP U+00A0, etc.
+  s = s.replace(/[\u0000-\u001F\u00A0\u200B\u200C\u200D\u2060\uFEFF]/g, '');
+  // Strip trailing punctuation
+  s = s.replace(/[,;]+$/, '');
+  return s.trim();
+}
+
+/**
+ * Splits a string into an array of sanitized strings.
+ * Splits by comma, semicolon, newline, or a slash surrounded by spaces.
+ */
+function splitAndSanitize(input) {
+  if (!input) return [];
+  // GAS regex needs slightly different handling for newlines in some contexts
+  var parts = String(input).split(/[,;\n\r]|\s+\/\s+/);
+  var result = [];
+  for (var i = 0; i < parts.length; i++) {
+    var s = sanitize(parts[i]);
+    if (s.length > 0) result.push(s);
+  }
+  return result;
+}
+
 // ─── Time / Period ───────────────────────────────────────────────────────────
 
 function isValidTimeFormat(value) {
@@ -64,23 +96,16 @@ function isSkipRow(firstCellValue) {
 /**
  * Returns true if this row is a "Marker Cell" — a human-readability section
  * divider that should not be included in validation or data export.
- *
- * A marker row is identified as a row where:
- *   - Only the first cell has content (all other cells are empty), AND
- *   - The first cell does not look like a normal data value (it is a grade header
- *     like ม.1–ม.6, or a text label ending with ":").
- *
- * Extend this function as needed for additional marker conventions.
  */
 function isMarkerRow(row) {
   if (!row || row.length === 0) return false;
-  var first = _str(row[0]);
+  var first = sanitize(row[0]);
   if (!first) return false;
 
   // All non-first cells must be empty for this to be a marker row
   var restEmpty = true;
   for (var i = 1; i < row.length; i++) {
-    if (_str(row[i])) { restEmpty = false; break; }
+    if (sanitize(row[i])) { restEmpty = false; break; }
   }
   if (!restEmpty) return false;
 

@@ -1,4 +1,5 @@
 import { TabData, ValidationError, ValidationResult } from '../types';
+import { isMarkerRow, sanitize } from '../utils/parsers';
 
 const REQUIRED_HEADERS = ['ห้องทั้งหมด'];
 
@@ -22,7 +23,7 @@ export function validateRoom(data: TabData): ValidationResult {
     };
   }
 
-  const headers = data[0].map((h) => h.trim());
+  const headers = data[0].map((h) => sanitize(h));
 
   // RM-1: Required headers
   for (const req of REQUIRED_HEADERS) {
@@ -36,16 +37,16 @@ export function validateRoom(data: TabData): ValidationResult {
   }
 
   const roomIdx = headers.indexOf('ห้องทั้งหมด');
-  const noteIdx = headers.indexOf('หมายเหตุ');
   const parsedRows: Record<string, string>[] = [];
   const seen = new Map<string, number>(); // roomId → first row number
 
   for (let r = 1; r < data.length; r++) {
     const row = data[r];
     const rowNum = r + 1;
-    const roomId = (row[roomIdx] ?? '').trim();
+    const roomId = sanitize(row[roomIdx]);
 
-    if (!roomId && row.every((c) => !c.trim())) continue;
+    if (!roomId && row.every((c) => !sanitize(c))) continue;
+    if (isMarkerRow(row)) continue;
 
     // RM-2: room ID non-empty
     if (!roomId) {
@@ -70,7 +71,7 @@ export function validateRoom(data: TabData): ValidationResult {
     // No warning for empty note
 
     const rowMap: Record<string, string> = {};
-    headers.forEach((h, i) => { rowMap[h] = (row[i] ?? '').trim(); });
+    headers.forEach((h, i) => { rowMap[h] = sanitize(row[i]); });
     parsedRows.push(rowMap);
   }
 

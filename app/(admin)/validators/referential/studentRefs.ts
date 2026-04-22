@@ -1,8 +1,9 @@
 import { ValidationError, ValidationResult, LookupTables } from '../types';
+import { splitAndSanitize } from '../utils/parsers';
+import { resolveRoom } from './lookups';
 
 /**
- * Warns if ห้องประจำ or หลักสูตร are missing — matches Apps Script behaviour.
- * No cross-tab existence check.
+ * ST-5: Validate homeroom (ห้องประจำ) exists if specified. Supports multiple rooms.
  */
 export function validateStudentRefs(
   studentResult: ValidationResult,
@@ -15,7 +16,18 @@ export function validateStudentRefs(
     const row = studentResult.parsedRows[i];
     const rowNum = i + 2;
 
-    // No empty warnings for "ห้องประจำ" or "หลักสูตร".
+    const rooms = splitAndSanitize(row['ห้องประจำ']);
+
+    // 1. Homeroom Check
+    for (const rRef of rooms) {
+      if (!resolveRoom(rRef, lookups)) {
+        errors.push({
+          row: rowNum, col: -1, column: 'ห้องประจำ', value: rRef,
+          message: `Row ${rowNum}, 'ห้องประจำ': ไม่พบห้อง "${rRef}" ในระบบ`,
+          severity: 'error'
+        });
+      }
+    }
   }
 
   return { ...studentResult, errors, warnings, valid: errors.length === 0 };

@@ -204,10 +204,10 @@ export async function fetchAllSheetTabs(
     throw new Error(body.error ?? 'ดึงข้อมูลชีทไม่สำเร็จ');
   }
 
-  const { tabs } = await res.json() as { tabs: Record<string, string[][]> };
+  const { data: rawTabs } = await res.json() as { data: Record<string, string[][]> };
 
   const data: SheetData = {};
-  for (const [title, rows] of Object.entries(tabs)) {
+  for (const [title, rows] of Object.entries(rawTabs || {})) {
     // Normalize: strip invisible/zero-width chars and leading/trailing whitespace,
     // then try NFC (handles Thai NFC vs NFD encoding differences) and lowercase fallback.
     const clean = title
