@@ -54,7 +54,7 @@ export function useLatestSchedule(jobId?: string | null): LatestSchedule {
           return;
         }
 
-        const transformed = transformToFullDataset(schedule);
+        const { dataset: transformed } = transformToFullDataset(schedule);
         setDataset(transformed);
         setJobId(data.job_id ?? jobId ?? null);
         setJobName(data.job_name ?? null);

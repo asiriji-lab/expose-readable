@@ -14,6 +14,7 @@ const MOCK_MESSAGES = [
 
 import { ScheduleFormData } from '../../_types';
 import { submitScheduleJob, getJobStatus, getJobResult } from '@/api/schedule';
+import { deriveEntityMetaFromSchedule, BackendSchedule } from '@/lib/api/transform';
 
 export function Step10_Generate({
   data,
@@ -93,6 +94,23 @@ export function Step10_Generate({
           `schedule_cache_${jobId}`,
           JSON.stringify(schedulePayload)
         );
+        // Derive and cache entity_meta so the schedule viewer has names/workload immediately.
+        try {
+          const entityMeta = deriveEntityMetaFromSchedule(schedulePayload as BackendSchedule);
+          sessionStorage.setItem(
+            `entity_meta_cache_${jobId}`,
+            JSON.stringify(entityMeta)
+          );
+          // Best-effort: persist entity_meta to the database via the backend API.
+          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dev.winscloud.net/api/v1';
+          fetch(`${API_URL}/schedules/${encodeURIComponent(jobId)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entity_meta: entityMeta }),
+          }).catch(() => { /* non-fatal */ });
+        } catch {
+          // Non-fatal — schedule page will fall back to derivation on first load.
+        }
       } catch (fetchErr) {
         // Non-fatal — schedule page will fall back to its own fetch.
       }

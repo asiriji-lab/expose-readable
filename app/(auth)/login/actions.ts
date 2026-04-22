@@ -24,7 +24,7 @@ export async function loginWithUsernameOrEmail(formData: FormData) {
         const res = await fetch(`${BACKEND_BASE}/api/v1/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username_or_email: usernameOrEmail, password }),
+            body: JSON.stringify({ email: usernameOrEmail, password }),
         });
 
         const data = await res.json();
@@ -51,15 +51,19 @@ export async function loginWithUsernameOrEmail(formData: FormData) {
 }
 
 export async function detectRoleAction(usernameOrEmail: string) {
-    if (!usernameOrEmail) return { role: null };
+    if (!usernameOrEmail) return { role: null, available: false };
 
     try {
         const res = await fetch(
             `${BACKEND_BASE}/api/v1/auth/detect-role?q=${encodeURIComponent(usernameOrEmail)}`
         );
+        if (!res.ok) {
+            // Endpoint doesn't exist or server error — can't determine if user exists
+            return { role: null, available: false };
+        }
         const data = await res.json();
-        return { role: normalizeRole(data.role) };
+        return { role: normalizeRole(data.role), available: true };
     } catch {
-        return { role: null };
+        return { role: null, available: false };
     }
 }

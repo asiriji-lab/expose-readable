@@ -1,5 +1,12 @@
 // ─── Core Entity ────────────────────────────────────────────────────────────
 
+/**
+ * 'team'  — multiple teachers co-teach ALL students in the same room simultaneously.
+ * 'split' — students are divided into groups; each group studies with a different
+ *           teacher in a different room at the same slot for the same subject.
+ */
+export type TeachingType = 'standard' | 'team' | 'split';
+
 export interface ScheduleItem {
     teacher: string;        // teacher code e.g. "0301"
     teacherName: string;    // full Thai name
@@ -9,6 +16,8 @@ export interface ScheduleItem {
     subjectCode: string;    // e.g. "อ21345"
     subject: string;        // Thai subject name
     variant: string;        // first char of subjectCode, or '_activity'
+    /** Populated by the transform post-pass when multiple teachers share a slot. */
+    teachingType?: TeachingType;
 }
 
 // ─── Entity Metadata (computed from input CSVs, stored in DB) ────────────────
@@ -73,6 +82,22 @@ export interface FullDataset {
     classes: EntityScheduleMap;   // keyed by class code
     rooms: EntityScheduleMap;     // keyed by room code
 }
+
+// ─── Grouped Slots (SPLIT teaching) ──────────────────────────────────────────
+
+/** One teacher+room group within a SPLIT-teaching slot. */
+export interface SlotGroup {
+    teacherCode: string;
+    teacherName: string;
+    room: string;
+    roomName: string;
+}
+
+/**
+ * Maps SPLIT lessons to their constituent groups.
+ * Indexed: classCode → day → slot → SlotGroup[]
+ */
+export type GroupedSlots = Record<string, Record<string, Record<number, SlotGroup[]>>>;
 
 // ─── Overlay ─────────────────────────────────────────────────────────────────
 

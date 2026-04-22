@@ -1,6 +1,6 @@
 'use client';
 
-import { OverlayCellData, ScheduleItem, EntityType } from '../_types/schedule.types';
+import { OverlayCellData, ScheduleItem, EntityType, GroupedSlots } from '../_types/schedule.types';
 
 interface OverlayInspectPopoverProps {
     isOpen: boolean;
@@ -11,6 +11,8 @@ interface OverlayInspectPopoverProps {
     data: OverlayCellData | null;
     /** If set, highlights this entity row and dims the others */
     focusedEntity?: EntityType;
+    /** SPLIT teaching groups index — populated by transformToFullDataset */
+    groupedSlots?: GroupedSlots;
 }
 
 // ─── Entity colors ───────────────────────────────────────────────────────────
@@ -104,12 +106,19 @@ export default function OverlayInspectPopover({
     slot,
     data,
     focusedEntity,
+    groupedSlots,
 }: OverlayInspectPopoverProps) {
     if (!isOpen || !data) return null;
 
     const { allFree, isSynchronized } = data;
 
     const busyCount = [!!data.teacher, !!data.class, !!data.room].filter(Boolean).length;
+
+    // SPLIT teaching: look up groups for this slot
+    const teacherItem = data.teacher;
+    const splitGroups = teacherItem?.teachingType === 'split'
+        ? (groupedSlots?.[teacherItem.classCode]?.[day]?.[slot] ?? null)
+        : null;
 
     return (
         <div
@@ -141,6 +150,16 @@ export default function OverlayInspectPopover({
                         {isSynchronized && !allFree && (
                             <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[11px] font-medium">
                                 ✓ Synced
+                            </span>
+                        )}
+                        {teacherItem?.teachingType === 'team' && (
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[11px] font-medium">
+                                Team
+                            </span>
+                        )}
+                        {teacherItem?.teachingType === 'split' && (
+                            <span className="px-2 py-0.5 bg-violet-100 text-violet-700 rounded-full text-[11px] font-medium">
+                                Split
                             </span>
                         )}
                     </div>
@@ -202,6 +221,30 @@ export default function OverlayInspectPopover({
                         dim={!!focusedEntity && focusedEntity !== 'room'}
                     />
                 </div>
+
+                {/* SPLIT teaching groups */}
+                {splitGroups && splitGroups.length > 0 && (
+                    <div className="px-4 pb-2">
+                        <div className="rounded-lg border border-violet-200 bg-violet-50 px-4 py-3">
+                            <p className="text-[11px] font-semibold text-violet-700 uppercase tracking-wide mb-2">
+                                Split Teaching — {splitGroups.length} groups
+                            </p>
+                            <div className="flex flex-col gap-1.5">
+                                {splitGroups.map((g, i) => (
+                                    <div key={i} className="flex items-center gap-2 text-[11px] text-violet-900">
+                                        <span className="w-4 h-4 rounded-full bg-violet-200 flex items-center justify-center text-[10px] font-bold text-violet-700 flex-shrink-0">
+                                            {i + 1}
+                                        </span>
+                                        <span className="font-medium">{g.teacherCode}</span>
+                                        <span className="text-violet-500">·</span>
+                                        <span className="truncate">{g.teacherName}</span>
+                                        <span className="ml-auto flex-shrink-0 text-violet-600 font-medium">{g.roomName || g.room}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Footer */}
                 <div className="px-4 pb-4 flex gap-2">

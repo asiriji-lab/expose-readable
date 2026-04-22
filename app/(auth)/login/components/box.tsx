@@ -24,13 +24,18 @@ const Box: React.FC = () => {
       return;
     }
     try {
-      const { role } = await detectRoleAction(username);
+      const { role, available } = await detectRoleAction(username);
       if (role) {
         setSelectedRole(role);
         setAccountExists(true);
-      } else {
+      } else if (available) {
+        // Endpoint responded but found no matching user
         setSelectedRole(null);
         setAccountExists(false);
+      } else {
+        // Endpoint unavailable — don't block login
+        setSelectedRole(null);
+        setAccountExists(null);
       }
     } catch (err) {
       console.error('Error detecting role:', err);
