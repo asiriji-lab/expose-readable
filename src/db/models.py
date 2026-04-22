@@ -357,6 +357,22 @@ def update_schedule_job_name(schedule_id: str, job_name: str) -> None:
 
 
 @_guard
+def update_entity_meta(schedule_id: str, entity_meta: Dict) -> None:
+    """
+    Update only the entity_meta column without touching data or status.
+
+    Used when the frontend computes and pushes entity_meta separately from
+    a full schedule save (e.g. first load after generation, or PUT with only
+    entity_meta in the body).
+    """
+    sched = db.session.get(Schedule, uuid.UUID(schedule_id))
+    if not sched:
+        return
+    sched.entity_meta = entity_meta
+    db.session.commit()
+
+
+@_guard
 def delete_schedule(schedule_id: str) -> bool:
     """
     Delete a schedule record from the database.

@@ -445,13 +445,16 @@ def sync_job_status(job_id):
 
         if status == 'completed':
             result = job.get('result') or {}
-            json_path = result.get('json_path')
+            json_path   = result.get('json_path')
+            entity_meta = result.get('entity_meta')
             if json_path and os.path.exists(json_path):
                 with open(json_path, 'r', encoding='utf-8') as f:
                     schedule_data = json.load(f)
-                models.complete_schedule(job_id, schedule_data)
+                models.complete_schedule(job_id, schedule_data, entity_meta)
             else:
                 models.update_schedule_status(job_id, status, progress=100.0)
+                if entity_meta is not None:
+                    models.update_entity_meta(job_id, entity_meta)
         elif status == 'failed':
             models.fail_schedule(job_id, error or 'Unknown error')
         else:
@@ -1091,14 +1094,19 @@ def update_schedule_record(schedule_id):
 
     body = request.get_json() or {}
     schedule_data = body.get('data')
-    job_name = (body.get('job_name') or '').strip() or None
+    entity_meta   = body.get('entity_meta')
+    job_name      = (body.get('job_name') or '').strip() or None
 
     sched = models.get_schedule(schedule_id)
     if not sched:
         return jsonify({"success": False, "error": "Schedule not found"}), 404
 
     if schedule_data is not None:
-        models.complete_schedule(schedule_id, schedule_data)
+        # entity_meta is passed through so both are saved atomically.
+        models.complete_schedule(schedule_id, schedule_data, entity_meta)
+    elif entity_meta is not None:
+        # Frontend sent only entity_meta (e.g. first-load derivation) — persist it.
+        models.update_entity_meta(schedule_id, entity_meta)
 
     if job_name:
         models.update_schedule_job_name(schedule_id, job_name)
