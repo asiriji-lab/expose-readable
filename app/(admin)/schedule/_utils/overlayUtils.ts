@@ -13,13 +13,25 @@ function computeBandStatus(
     return { kind: 'busy', occupyingItem: entityItem };
 }
 
-/** Returns true when two items represent the exact same lesson. */
+/**
+ * Returns true when two items represent the same lesson.
+ *
+ * For TEAM/SPLIT teaching (multiple teachers share a slot for the same subject
+ * and class), we relax the comparison to subject+class only — the room may differ
+ * between teacher and student/room cells because the student cell records only one
+ * room and SPLIT teachers use different rooms.
+ */
 function sameLessonItem(
     a: import('../_types/schedule.types').ScheduleItem | undefined,
     b: import('../_types/schedule.types').ScheduleItem | undefined,
 ): boolean {
     if (!a || !b) return false;
-    return a.teacher === b.teacher && a.classCode === b.classCode && a.room === b.room && a.subjectCode === b.subjectCode;
+    const isGrouped = a.teachingType === 'team' || a.teachingType === 'split'
+                   || b.teachingType === 'team' || b.teachingType === 'split';
+    if (isGrouped) {
+        return a.subjectCode === b.subjectCode && a.classCode === b.classCode;
+    }
+    return a.subjectCode === b.subjectCode && a.classCode === b.classCode && a.room === b.room;
 }
 
 /**

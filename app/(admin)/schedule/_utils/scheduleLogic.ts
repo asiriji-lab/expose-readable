@@ -320,9 +320,16 @@ export function autoEjectConflicts(dataset: FullDataset): {
     const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
     const SLOTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
-    const seenKeys = new Set<string>();
+    // Track which item first occupied each key so we can check TEAM/SPLIT.
+    const seenItems = new Map<string, ScheduleItem>();
     let current = dataset;
     const ejected: { item: ScheduleItem; day: string; slot: number }[] = [];
+
+    const isGroupedTeachingPair = (a: ScheduleItem, b: ScheduleItem) =>
+        (a.teachingType === 'team' || a.teachingType === 'split') &&
+        (b.teachingType === 'team' || b.teachingType === 'split') &&
+        a.subjectCode === b.subjectCode &&
+        a.classCode   === b.classCode;
 
     for (const day of DAYS) {
         for (const slot of SLOTS) {
@@ -335,12 +342,19 @@ export function autoEjectConflicts(dataset: FullDataset): {
                 const roomKey  = `${day}-${slot}-room-${item.room}`;
                 const classKey = `${day}-${slot}-class-${item.classCode}`;
 
-                if (seenKeys.has(roomKey) || seenKeys.has(classKey)) {
+                const seenRoom  = seenItems.get(roomKey);
+                const seenClass = seenItems.get(classKey);
+
+                // Allow TEAM (same room) or SPLIT (different room, same class) through.
+                const roomConflict  = seenRoom  && !isGroupedTeachingPair(item, seenRoom);
+                const classConflict = seenClass && !isGroupedTeachingPair(item, seenClass);
+
+                if (roomConflict || classConflict) {
                     current = removeItemFromDataset(current, item, day, slot);
                     ejected.push({ item, day, slot });
                 } else {
-                    seenKeys.add(roomKey);
-                    seenKeys.add(classKey);
+                    if (!seenRoom)  seenItems.set(roomKey,  item);
+                    if (!seenClass) seenItems.set(classKey, item);
                 }
             }
         }

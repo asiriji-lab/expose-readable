@@ -1,5 +1,5 @@
 import type { FullDataset } from '../_types/schedule.types';
-import type { WorkloadEntry } from './dummyData';
+import type { WorkloadEntry } from '../_types/schedule.types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 

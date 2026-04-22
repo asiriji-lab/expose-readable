@@ -25,6 +25,10 @@ export interface ThreeBandCellProps {
     onBandHoverEnd?: () => void;
     /** Which entity is currently focused via filters — non-active bands dim */
     activeEntity?: EntityType;
+    /** Override display text for each band [teacher, class, room] — used by individual entity views */
+    bandTexts?: [string | null, string | null, string | null];
+    /** When true, empty (all-free) cells render as a plain dashed box without band rows */
+    individualMode?: boolean;
 }
 
 // ─── StatusBand ──────────────────────────────────────────────────────────────
@@ -38,27 +42,29 @@ interface StatusBandProps {
     onHoverEnd?: () => void;
     /** Dim this band (non-active entity) */
     dim?: boolean;
+    /** Override display text instead of computing bandLabel */
+    displayText?: string | null;
 }
 
 // Entity-specific colors for busy bands
 const ENTITY_BAND_STYLES: Record<EntityType, { border: string; bg: string; hover: string; text: string }> = {
     teacher: { border: 'border-l-emerald-300', bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100', text: 'text-emerald-700' },
-    class:   { border: 'border-l-pink-300',    bg: 'bg-pink-50',    hover: 'hover:bg-pink-100',    text: 'text-pink-700' },
-    room:    { border: 'border-l-amber-300',    bg: 'bg-amber-50',   hover: 'hover:bg-amber-100',   text: 'text-amber-700' },
+    class:   { border: 'border-l-pink-300',    bg: 'bg-pink-50',    hover: 'hover:bg-pink-100',    text: 'text-pink-700'   },
+    room:    { border: 'border-l-amber-300',   bg: 'bg-amber-50',   hover: 'hover:bg-amber-100',   text: 'text-amber-700'  },
 };
 
-/** Universal band label: "subjectCode · teacherCode" */
+/** Universal band label: "subjectCode · teacherName" */
 function bandLabel(item: ScheduleItem | undefined): string {
     if (!item) return '';
-    const parts = [item.subjectCode, item.teacher].filter(Boolean);
+    const parts = [item.subjectCode, item.teacherName].filter(Boolean);
     return parts.join(' · ');
 }
 
-function StatusBand({ bandStatus, entityType, height, onClick, onHoverStart, onHoverEnd, dim }: StatusBandProps) {
+function StatusBand({ bandStatus, entityType, height, onClick, onHoverStart, onHoverEnd, dim, displayText }: StatusBandProps) {
     const { kind, occupyingItem } = bandStatus;
 
     const handleMouseEnter = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (kind === 'busy' && onHoverStart) {
+        if ((kind === 'busy' || kind === 'your-session') && onHoverStart) {
             onHoverStart(e.currentTarget.getBoundingClientRect());
         }
     };
@@ -87,7 +93,7 @@ function StatusBand({ bandStatus, entityType, height, onClick, onHoverStart, onH
                 onMouseLeave={onHoverEnd}
             >
                 <span className={`text-[10px] ${s.text} font-medium truncate px-1`}>
-                    {bandLabel(occupyingItem)}
+                    {displayText ?? bandLabel(occupyingItem)}
                 </span>
             </div>
         );
@@ -99,9 +105,11 @@ function StatusBand({ bandStatus, entityType, height, onClick, onHoverStart, onH
             style={{ height }}
             className={`w-full border-l-[3px] border-l-emerald-400 bg-emerald-100 flex items-center justify-center select-none cursor-pointer transition-colors duration-100 hover:bg-emerald-200 ${dimClass}`}
             onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={onHoverEnd}
         >
             <span className="text-[10px] text-emerald-800 font-semibold truncate px-1">
-                {bandLabel(occupyingItem)}
+                {displayText ?? bandLabel(occupyingItem)}
             </span>
         </div>
     );
@@ -116,6 +124,7 @@ function DraggableSessionBand({
     dragPayload,
     onClick,
     dim,
+    displayText,
 }: {
     item: ScheduleItem;
     height: number;
@@ -123,6 +132,7 @@ function DraggableSessionBand({
     dragPayload: DragPayload;
     onClick?: () => void;
     dim?: boolean;
+    displayText?: string | null;
 }) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: dragId,
@@ -144,7 +154,7 @@ function DraggableSessionBand({
             onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
         >
             <span className="text-[10px] text-emerald-800 font-semibold truncate px-1 pointer-events-none">
-                {bandLabel(item)}
+                {displayText ?? bandLabel(item)}
             </span>
         </div>
     );
@@ -162,6 +172,8 @@ export default function ThreeBandCell({
     onBandHover,
     onBandHoverEnd,
     activeEntity,
+    bandTexts,
+    individualMode = false,
 }: ThreeBandCellProps) {
     const { teacherBand, classBand, roomBand, allFree, isSynchronized, conflictCount } = data;
     const totalHeight = bandHeight * 3;
@@ -202,6 +214,17 @@ export default function ThreeBandCell({
         if (!isDraggingAny) onBandHoverEnd?.();
     };
 
+    // Individual mode empty cell — plain dashed box, no band rows
+    if (individualMode && allFree) {
+        return (
+            <div
+                style={{ height: totalHeight }}
+                className="w-full border border-dashed border-border hover:bg-green-50/20 cursor-pointer transition-colors duration-100"
+                onClick={onEmptyClick}
+            />
+        );
+    }
+
     return (
         <div
             style={{ height: totalHeight }}
@@ -221,6 +244,7 @@ export default function ThreeBandCell({
                     dragPayload={dragPayload}
                     onClick={() => onBandClick?.('teacher')}
                     dim={!!activeEntity && activeEntity !== 'teacher'}
+                    displayText={bandTexts?.[0]}
                 />
             ) : (
                 <StatusBand
@@ -231,6 +255,7 @@ export default function ThreeBandCell({
                     onHoverStart={makeHoverStart('teacher', teacherBand)}
                     onHoverEnd={handleHoverEnd}
                     dim={!!activeEntity && activeEntity !== 'teacher'}
+                    displayText={bandTexts?.[0]}
                 />
             )}
 
@@ -243,6 +268,7 @@ export default function ThreeBandCell({
                 onHoverStart={makeHoverStart('class', classBand)}
                 onHoverEnd={handleHoverEnd}
                 dim={!!activeEntity && activeEntity !== 'class'}
+                displayText={bandTexts?.[1]}
             />
 
             {/* ── Room band ── */}
@@ -254,6 +280,7 @@ export default function ThreeBandCell({
                 onHoverStart={makeHoverStart('room', roomBand)}
                 onHoverEnd={handleHoverEnd}
                 dim={!!activeEntity && activeEntity !== 'room'}
+                displayText={bandTexts?.[2]}
             />
 
             {/* Occupied badge — neutral indicator instead of alarming red */}

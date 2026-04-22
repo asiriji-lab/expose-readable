@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Download, Trash2, Sparkles, MoreHorizontal, Save } from 'lucide-react';
+import { ChevronLeft, Download, Trash2, Sparkles, MoreHorizontal, Save, RefreshCw } from 'lucide-react';
 import ViewModeToggle from './_components/ViewModeToggle';
 import TimetableGridV2 from './_components/TimetableGridV2';
 import TimetableGridSkeleton from './_components/TimetableGridSkeleton';
@@ -13,10 +13,10 @@ import FilterDropdown from './_components/FilterDropdown';
 import AdminHeader from '../_components/AdminHeader';
 import { computeOverlayData } from './_utils/overlayUtils';
 import { moveItem, hasConflict, removeItemFromDataset, autoEjectConflicts } from './_utils/scheduleLogic';
-import { FullDataset, ScheduleItem, ScheduleData, ViewMode, OverlayCellData, EntityType, DragPayload } from './_types/schedule.types';
+import { FullDataset, ScheduleItem, ScheduleData, ViewMode, OverlayCellData, EntityType, DragPayload, EntityMeta, GroupedSlots } from './_types/schedule.types';
 import OverlayInspectPopover from './_components/OverlayInspectPopover';
 import BandHoverTooltip from './_components/BandHoverTooltip';
-import { transformToFullDataset, getTeacherCodes, getClassCodes, getRoomCodes, emptyDataset, BackendSchedule } from '@/lib/api/transform';
+import { transformToFullDataset, getTeacherCodes, getClassCodes, getRoomCodes, emptyDataset, deriveEntityMetaFromSchedule, BackendSchedule } from '@/lib/api/transform';
 
 function SchedulePageContent() {
     const router = useRouter();
@@ -26,6 +26,8 @@ function SchedulePageContent() {
     const [jobName, setJobName] = useState('ตารางสอน');
     const [loadError, setLoadError] = useState<string | null>(null);
     const [dataset, setDataset] = useState<FullDataset | null>(null);
+    const [groupedSlots, setGroupedSlots] = useState<GroupedSlots>({});
+    const [entityMeta, setEntityMeta] = useState<EntityMeta | null>(null);
 
     // ─── Derived filter options ───────────────────────────────────────────────
     const teacherCodes = useMemo(() => dataset ? getTeacherCodes(dataset) : [], [dataset]);
@@ -62,12 +64,15 @@ function SchedulePageContent() {
             const loadSchedule = async () => {
                 try {
                     const cached = sessionStorage.getItem(`schedule_cache_${jobId}`);
+                    const cachedMeta = sessionStorage.getItem(`entity_meta_cache_${jobId}`);
                     if (cached) {
                         const raw = JSON.parse(cached) as BackendSchedule;
-                        const transformed = transformToFullDataset(raw);
+                        const { dataset: transformed, groupedSlots: gs } = transformToFullDataset(raw);
                         const { dataset: clean } = autoEjectConflicts(transformed);
                         setDataset(clean);
+                        setGroupedSlots(gs);
                         setJobName(raw.config?.academic_year || 'ตารางสอน');
+                        if (cachedMeta) setEntityMeta(JSON.parse(cachedMeta) as EntityMeta);
                         return;
                     }
 
@@ -78,12 +83,28 @@ function SchedulePageContent() {
                     if (!res.ok) throw new Error(data?.error ?? 'Backend error');
 
                     const raw: BackendSchedule | null = data.schedule?.data ?? null;
+                    let meta: EntityMeta | null = data.schedule?.entity_meta ?? null;
 
                     if (raw) {
-                        const transformed = transformToFullDataset(raw);
+                        const { dataset: transformed, groupedSlots: gs } = transformToFullDataset(raw);
                         const { dataset: clean } = autoEjectConflicts(transformed);
                         setDataset(clean);
+                        setGroupedSlots(gs);
                         sessionStorage.setItem(`schedule_cache_${jobId}`, JSON.stringify(raw));
+                        // If the backend didn't return entity_meta, derive it from the schedule data.
+                        if (!meta) {
+                            try { meta = deriveEntityMetaFromSchedule(raw); } catch { /* non-fatal */ }
+                        }
+                        if (meta) {
+                            setEntityMeta(meta);
+                            sessionStorage.setItem(`entity_meta_cache_${jobId}`, JSON.stringify(meta));
+                            // Best-effort: write entity_meta to DB so future loads don't need to derive it.
+                            fetch(`${API_URL}/schedules/${encodeURIComponent(jobId)}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ entity_meta: meta }),
+                            }).catch(() => { /* non-fatal */ });
+                        }
                         setJobName(data.schedule?.job_name || raw.config?.academic_year || 'ตารางสอน');
                     } else {
                         console.warn('[SchedulePage] Unexpected result shape:', data);
@@ -137,9 +158,10 @@ function SchedulePageContent() {
             if (!response.ok) throw new Error('Failed to import JSON');
             const result = await response.json();
             const payload = result.data.schedule ? result.data.schedule : result.data;
-            const transformed = transformToFullDataset(payload as BackendSchedule);
+            const { dataset: transformed, groupedSlots: gs } = transformToFullDataset(payload as BackendSchedule);
             const { dataset: clean } = autoEjectConflicts(transformed);
             setDataset(clean);
+            setGroupedSlots(gs);
             setJobName(payload.job_name || 'Imported Schedule');
             alert('JSON imported successfully!');
         } catch (e) {
@@ -208,7 +230,7 @@ function SchedulePageContent() {
             const res = await fetch(`${API_URL}/schedules/${encodeURIComponent(jobId)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data: exportData }),
+                body: JSON.stringify({ data: exportData, entity_meta: entityMeta }),
             });
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
@@ -218,6 +240,34 @@ function SchedulePageContent() {
         } catch (e) {
             console.error('Save error:', e);
             alert('Failed to save schedule.');
+        }
+    };
+
+    const [isRefreshingMeta, setIsRefreshingMeta] = useState(false);
+
+    const handleRefreshMeta = async () => {
+        const params = new URLSearchParams(window.location.search);
+        const jobId = params.get('job_id');
+        if (!jobId) return;
+
+        setIsRefreshingMeta(true);
+        try {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dev.winscloud.net/api/v1';
+            const res = await fetch(`${API_URL}/schedules/${encodeURIComponent(jobId)}/refresh-meta`, {
+                method: 'POST',
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data?.error ?? 'Refresh failed');
+
+            const newMeta = data.entity_meta as EntityMeta;
+            setEntityMeta(newMeta);
+            sessionStorage.setItem(`entity_meta_cache_${jobId}`, JSON.stringify(newMeta));
+            alert('Metadata refreshed successfully.');
+        } catch (e) {
+            console.error('Refresh meta error:', e);
+            alert(`Failed to refresh metadata: ${(e as Error).message}`);
+        } finally {
+            setIsRefreshingMeta(false);
         }
     };
 
@@ -324,7 +374,7 @@ function SchedulePageContent() {
             roomName: data.roomName ?? '',
             subjectCode: data.subjectCode ?? '',
             subject: data.subject ?? '',
-            variant: data.variant ?? 'green',
+            variant: data.variant ?? '_activity',
         };
         setDataset(prev => {
             if (!prev) return prev;
@@ -366,13 +416,13 @@ function SchedulePageContent() {
 
                     <div className="flex items-center gap-2 shrink-0">
                         {viewMode === 'teacher' && teacherCodes.length > 0 && (
-                            <FilterDropdown label="T. code" value={tCode} options={teacherCodes} onChange={handleTCodeChange} labelClassName="text-primary font-semibold w-14" />
+                            <FilterDropdown label="T. code" value={tCode} options={teacherCodes} onChange={handleTCodeChange} labelClassName="text-primary font-semibold w-14" entityMeta={entityMeta} />
                         )}
                         {viewMode === 'class' && classCodes.length > 0 && (
-                            <FilterDropdown label="Class" value={classCode} options={classCodes} onChange={handleClassChange} labelClassName="text-primary font-semibold w-14" />
+                            <FilterDropdown label="Class" value={classCode} options={classCodes} onChange={handleClassChange} labelClassName="text-primary font-semibold w-14" entityMeta={entityMeta} />
                         )}
                         {viewMode === 'room' && roomCodes.length > 0 && (
-                            <FilterDropdown label="Room" value={room} options={roomCodes} onChange={handleRoomChange} labelClassName="text-primary font-semibold w-14" />
+                            <FilterDropdown label="Room" value={room} options={roomCodes} onChange={handleRoomChange} labelClassName="text-primary font-semibold w-14" entityMeta={entityMeta} />
                         )}
                         {viewMode !== 'all' && <div className="h-5 w-px bg-border hidden sm:block" />}
                         <ViewModeToggle activeMode={viewMode} onChange={setViewMode} />
@@ -402,6 +452,14 @@ function SchedulePageContent() {
                                     <div className="absolute right-0 top-full mt-1 z-40 w-48 bg-surface border border-border rounded-xl shadow-lg py-1">
                                         <button onClick={() => { handleSaveSchedule(); setActionsOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors">
                                             <Save className="w-4 h-4 text-foreground-muted" /> Save Schedule
+                                        </button>
+                                        <button
+                                            onClick={() => { handleRefreshMeta(); setActionsOpen(false); }}
+                                            disabled={isRefreshingMeta}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors disabled:opacity-50"
+                                        >
+                                            <RefreshCw className={`w-4 h-4 text-foreground-muted ${isRefreshingMeta ? 'animate-spin' : ''}`} />
+                                            {isRefreshingMeta ? 'Refreshing...' : 'Refresh Metadata'}
                                         </button>
                                         <div className="my-1 border-t border-border" />
                                         <button onClick={() => { handleExportClick(); setActionsOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors">
@@ -433,6 +491,7 @@ function SchedulePageContent() {
                                 options={teacherCodes}
                                 onChange={handleTCodeChange}
                                 labelClassName={activeEntity === 'teacher' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
+                                entityMeta={entityMeta}
                             />
                         )}
                         {classCodes.length > 0 && (
@@ -442,6 +501,7 @@ function SchedulePageContent() {
                                 options={classCodes}
                                 onChange={handleClassChange}
                                 labelClassName={activeEntity === 'class' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
+                                entityMeta={entityMeta}
                             />
                         )}
                         {roomCodes.length > 0 && (
@@ -451,6 +511,7 @@ function SchedulePageContent() {
                                 options={roomCodes}
                                 onChange={handleRoomChange}
                                 labelClassName={activeEntity === 'room' ? 'text-primary font-semibold border-l-2 border-primary pl-2 w-14' : 'w-14'}
+                                entityMeta={entityMeta}
                             />
                         )}
                         {!dataset && <span className="text-xs text-foreground-muted">กำลังโหลดข้อมูล...</span>}
@@ -486,6 +547,7 @@ function SchedulePageContent() {
                             <PaletteSidebar
                                 teacherCode={tCode}
                                 dataset={dataset}
+                                entityMeta={entityMeta}
                             />
                         )}
                     </div>
@@ -499,6 +561,7 @@ function SchedulePageContent() {
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleModalSave}
                 initialData={editingItem}
+                entityMeta={entityMeta}
             />
             {hoverTooltip && (
                 <BandHoverTooltip
@@ -515,6 +578,7 @@ function SchedulePageContent() {
                 slot={bandInspect?.slot ?? 1}
                 data={bandInspect?.data ?? null}
                 focusedEntity={bandInspect?.entityType ?? activeEntity}
+                groupedSlots={groupedSlots}
             />
         </div>
     );
