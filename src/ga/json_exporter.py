@@ -338,6 +338,23 @@ class ScheduleJsonExporter:
                         "class":        class_str,
                     }
 
+        # Post-pass: annotate teacher cells with teaching_type when multiple
+        # teachers share the same (day, slot, class, subject).
+        # Same room → 'team'; different rooms → 'split'.
+        slot_teacher_map: Dict[Tuple, list] = defaultdict(list)
+        for tid, cells in teacher_ga.items():
+            for key, cell in cells.items():
+                bucket_key = (key[0], key[1], cell.get("class"), cell.get("subject_id"))
+                slot_teacher_map[bucket_key].append((tid, key))
+
+        for bucket_key, entries in slot_teacher_map.items():
+            if len(entries) <= 1:
+                continue
+            rooms = {teacher_ga[tid][key].get("room") for tid, key in entries}
+            teaching_type = "team" if len(rooms) == 1 else "split"
+            for tid, key in entries:
+                teacher_ga[tid][key]["teaching_type"] = teaching_type
+
         # ── Teachers ──────────────────────────────────────────────────────────
         all_teacher_ids = sorted(
             set(self.manager.teacher_grids.keys()) | set(teacher_ga.keys())

@@ -24,6 +24,8 @@ from src.utils.file_helpers import allowed_file, get_job_folder, create_zip_arch
 from src.db import database, models
 from src.db.database import db as _db
 from src.db.orm_models import Schedule as ScheduleModel
+from src.data_cleaning.data_cleaning import clean_input_data
+from src.data_cleaning.entity_meta import compute_entity_meta
 
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
@@ -1112,6 +1114,85 @@ def update_schedule_record(schedule_id):
         models.update_schedule_job_name(schedule_id, job_name)
 
     return jsonify({"success": True, "message": "Schedule updated"})
+
+
+@api_bp.route('/schedules/<schedule_id>/refresh-meta', methods=['POST'])
+def refresh_schedule_meta(schedule_id):
+    """
+    Re-compute entity_meta from the original uploaded CSVs for this job.
+
+    Useful when the admin has made minor changes to the input files and wants
+    updated teacher/class/room/subject metadata without re-running the full GA.
+    The uploaded CSV files must still exist on disk (inside the job's uploads/ folder).
+    ---
+    tags:
+      - Schedules
+    parameters:
+      - name: schedule_id
+        in: path
+        type: string
+        required: true
+        description: Schedule UUID (same as the API job_id)
+    responses:
+      200:
+        description: entity_meta recomputed and persisted; returns the new value
+        schema:
+          type: object
+          properties:
+            success:     {type: boolean}
+            entity_meta: {type: object}
+      404:
+        description: Schedule not found or uploads folder missing
+      400:
+        description: Database not configured or no CSV files found
+    """
+    # Locate the uploads folder for this job
+    job_folder     = get_job_folder(current_app.config['JOBS_FOLDER'], schedule_id)
+    uploads_folder = os.path.join(job_folder, 'uploads')
+
+    if not os.path.isdir(uploads_folder):
+        return jsonify({
+            "success": False,
+            "error": "Uploads folder not found — the original input files may have been deleted",
+        }), 404
+
+    # Load whichever CSV files are present (mirrors _load_raw_data in scheduler.py)
+    _INPUT_FILES = {
+        'curriculum': 'curriculum.csv',
+        'elective':   'elective.csv',
+        'teacher':    'teacher.csv',
+        'period':     'period.csv',
+        'preplace':   'preplace.csv',
+        'room':       'room.csv',
+        'student':    'student.csv',
+        'scout':      'scout.csv',
+    }
+    try:
+        import pandas as pd
+        raw_data = {}
+        for key, filename in _INPUT_FILES.items():
+            path = os.path.join(uploads_folder, filename)
+            if os.path.exists(path):
+                raw_data[key] = pd.read_csv(path, encoding='utf-8-sig')
+    except Exception as exc:
+        return jsonify({"success": False, "error": f"Failed to read CSV files: {exc}"}), 500
+
+    if not raw_data:
+        return jsonify({"success": False, "error": "No input CSV files found in uploads folder"}), 400
+
+    # Re-compute entity_meta using the same pipeline as the scheduler
+    try:
+        cleaned_data = clean_input_data(raw_data)
+        entity_meta  = compute_entity_meta(cleaned_data)
+    except Exception as exc:
+        current_app.logger.error('[refresh_schedule_meta] Compute failed for %s: %s', schedule_id, exc)
+        return jsonify({"success": False, "error": f"Metadata computation failed: {exc}"}), 500
+
+    # Persist to database if available; proceed regardless (caller can use the response)
+    if database.is_available():
+        models.update_entity_meta(schedule_id, entity_meta)
+
+    return jsonify({"success": True, "entity_meta": entity_meta})
 
 
 @api_bp.route('/schedules/<schedule_id>', methods=['DELETE'])

@@ -190,7 +190,10 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
                         'room': assignment_room,
                         'periodsPerWeek': ppw,
                     })
-                    workload_map[tid][sid]['totalPeriods'] += ppw
+                # totalPeriods counts actual periods the teacher is present —
+                # for multi-class lessons all classes share the same slot, so
+                # add ppw once regardless of how many classes are in the row.
+                workload_map[tid][sid]['totalPeriods'] += ppw
 
         for tid, subject_entries in workload_map.items():
             teacher_workload[tid] = list(subject_entries.values())
