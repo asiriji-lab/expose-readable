@@ -24,6 +24,7 @@ from .data_loader import (
     get_teaching_period_cols,
     build_lessons_from_manager,
     build_free_slots_per_entity,
+    build_room_type_data,
     get_lesson_available_slots,
     get_consecutive_slots,
     build_blocked_keywords,
@@ -46,13 +47,15 @@ class GeneticAlgorithm:
         5. Stagnation restart-with-memory
         """
 
-    PENALTY_TEACHER_CONFLICT = 100
-    PENALTY_STUDENT_CONFLICT = 100
-    PENALTY_ROOM_CONFLICT    = 75   # raised from 50 — double-booked room makes slot unusable
-    PENALTY_BLOCK_VIOLATION  = 80   # raised from 30 — non-consecutive is not a cheap option
-    PENALTY_PERIOD_COUNT     = 20
-    PENALTY_SEPERATE_SLOT    = 100  # two lessons in same SEPERATE_SLOT group share a slot
-    PENALTY_SUB_GROUP        = 100  # lessons in same SUB_GROUP group are NOT at the same slot
+    PENALTY_TEACHER_CONFLICT    = 100
+    PENALTY_STUDENT_CONFLICT    = 100
+    PENALTY_ROOM_CONFLICT       = 75   # raised from 50 — double-booked room makes slot unusable
+    PENALTY_BLOCK_VIOLATION     = 80   # raised from 30 — non-consecutive is not a cheap option
+    PENALTY_PERIOD_COUNT        = 20
+    PENALTY_SEPERATE_SLOT       = 100  # two lessons in same SEPERATE_SLOT group share a slot
+    PENALTY_SUB_GROUP           = 100  # lessons in same SUB_GROUP group are NOT at the same slot
+    PENALTY_HOMEROOM_VIOLATION  = 100  # lesson placed in a homeroom belonging to another class
+    PENALTY_SPECIALIST_ROOM     = 80   # lesson placed in a specialist room without being assigned it
 
     # Stagnation: if best fitness hasn't improved in this many generations,
     # reseed the bottom half of the population.
@@ -97,6 +100,15 @@ class GeneticAlgorithm:
         }
         self.lessons: List[Lesson] = build_lessons_from_manager(schedule_manager)
         self.lesson_map: Dict[str, Lesson] = {l.lesson_id: l for l in self.lessons}
+
+        # Room type data — must be built before _get_room_list()
+        (
+            self.homeroom_map,           # class_id  -> room_id
+            self.homeroom_room_to_class, # room_id   -> class_id
+            self._general_rooms,         # free pool
+            self._specialist_rooms,      # exclusive pool (curriculum.room only)
+        ) = build_room_type_data(schedule_manager)
+
         self.room_list: List[str] = self._get_room_list()
 
         # Preschedule-state free slots (immutable snapshot)
@@ -171,34 +183,41 @@ class GeneticAlgorithm:
     # =========================================================================
 
     def _get_room_list(self) -> List[str]:
+        # General rooms only — homeroom and specialist rooms excluded from free pool.
+        # Falls back to all room_grids if room type data is unavailable.
+        if self._general_rooms:
+            return list(self._general_rooms)
         df_room = self.manager.get_sheet_data('room')
         if df_room is not None and 'room_id' in df_room.columns:
             return [str(r).strip() for r in df_room['room_id'].unique() if str(r).strip()]
         return list(self.manager.room_grids.keys())
 
     def _pick_room(self, lesson: Lesson) -> str:
+        # 1. Curriculum specifies required room(s) — use those.
         if lesson.required_rooms:
             return random.choice(lesson.required_rooms)
+        # 2. Single-class lesson — prefer the class's designated homeroom.
+        if len(lesson.student_classes) == 1:
+            hr = self.homeroom_map.get(lesson.student_classes[0])
+            if hr:
+                return hr
+        # 3. Multi-class or no homeroom — pick from general pool.
         if self.room_list:
             return random.choice(self.room_list)
         return "NO_ROOM"
 
     def _normalize_gene_room(self, lid: str, gene: List[Tuple[TimeSlot, str]]) -> List[Tuple[TimeSlot, str]]:
         """
-        Ensure all periods of a lesson use the same room.
-        Called after block-level crossover which can mix rooms from different parents.
-        - Required-room lessons: re-pick from required_rooms list.
-        - Other lessons: inherit the room from the first assignment.
+        Ensure all periods of a lesson use a valid, consistent room after crossover.
+        - Required-room lessons: re-pick from required_rooms.
+        - Others: use _pick_room to respect homeroom/general-pool rules.
         """
         if not gene:
             return gene
         lesson = self.lesson_map.get(lid)
         if not lesson:
             return gene
-        if lesson.required_rooms:
-            room = random.choice(lesson.required_rooms)
-        else:
-            room = gene[0][1]
+        room = self._pick_room(lesson)
         return [(ts, room) for ts, _ in gene]
 
     def _parse_fixed_period(self, fixed_period_str: str) -> List[Tuple[str, str]]:
@@ -531,14 +550,32 @@ class GeneticAlgorithm:
                 for j in range(i + 1, len(slot_sets)):
                     violations['sub_group'] += len(slot_sets[i].symmetric_difference(slot_sets[j]))
 
+        # Homeroom and specialist room violations
+        if self.homeroom_room_to_class or self._specialist_rooms:
+            for lesson in self.lessons:
+                lesson_class_set = set(lesson.student_classes)
+                for ts, room in chromosome.genes.get(lesson.lesson_id, []):
+                    if not room or room == 'NO_ROOM':
+                        continue
+                    # Homeroom violation: lesson uses another class's homeroom
+                    owner = self.homeroom_room_to_class.get(room)
+                    if owner is not None and owner not in lesson_class_set:
+                        violations['homeroom_violation'] += 1
+                    # Specialist room violation: lesson uses a specialist room
+                    # it didn't explicitly request (required_rooms not set)
+                    elif room in self._specialist_rooms and not lesson.required_rooms:
+                        violations['specialist_room'] += 1
+
         fitness = (
-            violations['teacher_conflict'] * self.PENALTY_TEACHER_CONFLICT +
-            violations['student_conflict'] * self.PENALTY_STUDENT_CONFLICT +
-            violations['room_conflict']    * self.PENALTY_ROOM_CONFLICT    +
-            violations['block_violation']  * self.PENALTY_BLOCK_VIOLATION  +
-            violations['period_count']     * self.PENALTY_PERIOD_COUNT     +
-            violations['seperate_slot']    * self.PENALTY_SEPERATE_SLOT    +
-            violations['sub_group']        * self.PENALTY_SUB_GROUP
+            violations['teacher_conflict']   * self.PENALTY_TEACHER_CONFLICT   +
+            violations['student_conflict']   * self.PENALTY_STUDENT_CONFLICT   +
+            violations['room_conflict']      * self.PENALTY_ROOM_CONFLICT      +
+            violations['block_violation']    * self.PENALTY_BLOCK_VIOLATION    +
+            violations['period_count']       * self.PENALTY_PERIOD_COUNT       +
+            violations['seperate_slot']      * self.PENALTY_SEPERATE_SLOT      +
+            violations['sub_group']          * self.PENALTY_SUB_GROUP          +
+            violations['homeroom_violation'] * self.PENALTY_HOMEROOM_VIOLATION +
+            violations['specialist_room']    * self.PENALTY_SPECIALIST_ROOM
         )
         chromosome.fitness = fitness
         chromosome.violations = dict(violations)

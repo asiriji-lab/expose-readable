@@ -81,7 +81,7 @@ def rename_csv_columns(input_data: Dict[str, pd.DataFrame], csv_column_mapping: 
 _EMPTY_STUBS: dict[str, pd.DataFrame] = {
     'student':    pd.DataFrame(columns=['class_id', 'grade', 'section', 'default_room', 'curriculum']),
     'teacher':    pd.DataFrame(columns=['teacher_id', 'teacher_name', 'available_slots', 'unavailable_slots', 'constraint']),
-    'room':       pd.DataFrame(columns=['room_id', 'note', 'tag']),
+    'room':       pd.DataFrame(columns=['room_id', 'note', 'tag', 'room_type']),
     'elective':   pd.DataFrame(columns=['subject_id', 'subject_name', 'teacher', 'room']),
     'scout':      pd.DataFrame(columns=[]),
 }

@@ -39,7 +39,8 @@ prepalce_column = {
 room_column = {
     'ห้องทั้งหมด': 'room_id',
     'หมายเหตุ': 'note',
-    'ประเภท': 'tag'
+    'ประเภท': 'tag',
+    'ประเภทห้อง': 'room_type',
 }
 
 student_column = {
