@@ -23,7 +23,7 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
 
     const searchableFields = useMemo(() => {
         if (label.toLowerCase().includes('t.')) {
-            return ["Code", "Name"];
+            return ["Name", "Code"];
         }
         if (label.toLowerCase().includes('room')) {
             return ["Code", "Name", "Type"];
@@ -45,8 +45,8 @@ export default function FilterDropdown({ label, value, options, onChange, labelC
                 return {
                     value: code,
                     fields: {
-                        "Code": code,
                         "Name": meta?.name || code,
+                        "Code": code,
                     },
                 };
             });

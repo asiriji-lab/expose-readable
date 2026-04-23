@@ -9,6 +9,7 @@ function computeBandStatus(
     isSynchronized: boolean,
 ): BandStatus {
     if (!entityItem) return { kind: 'free' };
+    if (entityItem.isPreplace) return { kind: 'preplace', occupyingItem: entityItem };
     if (isSynchronized) return { kind: 'your-session', occupyingItem: entityItem };
     return { kind: 'busy', occupyingItem: entityItem };
 }
@@ -72,7 +73,7 @@ export function computeOverlayData(
             // (teacher's lesson is the same as what the class and room show for this slot)
             const teacherClassSync = hasTeacher && hasClass ? sameLessonItem(teacherItem, classItem) : true;
             const teacherRoomSync = hasTeacher && hasRoom ? sameLessonItem(teacherItem, roomItem) : true;
-            const isSynchronized = busyCount > 0 && teacherClassSync && teacherRoomSync;
+            const isSynchronized = hasTeacher && busyCount > 1 && teacherClassSync && teacherRoomSync;
 
             // conflictCount: how many bands are occupied with DIFFERENT lessons
             // (non-synchronized entities that are busy)

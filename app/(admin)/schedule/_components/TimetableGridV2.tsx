@@ -66,22 +66,21 @@ function PreplaceCellWidget({ label, bandHeight }: { label: string; bandHeight: 
     return (
         <div
             style={{ height: bandHeight * 3 }}
-            className="w-full flex flex-col overflow-hidden border-l-[3px] border-l-violet-400 bg-violet-50 relative select-none"
+            className="w-full flex flex-col overflow-hidden border-l-[3px] border-l-violet-400 bg-violet-50 dark:bg-violet-900/20 relative select-none divide-y divide-violet-50 dark:divide-violet-900/20"
         >
             <span className="absolute top-1 right-1 z-10 text-violet-400 pointer-events-none">
                 <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
                 </svg>
             </span>
-            <div style={{ height: bandHeight }} className="flex items-center justify-center border-b border-violet-200 bg-violet-100 px-4">
-                <span className="text-[10px] font-semibold text-violet-700 truncate">{label}</span>
+            {/* top — empty */}
+            <div style={{ height: bandHeight }} />
+            {/* middle — label only */}
+            <div style={{ height: bandHeight }} className="flex items-center justify-center px-4">
+                <span className="text-[10px] font-semibold text-violet-700 dark:text-violet-300 truncate">{label}</span>
             </div>
-            <div style={{ height: bandHeight }} className="flex items-center justify-center border-b border-violet-100 px-1">
-                <span className="text-[9px] text-violet-400 truncate">{label}</span>
-            </div>
-            <div style={{ height: bandHeight }} className="flex items-center justify-center px-1">
-                <span className="text-[9px] text-violet-300 truncate">{label}</span>
-            </div>
+            {/* bottom — empty */}
+            <div style={{ height: bandHeight }} />
         </div>
     );
 }
@@ -200,11 +199,11 @@ export default function TimetableGridV2({
                                     const isViewAll = viewMode === 'all';
 
                                     // ── Preplace detection ────────────────────────────────────────────────
+                                    // View-all: per-band preplace rendered via BandStatus 'preplace' kind.
+                                    // Individual views: whole cell becomes PreplaceCellWidget when the
+                                    // selected entity's slot is a preplace activity.
                                     const preplaceLabel = isViewAll
-                                        ? (overlayCell?.teacher?.isPreplace ? overlayCell.teacher.subjectCode
-                                           : overlayCell?.class?.isPreplace ? overlayCell.class.subjectCode
-                                           : overlayCell?.room?.isPreplace  ? overlayCell.room.subjectCode
-                                           : null)
+                                        ? null
                                         : (cellData?.isPreplace ? cellData.subjectCode : null);
 
                                     if (preplaceLabel !== null) {

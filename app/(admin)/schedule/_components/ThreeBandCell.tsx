@@ -71,15 +71,26 @@ function StatusBand({ bandStatus, entityType, height, onClick, onHoverStart, onH
 
     const dimClass = dim ? 'opacity-50' : '';
 
-    if (kind === 'free') {
+    if (kind === 'preplace') {
         return (
             <div
                 style={{ height }}
-                className={`w-full border-l-[3px] border-l-green-300 bg-green-50 flex items-center justify-center select-none ${dimClass}`}
+                className={`w-full border-l-[3px] border-l-violet-400 bg-violet-50 flex items-center justify-center select-none relative ${dimClass}`}
             >
-                <span className="text-[10px] text-green-600 font-medium">ว่าง</span>
+                <span className="absolute right-1 top-0 bottom-0 flex items-center pointer-events-none">
+                    <svg className="w-2.5 h-2.5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                </span>
+                <span className="text-[10px] text-violet-600 font-semibold truncate px-1">
+                    {displayText ?? bandLabel(occupyingItem)}
+                </span>
             </div>
         );
+    }
+
+    if (kind === 'free') {
+        return <div style={{ height }} className={dimClass} />;
     }
 
     if (kind === 'busy') {
@@ -180,26 +191,30 @@ export default function ThreeBandCell({
     const { activeDrag } = useScheduleDnd();
     const isDraggingAny = !!activeDrag;
 
+    const allPreplace = teacherBand.kind === 'preplace' && classBand.kind === 'preplace' && roomBand.kind === 'preplace';
+
     // Cell-level border based on availability
     let cellBorder = '';
-    let cellBg = 'bg-surface';
+    let cellBg = 'bg-slate-50 dark:bg-white/[0.03]';
 
     if (allFree) {
-        // All 3 free → can schedule here
-        cellBorder = 'border border-dashed border-green-400';
-        cellBg = isDraggingAny ? 'bg-green-50/30' : 'bg-surface hover:bg-green-50/30 cursor-pointer';
+        cellBorder = '';
+        cellBg = isDraggingAny
+            ? 'bg-slate-100 dark:bg-white/[0.06]'
+            : 'bg-slate-50 dark:bg-white/[0.03] hover:bg-slate-100 dark:hover:bg-white/[0.06] cursor-pointer';
+    } else if (allPreplace) {
+        cellBorder = 'border-l-[3px] border-l-violet-400';
+        cellBg = 'bg-violet-50/40 dark:bg-violet-900/20';
     } else if (isSynchronized) {
-        // Your session — all 3 have the same lesson
         cellBorder = 'border-[2px] border-emerald-500';
-        cellBg = 'bg-emerald-50/20';
+        cellBg = 'bg-emerald-50/40 dark:bg-emerald-900/20';
     } else if (conflictCount >= 2) {
-        // Multiple bands busy with different lessons — neutral styling
         cellBorder = 'border-l-[3px] border-l-slate-300';
-        cellBg = 'bg-slate-50/30';
+        cellBg = 'bg-slate-50 dark:bg-white/[0.03]';
     } else {
         // Partial — 1 busy, others free
         cellBorder = 'border-l-[3px] border-l-slate-300';
-        cellBg = 'bg-slate-50/20';
+        cellBg = 'bg-slate-50 dark:bg-white/[0.03]';
     }
 
     // Hover helpers — skip when dragging
@@ -219,7 +234,7 @@ export default function ThreeBandCell({
         return (
             <div
                 style={{ height: totalHeight }}
-                className="w-full border border-dashed border-border hover:bg-green-50/20 cursor-pointer transition-colors duration-100"
+                className="w-full hover:bg-primary/5 cursor-pointer transition-colors duration-100"
                 onClick={onEmptyClick}
             />
         );
@@ -229,7 +244,7 @@ export default function ThreeBandCell({
         <div
             style={{ height: totalHeight }}
             className={[
-                'w-full flex flex-col overflow-hidden transition-colors duration-100 relative',
+                'w-full flex flex-col overflow-hidden transition-colors duration-100 relative divide-y divide-slate-200 dark:divide-white/10',
                 cellBg,
                 cellBorder,
             ].join(' ')}

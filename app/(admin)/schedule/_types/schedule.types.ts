@@ -103,7 +103,7 @@ export type GroupedSlots = Record<string, Record<string, Record<number, SlotGrou
 
 // ─── Overlay ─────────────────────────────────────────────────────────────────
 
-export type BandStatusKind = 'free' | 'busy' | 'your-session';
+export type BandStatusKind = 'free' | 'busy' | 'your-session' | 'preplace';
 
 export interface BandStatus {
     kind: BandStatusKind;
