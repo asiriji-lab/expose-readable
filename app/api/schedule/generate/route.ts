@@ -36,6 +36,7 @@ const TAB_COLUMN_MAP: Record<string, Record<string, string>> = {
     'ห้องทั้งหมด': 'room_id',
     'หมายเหตุ': 'note',
     'ประเภท': 'tag',
+    'ประเภทห้อง': 'room_type',
   },
   teacher: {
     'ชื่อ': 'teacher_name',

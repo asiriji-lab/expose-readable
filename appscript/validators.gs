@@ -73,8 +73,10 @@ function validateRoom(data) {
   errors = errors.concat(_checkRequiredHeaders(headers, ['ห้องทั้งหมด']));
   if (errors.length) return { valid: false, errors: errors, warnings: warnings };
 
-  var roomIdx = headers.indexOf('ห้องทั้งหมด');
+  var roomIdx     = headers.indexOf('ห้องทั้งหมด');
+  var roomTypeIdx = headers.indexOf('ประเภทห้อง');
   var seen = {};
+  var validRoomTypes = { 'general': true, 'homeroom': true, 'specialist': true };
 
   for (var r = 1; r < data.length; r++) {
     var row      = data[r];
@@ -90,6 +92,12 @@ function validateRoom(data) {
       errors.push(_err(sheetRow, roomIdx + 1, 'ห้องทั้งหมด: รหัสห้องซ้ำ "' + roomId + '" (แถว ' + seen[roomId] + ')'));
     } else {
       seen[roomId] = sheetRow;
+    }
+    if (roomTypeIdx !== -1) {
+      var roomType = sanitize(row[roomTypeIdx]);
+      if (roomType && !validRoomTypes[roomType]) {
+        warnings.push(_err(sheetRow, roomTypeIdx + 1, 'ประเภทห้อง: ต้องเป็น general, homeroom หรือ specialist — ได้รับ "' + roomType + '"'));
+      }
     }
   }
   return { valid: errors.length === 0, errors: errors, warnings: warnings };

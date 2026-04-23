@@ -83,9 +83,8 @@ export default function UpdateSourcePanel({
 
         // ── 4. POST to backend ─────────────────────────────────────────────────
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dev.winscloud.net/api/v1';
             const res = await fetch(
-                `${API_URL}/schedules/${encodeURIComponent(jobId)}/refresh-meta`,
+                `/api/schedule/refresh-meta?schedule_id=${encodeURIComponent(jobId)}`,
                 { method: 'POST', body: form },
             );
             const data = await res.json();

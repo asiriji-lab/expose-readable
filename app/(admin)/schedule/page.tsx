@@ -81,8 +81,7 @@ function SchedulePageContent() {
                         return;
                     }
 
-                    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dev.winscloud.net/api/v1';
-                    const res = await fetch(`${API_URL}/schedules/${encodeURIComponent(jobId)}`);
+                    const res = await fetch(`/api/schedule/record?schedule_id=${encodeURIComponent(jobId)}`);
                     const data = await res.json();
 
                     if (!res.ok) throw new Error(data?.error ?? 'Backend error');
@@ -104,7 +103,7 @@ function SchedulePageContent() {
                             setEntityMeta(meta);
                             sessionStorage.setItem(`entity_meta_cache_${jobId}`, JSON.stringify(meta));
                             // Best-effort: write entity_meta to DB so future loads don't need to derive it.
-                            fetch(`${API_URL}/schedules/${encodeURIComponent(jobId)}`, {
+                            fetch(`/api/schedule/record?schedule_id=${encodeURIComponent(jobId)}`, {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ entity_meta: meta }),
@@ -230,14 +229,13 @@ function SchedulePageContent() {
         if (!jobId || !dataset) return;
 
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dev.winscloud.net/api/v1';
             const exportData = {
                 config: { academic_year: '2026', semester: 1 },
                 teachers: dataset.teachers,
                 classes: dataset.classes,
                 rooms: dataset.rooms,
             };
-            const res = await fetch(`${API_URL}/schedules/${encodeURIComponent(jobId)}`, {
+            const res = await fetch(`/api/schedule/record?schedule_id=${encodeURIComponent(jobId)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ data: exportData, entity_meta: entityMeta }),

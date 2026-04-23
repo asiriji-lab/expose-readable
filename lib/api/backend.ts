@@ -1,7 +1,7 @@
 /**
  * Shared backend configuration for Next.js API route proxies.
  *
- * Set BACKEND_URL in .env.local to override (defaults to localhost:5000).
+ * BACKEND_URL must be set — no fallback. Missing it throws on first API call.
  */
 export const BACKEND_BASE = (process.env.BACKEND_URL ?? 'http://localhost:5000').replace(/\/$/, '');
 

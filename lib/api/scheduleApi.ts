@@ -1,7 +1,5 @@
 import type { JobDetail, ScheduleResult, SubmitJobResponse } from '../../types/api';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dev.winscloud.net/api/v1';
-
 export async function submitScheduleJob(params: {
   curriculum: File | Blob;
   room: File | Blob;
@@ -34,7 +32,7 @@ export async function submitScheduleJob(params: {
   if (params.userId) form.append('user_id', params.userId);
   if (params.sheetUrl) form.append('sheet_url', params.sheetUrl);
 
-  const res = await fetch(`${API_URL}/schedule`, { method: 'POST', body: form });
+  const res = await fetch('/api/schedule/submit', { method: 'POST', body: form });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error ?? 'Failed to submit schedule job');
@@ -43,7 +41,7 @@ export async function submitScheduleJob(params: {
 }
 
 export async function getScheduleRecord(scheduleId: string): Promise<{ schedule: { status: string; sheet_url: string | null; job_name: string; error?: string; data?: any } }> {
-  const res = await fetch(`${API_URL}/schedules/${scheduleId}`);
+  const res = await fetch(`/api/schedule/record?schedule_id=${encodeURIComponent(scheduleId)}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error ?? 'Failed to get schedule record');
@@ -52,7 +50,7 @@ export async function getScheduleRecord(scheduleId: string): Promise<{ schedule:
 }
 
 export async function getJobStatus(jobId: string): Promise<JobDetail> {
-  const res = await fetch(`${API_URL}/schedule/${jobId}`);
+  const res = await fetch(`/api/schedule/status?job_id=${encodeURIComponent(jobId)}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error ?? 'Failed to get job status');
@@ -61,7 +59,7 @@ export async function getJobStatus(jobId: string): Promise<JobDetail> {
 }
 
 export async function getJobResult(jobId: string): Promise<{ result: ScheduleResult; schedule: any }> {
-  const res = await fetch(`${API_URL}/schedule/${jobId}/result`);
+  const res = await fetch(`/api/schedule/result?job_id=${encodeURIComponent(jobId)}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error ?? 'Failed to get result');
@@ -70,7 +68,7 @@ export async function getJobResult(jobId: string): Promise<{ result: ScheduleRes
 }
 
 export async function downloadScheduleZip(jobId: string): Promise<void> {
-  const res = await fetch(`${API_URL}/schedule/${jobId}/download`);
+  const res = await fetch(`/api/schedule/download?job_id=${encodeURIComponent(jobId)}`);
   if (!res.ok) throw new Error('Failed to download schedule ZIP');
   const blob = await res.blob();
   const url = window.URL.createObjectURL(blob);

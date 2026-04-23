@@ -2,6 +2,7 @@ import { TabData, ValidationError, ValidationResult } from '../types';
 import { isMarkerRow, sanitize } from '../utils/parsers';
 
 const REQUIRED_HEADERS = ['ห้องทั้งหมด'];
+const VALID_ROOM_TYPES = new Set(['general', 'homeroom', 'specialist']);
 
 /**
  * RM-1: Required columns must be present.
@@ -36,7 +37,8 @@ export function validateRoom(data: TabData): ValidationResult {
     return { tabName: 'room', valid: false, errors, warnings, rowCount: 0, parsedRows: [] };
   }
 
-  const roomIdx = headers.indexOf('ห้องทั้งหมด');
+  const roomIdx     = headers.indexOf('ห้องทั้งหมด');
+  const roomTypeIdx = headers.indexOf('ประเภทห้อง');
   const parsedRows: Record<string, string>[] = [];
   const seen = new Map<string, number>(); // roomId → first row number
 
@@ -68,7 +70,20 @@ export function validateRoom(data: TabData): ValidationResult {
       seen.set(roomId, rowNum);
     }
 
-    // No warning for empty note
+    // RM-4: ประเภทห้อง must be one of general / homeroom / specialist (optional column)
+    if (roomTypeIdx !== -1) {
+      const roomType = sanitize(row[roomTypeIdx]);
+      if (roomType && !VALID_ROOM_TYPES.has(roomType)) {
+        warnings.push({
+          row: rowNum,
+          col: roomTypeIdx + 1,
+          column: 'ประเภทห้อง',
+          value: roomType,
+          message: `Row ${rowNum}, 'ประเภทห้อง': ค่าต้องเป็น general, homeroom หรือ specialist — ได้รับ "${roomType}"`,
+          severity: 'warning',
+        });
+      }
+    }
 
     const rowMap: Record<string, string> = {};
     headers.forEach((h, i) => { rowMap[h] = sanitize(row[i]); });

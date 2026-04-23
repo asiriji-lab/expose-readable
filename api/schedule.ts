@@ -1,8 +1,6 @@
 import type { SubmitJobResponse, JobDetail, ScheduleResult, JobSummary } from '@/types/api';
 import { apiFetch } from '@/lib/apiFetch';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dev.winscloud.net/api/v1';
-
 export async function submitScheduleJob(params: {
   curriculum: File;
   room: File;
@@ -27,7 +25,7 @@ export async function submitScheduleJob(params: {
     if (text.charCodeAt(0) === 0xFEFF) {
       text = text.slice(1);
     }
-    
+
     // Globally strip phantom rows (rows with only spaces and commas like `,,,,,`)
     text = text.split(/\r?\n/).filter(line => /[^\s,]/.test(line)).join('\n');
 
@@ -53,7 +51,7 @@ export async function submitScheduleJob(params: {
       });
       text = Papa.unparse(rows);
     }
-    
+
     return new File([text], file.name || `${name}.csv`, { type: 'text/csv' });
   };
 
@@ -82,7 +80,7 @@ export async function submitScheduleJob(params: {
   if (params.orgId)       form.append('org_id', params.orgId);
   if (params.userId)      form.append('user_id', params.userId);
 
-  const res = await fetch(`${API_URL}/schedule`, {
+  const res = await fetch('/api/schedule/submit', {
     method: 'POST',
     body: form,
   });
@@ -96,7 +94,7 @@ export async function submitScheduleJob(params: {
 }
 
 export async function getJobStatus(jobId: string): Promise<JobDetail> {
-  return apiFetch<JobDetail>(`${API_URL}/schedule/${jobId}`);
+  return apiFetch<JobDetail>(`/api/schedule/status?job_id=${encodeURIComponent(jobId)}`);
 }
 
 export async function getJobResult(jobId: string): Promise<{
@@ -109,11 +107,11 @@ export async function getJobResult(jobId: string): Promise<{
     unfilled_slots: unknown[];
   };
 }> {
-  return apiFetch(`${API_URL}/schedule/${jobId}/result`);
+  return apiFetch(`/api/schedule/result?job_id=${encodeURIComponent(jobId)}`);
 }
 
 export async function downloadScheduleZip(jobId: string): Promise<void> {
-  const res = await fetch(`${API_URL}/schedule/${jobId}/download`);
+  const res = await fetch(`/api/schedule/download?job_id=${encodeURIComponent(jobId)}`);
 
   if (!res.ok) {
     const err = await res.json().catch(() => null);
@@ -132,7 +130,7 @@ export async function downloadScheduleZip(jobId: string): Promise<void> {
 }
 
 export async function deleteJob(jobId: string): Promise<void> {
-  const res = await fetch(`${API_URL}/schedule/${jobId}`, {
+  const res = await fetch(`/api/schedule/delete?job_id=${encodeURIComponent(jobId)}`, {
     method: 'DELETE',
   });
 
@@ -143,7 +141,7 @@ export async function deleteJob(jobId: string): Promise<void> {
 }
 
 export async function listJobs(): Promise<JobSummary[]> {
-  const res = await fetch(`${API_URL}/jobs`);
+  const res = await fetch('/api/schedule/jobs');
 
   if (!res.ok) throw new Error('Failed to list jobs');
 

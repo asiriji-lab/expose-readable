@@ -1,6 +1,7 @@
 import { apiFetch } from '@/lib/apiFetch';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://dev.winscloud.net/api/v1';
+// TODO: route these through Next.js API proxy routes before using client-side
+const API_URL = '/api';
 
 // --- Organizations ---
 
