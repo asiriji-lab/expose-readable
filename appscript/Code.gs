@@ -160,6 +160,12 @@ var TAB_FORMAT_RULES = {
       formula: '=AND(NOT(ISBLANK({COL}2)),NOT(REGEXMATCH({COL}2,"^\\d+(\\.\\d+)?$")))',
     },
   ],
+  'preplace': [
+    {
+      column: 'คาบ',
+      formula: '=AND(NOT(ISBLANK({COL}2)),NOT(REGEXMATCH({COL}2,"^(Everyday_\\d+|(MON|TUE|WED|THU|FRI)_\\d+)(,(Everyday_\\d+|(MON|TUE|WED|THU|FRI)_\\d+))*$")))',
+    },
+  ],
 };
 
 // ─── onEdit Cell Validators Config ────────────────────────────────────────────
@@ -218,6 +224,22 @@ var CELL_VALIDATORS = {
     'คาบ/สัปดาห์': {
       check: function(v) { return /^\d+(\.\d+)?$/.test(v) && parseFloat(v) > 0; },
       msg: 'ต้องเป็นจำนวนบวก เช่น 3 หรือ 1.5',
+    },
+  },
+  'room': {
+    'ห้องทั้งหมด': {
+      check: function(v) { return v.length > 0; },
+      msg: 'ต้องระบุรหัสห้อง',
+    },
+  },
+  'elective': {
+    'รหัสวิชา': {
+      check: function(v) { return v.length > 0; },
+      msg: 'ต้องระบุรหัสวิชา',
+    },
+    'ชื่อวิชา (เสรี)': {
+      check: function(v) { return v.length > 0; },
+      msg: 'ต้องระบุชื่อวิชา',
     },
   },
 };
@@ -356,11 +378,11 @@ function createTriggerIfNeeded_() {
  * Delegates to internal logic; catches all errors to avoid breaking the sheet.
  */
 function onEdit(e) {
-  try {
-    _handleEdit(e);
-  } catch (err) {
-    // Never let onEdit crash — silently swallow errors.
-  }
+  // Intentionally a no-op. The installable trigger (onEditInstallable) handles
+  // all edit validation with full permissions. This simple trigger is kept to
+  // satisfy the GAS contract but does NOT call _handleEdit, because both
+  // triggers fire on every edit and that causes double-execution + race conditions.
+  // The installable trigger is auto-created by createTriggerIfNeeded_() on first open.
 }
 
 /**
@@ -378,6 +400,7 @@ function onEditInstallable(e) {
 /**
  * Core logic for live per-cell validation on edit.
  * Only validates the single edited cell. NEVER runs runValidation() or cross-tab checks.
+ * (Exception: Teacher name fuzzy matching is enabled for high-priority UX).
  */
 function _handleEdit(e) {
   if (!e || !e.range) return;
@@ -389,9 +412,6 @@ function _handleEdit(e) {
 
   // Guard: skip header row
   if (editedRow === 1) return;
-
-  // Guard: skip the example row (row 2) — it's not real data
-  if (editedRow === 2) return;
 
   // Find canonical tab name from sheet name
   var sheetName = sheet.getName().trim();
@@ -411,23 +431,26 @@ function _handleEdit(e) {
   // Guard: not a known data tab (e.g. "Validation Results")
   if (!tabName) return;
 
-  // Get validators for this tab
-  var tabValidators = CELL_VALIDATORS[tabName];
-  if (!tabValidators) return;
+  // Guard: skip the example row (row 2) only if it still contains example data.
+  // If the user overwrote the example with real data, we MUST validate it.
+  if (editedRow === 2) {
+    for (var d = 0; d < TAB_DEFS.length; d++) {
+      if (TAB_DEFS[d].name === tabName) {
+        var row2Vals = sheet.getRange(2, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+        if (isExampleRow_(TAB_DEFS[d], row2Vals)) return;
+        break;
+      }
+    }
+  }
 
   // Get the column header from row 1
   var headerCell = sheet.getRange(1, editedCol);
   var headerName = sanitize(headerCell.getValue());
   if (!headerName) return;
 
-  // Look up validator for this (tab, header) combination
-  var validator = tabValidators[headerName];
-  if (!validator) return;
-
   // Get and sanitize the edited value
   var rawValue = e.value !== undefined ? e.value : range.getValue();
   var cleanValue = sanitize(String(rawValue));
-
   var cell = sheet.getRange(editedRow, editedCol);
 
   // If cell is blank, clear any previous error styling and exit
@@ -437,16 +460,85 @@ function _handleEdit(e) {
     return;
   }
 
-  // Run the validator
-  if (validator.check(cleanValue)) {
-    // Valid — clear error styling
+  // ── 1. High-Impact Referential Check: Teacher Name Fuzzy Matching ─────────
+  // We allow this in onEdit because it's a critical UX piece.
+  var isTeacherCol = (headerName === 'ครู' || headerName === 'ครูผู้สอน' || tabName === 'scout');
+  if (isTeacherCol) {
+    var validNames = _getCachedTeacherNames();
+    if (validNames.length > 0) {
+      var items = splitAndSanitize(cleanValue);
+      var missing = [];
+      var suggestion = '';
+
+      for (var k = 0; k < items.length; k++) {
+        var item = items[k];
+        if (validNames.indexOf(item) === -1) {
+          missing.push(item);
+          if (!suggestion) suggestion = fuzzyMatchTeacher(item, validNames);
+        }
+      }
+
+      if (missing.length > 0) {
+        var msg = 'ไม่พบชื่อครู: ' + missing.join(', ');
+        if (suggestion) msg += '\nคุณหมายถึง "' + suggestion + '" หรือไม่?';
+        cell.setBackground(COLOR_RED);
+        cell.setNote('⚠ ' + msg);
+        return; // Skip structural checks if referential check fails
+      }
+    }
+  }
+
+  // ── 2. Standard Structural Checks ──────────────────────────────────────────
+  var tabValidators = CELL_VALIDATORS[tabName];
+  if (tabValidators) {
+    var validator = tabValidators[headerName];
+    if (validator) {
+      if (validator.check(cleanValue)) {
+        cell.setBackground(null);
+        cell.clearNote();
+      } else {
+        cell.setBackground(COLOR_RED);
+        cell.setNote('⚠ ' + validator.msg);
+      }
+      return;
+    }
+  }
+
+  // If no specific validator, only clear error/warning state — don't touch green markers or clean cells.
+  var currentBg = cell.getBackground();
+  if (currentBg === COLOR_RED || currentBg === COLOR_YELLOW) {
     cell.setBackground(null);
     cell.clearNote();
-  } else {
-    // Invalid — mark with red + explanatory note
-    cell.setBackground(COLOR_RED);
-    cell.setNote('⚠ ' + validator.msg);
   }
+}
+
+/**
+ * Returns cached teacher names for onEdit fuzzy matching.
+ * Uses CacheService to avoid reading the teacher sheet on every keystroke.
+ * Cache TTL: 60 seconds — edits to the teacher tab are reflected within a minute.
+ */
+function _getCachedTeacherNames() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('onEdit_teacherNames');
+  if (cached) return JSON.parse(cached);
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var teacherSheet = getSheetByAliases(ss, 'teacher');
+  if (!teacherSheet) return [];
+
+  var tData = teacherSheet.getDataRange().getValues();
+  var tHeaders = tData[0].map(function(h) { return sanitize(h); });
+  var tNameIdx = tHeaders.indexOf('ชื่อ');
+  var validNames = [];
+  if (tNameIdx !== -1) {
+    for (var r = 1; r < tData.length; r++) {
+      var n = sanitize(tData[r][tNameIdx]);
+      if (n && !isSkipRow(sanitize(tData[r][0]))) validNames.push(n);
+    }
+  }
+
+  cache.put('onEdit_teacherNames', JSON.stringify(validNames), 60);
+  return validNames;
 }
 
 // ─── Skeleton Generation ──────────────────────────────────────────────────────
@@ -498,6 +590,9 @@ function generateSkeleton() {
     // ── Apply conditional formatting rules ──────────────────────────────────
     applyConditionalFormatting_(sheet, def.name, headers);
 
+    // ── Add info notes to validated column headers ──────────────────────────
+    _addValidationHints_(sheet, def.name, headers);
+
     // Protect header row — only owner can edit
     lockHeaderRow_(sheet);
   }
@@ -534,8 +629,10 @@ function _insertExampleRow_(sheet, def) {
     .setFontColor('#9E9E9E')
     .setBackground('#FFF9C4');
 
-  // Add a deletion reminder note on the first cell of the example row
-  sheet.getRange(2, 1).setNote('⬆ ตัวอย่าง — ลบแถวนี้ก่อนกรอกข้อมูลจริง');
+  // Add a deletion reminder note on all cells of the example row (not just A2)
+  for (var c = 1; c <= def.exampleRow.length; c++) {
+    sheet.getRange(2, c).setNote('⬆ ตัวอย่าง — ลบแถวนี้ก่อนกรอกข้อมูลจริง');
+  }
 }
 
 /**
@@ -595,8 +692,10 @@ function applyConditionalFormatting_(sheet, tabName, headers) {
   // Retain rules we didn't create (user-defined rules)
   // We identify our rules by color (#FFCDD2). This is a heuristic — good enough.
   for (var k = 0; k < existingRules.length; k++) {
-    var bg = existingRules[k].getBooleanCondition();
-    if (bg && bg.getBackground() === '#FFCDD2') continue; // Our rule — skip (will re-add)
+    try {
+      var bg = existingRules[k].getBooleanCondition();
+      if (bg && bg.getBackground() === '#FFCDD2') continue; // Our rule — skip (will re-add)
+    } catch (_) { /* keep non-boolean rules (e.g. gradient rules) */ }
     newRules.push(existingRules[k]);
   }
 
@@ -636,6 +735,24 @@ function columnIndexToLetter_(colIndex) {
     colIndex = Math.floor((colIndex - 1) / 26);
   }
   return letter;
+}
+
+/**
+ * Adds informational notes to header cells of columns that have live validation.
+ * Helps users understand which columns give instant feedback on edit.
+ */
+function _addValidationHints_(sheet, tabName, headers) {
+  var tabValidators = CELL_VALIDATORS[tabName];
+  if (!tabValidators) return;
+
+  for (var headerName in tabValidators) {
+    var colIdx = headers.indexOf(sanitize(headerName));
+    if (colIdx === -1) continue;
+    var headerCell = sheet.getRange(1, colIdx + 1);
+    // Don't overwrite existing notes
+    if (headerCell.getNote()) continue;
+    headerCell.setNote('ℹ️ ตรวจสอบอัตโนมัติ: ' + tabValidators[headerName].msg);
+  }
 }
 
 /**

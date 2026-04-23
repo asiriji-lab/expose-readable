@@ -22,7 +22,7 @@ import {
 } from '../../../schedule/_utils/parseCurriculum';
 import { TEACHER_META } from '../../../schedule/_utils/dummyData';
 import { SheetData, TabName } from '../../../validators/types';
-import { ALL_TAB_NAMES, extractSheetId, filenameToTabName, parseCSVText, fetchAllPublicTabs } from '../_utils/csvHelpers';
+import { ALL_TAB_NAMES, extractSheetId, filenameToTabName, parseCSVText, fetchAllSheetTabs } from '../_utils/csvHelpers';
 
 // ── Icons / labels per tab ──────────────────────────────────────────────────
 const TAB_META: Record<TabName, { icon: string; label: string }> = {
@@ -175,7 +175,9 @@ export default function DataCommandCenter({
     setLinkStatus('fetching');
 
     try {
-      const { data, missingTabs } = await fetchAllPublicTabs(id);
+      // Use the backend API (service account) instead of direct XLSX download.
+      // This works for non-public sheets and avoids CORS/login-wall issues.
+      const { data, missingTabs } = await fetchAllSheetTabs(id);
       const found = ALL_TAB_NAMES.filter((t) => data[t]);
       setLinkFound(found);
       setLinkMissing(missingTabs);
@@ -183,10 +185,9 @@ export default function DataCommandCenter({
       
       if (found.length > 0) {
         onDataLoaded(data);
-        const fullUrl = linkInput.trim().startsWith('http')
-          ? linkInput.trim()
-          : `https://docs.google.com/spreadsheets/d/${id}/edit`;
-        onSheetUrlConnected?.(fullUrl);
+        // Pass the extracted sheet ID (not full URL) to the parent callback.
+        // The parent uses this as a spreadsheet ID for subsequent operations.
+        onSheetUrlConnected?.(id);
       } else {
         setLinkError('ไม่พบแท็บข้อมูล (period, room, teacher, ...)');
       }

@@ -231,6 +231,8 @@ function validateScout(data) {
 
 // ─── 7. Elective ─────────────────────────────────────────────────────────────
 
+var ELECTIVE_SECTION_HEADER = /^เสรีม\.(ต้น|ปลาย)$/;
+
 function validateElective(data) {
   var errors = [], warnings = [];
   if (!data || data.length === 0)
@@ -240,9 +242,15 @@ function validateElective(data) {
   errors = errors.concat(_checkRequiredHeaders(headers, ['รหัสวิชา', 'ชื่อวิชา (เสรี)', 'ครูผู้สอน', 'ห้องเรียน']));
   if (errors.length) return { valid: false, errors: errors, warnings: warnings };
 
+  var subjectIdx = headers.indexOf('รหัสวิชา');
+
   for (var r = 1; r < data.length; r++) {
-    if (_isEmptyRow(data[r])) continue;
-    if (isMarkerRow(data[r])) continue;
+    var row = data[r];
+    if (_isEmptyRow(row)) continue;
+    if (isMarkerRow(row)) continue;
+    
+    var subjectId = sanitize(row[subjectIdx]);
+    if (ELECTIVE_SECTION_HEADER.test(subjectId)) continue;
   }
   return { valid: errors.length === 0, errors: errors, warnings: warnings };
 }
@@ -287,7 +295,8 @@ function buildGASLookups(allData) {
   var lookups = {
     roomIds: {},
     roomNotes: {},
-    teacherNames: {},
+    roomTypes: {},
+    teacherNames: [],
     gradeToSections: {} // grade -> map of section -> true
   };
 
@@ -297,10 +306,12 @@ function buildGASLookups(allData) {
     var h = roomData[0].map(function(c) { return sanitize(c); });
     var idIdx   = h.indexOf('ห้องทั้งหมด');
     var noteIdx = h.indexOf('หมายเหตุ');
+    var typeIdx = h.indexOf('ประเภท');
     for (var r = 1; r < roomData.length; r++) {
       if (_isEmptyRow(roomData[r]) || isMarkerRow(roomData[r])) continue;
       if (idIdx !== -1) { var id = sanitize(roomData[r][idIdx]); if (id) lookups.roomIds[id] = true; }
       if (noteIdx !== -1) { var note = sanitize(roomData[r][noteIdx]); if (note) lookups.roomNotes[note] = true; }
+      if (typeIdx !== -1) { var type = sanitize(roomData[r][typeIdx]); if (type) lookups.roomTypes[type] = true; }
     }
   }
 
@@ -311,7 +322,10 @@ function buildGASLookups(allData) {
     var nameIdx = h.indexOf('ชื่อ');
     for (var r = 1; r < teacherData.length; r++) {
       if (_isEmptyRow(teacherData[r]) || isMarkerRow(teacherData[r]) || isSkipRow(sanitize(teacherData[r][0]))) continue;
-      if (nameIdx !== -1) { var name = sanitize(teacherData[r][nameIdx]); if (name) lookups.teacherNames[name] = true; }
+      if (nameIdx !== -1) { 
+        var name = sanitize(teacherData[r][nameIdx]); 
+        if (name) lookups.teacherNames.push(name); 
+      }
     }
   }
 
@@ -324,7 +338,7 @@ function buildGASLookups(allData) {
     for (var r = 1; r < studentData.length; r++) {
       if (_isEmptyRow(studentData[r]) || isMarkerRow(studentData[r])) continue;
       var g = sanitize(studentData[r][gradeIdx]);
-      var s = parseInt(sanitize(studentData[r][sectIdx]));
+      var s = parseInt(sanitize(studentData[r][sectIdx]), 10);
       if (g && !isNaN(s)) {
         if (!lookups.gradeToSections[g]) lookups.gradeToSections[g] = {};
         lookups.gradeToSections[g][s] = true;
@@ -336,7 +350,7 @@ function buildGASLookups(allData) {
 
 function _resolveRoom(ref, lookups) {
   var v = sanitize(ref);
-  return lookups.roomIds[v] || lookups.roomNotes[v];
+  return lookups.roomIds[v] || lookups.roomNotes[v] || lookups.roomTypes[v];
 }
 
 function validateCurriculumRefs(data, lookups) {
@@ -344,26 +358,61 @@ function validateCurriculumRefs(data, lookups) {
   var headers = data[0].map(function(h) { return sanitize(h); });
   var teacherIdx = headers.indexOf('ครู');
   var roomIdx    = headers.indexOf('ห้องเรียน');
+  var classRangeIdx = headers.indexOf('ห้อง (นักเรียน) ที่สอน');
+  
+  var currentGrade = '';
 
   for (var r = 1; r < data.length; r++) {
     var row = data[r];
     var sheetRow = r + 1;
-    if (_isEmptyRow(row)) continue;
-    if (isGradeHeader(sanitize(row[0]))) continue;
-    if (isMarkerRow(row)) continue;
+    var firstCell = sanitize(row[0]);
 
-    // Teachers (Atomic)
+    if (_isEmptyRow(row)) continue;
+    if (isMarkerRow(row)) {
+      if (isGradeHeader(firstCell)) {
+        currentGrade = firstCell;
+      }
+      continue;
+    }
+
+    // 1. Teachers (Atomic + Fuzzy)
     var teachers = splitAndSanitize(row[teacherIdx]);
     for (var i = 0; i < teachers.length; i++) {
-      if (!lookups.teacherNames[teachers[i]]) {
-        errors.push(_err(sheetRow, teacherIdx + 1, 'ครู: ไม่พบชื่อครู "' + teachers[i] + '" ในแท็บ teacher'));
+      var t = teachers[i];
+      if (lookups.teacherNames.indexOf(t) === -1) {
+        var suggestion = fuzzyMatchTeacher(t, lookups.teacherNames);
+        errors.push(_err(sheetRow, teacherIdx + 1, 'ครู: ไม่พบชื่อครู "' + t + '" ในแท็บ teacher', suggestion));
       }
     }
-    // Rooms (Atomic)
+
+    // 2. Rooms (Atomic)
     var rooms = splitAndSanitize(row[roomIdx]);
     for (var i = 0; i < rooms.length; i++) {
       if (!_resolveRoom(rooms[i], lookups)) {
         errors.push(_err(sheetRow, roomIdx + 1, 'ห้องเรียน: ไม่พบห้อง "' + rooms[i] + '" ในแท็บ room'));
+      }
+    }
+
+    // 3. Class Range Check (CU-4)
+    if (classRangeIdx !== -1 && currentGrade) {
+      var classRangeStr = sanitize(row[classRangeIdx]);
+      if (classRangeStr) {
+        var sections = parseStudentClassString(classRangeStr);
+        var validSections = lookups.gradeToSections[currentGrade];
+        
+        if (!validSections) {
+          errors.push(_err(sheetRow, classRangeIdx + 1, 'ห้อง (นักเรียน) ที่สอน: ไม่พบข้อมูลนักเรียนชั้น ' + currentGrade + ' ในระบบ'));
+        } else {
+          var missing = [];
+          for (var j = 0; j < sections.length; j++) {
+            if (!validSections[sections[j]]) {
+              missing.push('/' + sections[j]);
+            }
+          }
+          if (missing.length > 0) {
+            errors.push(_err(sheetRow, classRangeIdx + 1, 'ห้อง (นักเรียน) ที่สอน: ห้อง ' + missing.join(', ') + ' ไม่มีอยู่ในชั้น ' + currentGrade));
+          }
+        }
       }
     }
   }
@@ -373,6 +422,7 @@ function validateCurriculumRefs(data, lookups) {
 function validateElectiveRefs(data, lookups) {
   var errors = [], warnings = [];
   var headers = data[0].map(function(h) { return sanitize(h); });
+  var subjectIdx = headers.indexOf('รหัสวิชา');
   var teacherIdx = headers.indexOf('ครูผู้สอน');
   var roomIdx    = headers.indexOf('ห้องเรียน');
 
@@ -381,13 +431,18 @@ function validateElectiveRefs(data, lookups) {
     var sheetRow = r + 1;
     if (_isEmptyRow(row) || isMarkerRow(row)) continue;
 
+    var subjectId = sanitize(row[subjectIdx]);
+    if (ELECTIVE_SECTION_HEADER.test(subjectId)) continue;
+
     var teachers = splitAndSanitize(row[teacherIdx]);
     if (teachers.length === 0) {
       warnings.push(_warn(sheetRow, teacherIdx + 1, 'ครูผู้สอน: ไม่ได้ระบุครูผู้สอน'));
     } else {
       for (var i = 0; i < teachers.length; i++) {
-        if (!lookups.teacherNames[teachers[i]]) {
-          errors.push(_err(sheetRow, teacherIdx + 1, 'ครูผู้สอน: ไม่พบชื่อครู "' + teachers[i] + '" ในแท็บ teacher'));
+        var t = teachers[i];
+        if (lookups.teacherNames.indexOf(t) === -1) {
+          var suggestion = fuzzyMatchTeacher(t, lookups.teacherNames);
+          errors.push(_err(sheetRow, teacherIdx + 1, 'ครูผู้สอน: ไม่พบชื่อครู "' + t + '" ในแท็บ teacher', suggestion));
         }
       }
     }
@@ -438,8 +493,10 @@ function validateScoutRefs(data, lookups) {
     for (var c = 0; c < row.length; c++) {
       var teachers = splitAndSanitize(row[c]);
       for (var i = 0; i < teachers.length; i++) {
-        if (!lookups.teacherNames[teachers[i]]) {
-          errors.push(_err(sheetRow, c + 1, headers[c] + ': ไม่พบชื่อครู "' + teachers[i] + '" ในแท็บ teacher'));
+        var t = teachers[i];
+        if (lookups.teacherNames.indexOf(t) === -1) {
+          var suggestion = fuzzyMatchTeacher(t, lookups.teacherNames);
+          errors.push(_err(sheetRow, c + 1, headers[c] + ': ไม่พบชื่อครู "' + t + '" ในแท็บ teacher', suggestion));
         }
       }
     }

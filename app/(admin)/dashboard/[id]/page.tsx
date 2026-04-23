@@ -123,10 +123,11 @@ export default function SessionDetailPage() {
     const url = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
     setConnectedSheetId(sheetId);
     setSheetUrl(url);
-    clearSheet();
+    // Don't clearSheet() or fetchSheet() here — DataCommandCenter already
+    // loaded the data via onDataLoaded before calling this callback.
+    // Only reset validation state so it can re-run on the fresh data.
     resetStates();
-    fetchSheet(sheetId);
-  }, [clearSheet, resetStates, fetchSheet, setSheetUrl]);
+  }, [resetStates, setSheetUrl]);
 
   const handleValidate = useCallback(async () => {
     resetStates();

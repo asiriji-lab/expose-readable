@@ -274,9 +274,11 @@ COLOR_HEADER = '#E8EAF6'   // header row background
 10. **Tab aliases must be preserved.** Tabs can have Thai names (`ครู`) or English names (`teacher`). `getSheetByAliases()` handles this.
 11. **`generateSkeleton()` is idempotent on headers and example rows.** It only writes headers if row 1 is empty. It only writes the example row if row 2 is empty. It always re-applies formatting, dropdowns, and conditional formatting rules.
 12. **Validation Results tab** is auto-created if missing, always cleared before each run, and navigated to after completion.
-13. **Row 2 is reserved for the example row.** `onEdit` skips row 2 entirely. `applyHighlights` skips row 2 when checking for clean rows. `_insertExampleRow_()` only writes to row 2 if it is empty.
+13. **Row 2 is reserved for the example row.** `onEdit` skips row 2 **only if it still matches the example data** (checked via `isExampleRow_`). If the user has overwritten the example with real data, row 2 is validated normally. `applyHighlights` skips row 2 when checking for clean rows. `_insertExampleRow_()` only writes to row 2 if it is empty and places reminder notes on ALL cells (not just A2).
 14. **`isExampleRow_(def, row)` auto-detects forgotten example rows.** Compares the first 2 cells of the row to the `exampleRow` in `TAB_DEFS`. If they match, the row is silently skipped in `applyHighlights`. This prevents false errors if the user forgot to delete the example.
-15. **Two onEdit triggers coexist.** `onEdit(e)` is the simple trigger (always registered, limited permissions). `onEditInstallable(e)` is the installable trigger (registered by `createTriggerIfNeeded_()`, full permissions). Both delegate to `_handleEdit(e)` and wrap it in try-catch.
+15. **Two onEdit triggers coexist but only one is active.** `onEdit(e)` is the simple trigger but is now a **no-op** to prevent double execution. `onEditInstallable(e)` is the installable trigger (registered by `createTriggerIfNeeded_()`, full permissions) and is the **sole** handler that calls `_handleEdit(e)`.
+16. **Teacher name cache in onEdit.** `_getCachedTeacherNames()` uses `CacheService.getScriptCache()` with a 60-second TTL to avoid reading the teacher sheet on every keystroke. Teacher tab edits are reflected within a minute.
+17. **Validation hint notes on headers.** `_addValidationHints_()` adds `"ℹ️ ตรวจสอบอัตโนมัติ: ..."` notes to header cells of columns that have `CELL_VALIDATORS` entries. Non-overwriting — skips columns that already have notes.
 
 ---
 
@@ -304,6 +306,7 @@ Applied during `generateSkeleton()`, range is column rows 2–1000. All use ligh
 | student | ห้อง | `=AND(NOT(ISBLANK({COL}2)), NOT(REGEXMATCH({COL}2, "^\d+$")))` |
 | period | เวลา | `=AND(NOT(ISBLANK({COL}2)), NOT(REGEXMATCH({COL}2, "^\d{2}\.\d{2}-\d{2}\.\d{2}$")), NOT(REGEXMATCH({COL}2, "^\d+$")))` |
 | curriculum | คาบ/สัปดาห์ | `=AND(NOT(ISBLANK({COL}2)), NOT(REGEXMATCH({COL}2, "^\d+(\.\d+)?$")))` |
+| preplace | คาบ | `=AND(NOT(ISBLANK({COL}2)), NOT(REGEXMATCH({COL}2, "^(Everyday_\d+\|(MON\|TUE\|WED\|THU\|FRI)_\d+)(,...)*$")))` |
 
 ---
 
@@ -324,14 +327,21 @@ Only cheap single-cell checks. Maps `(tabName, headerName) → { check: function
 | preplace | คาบ | `getInvalidPreplaceSlotTokens(v).length === 0` | `"รูปแบบ slot ไม่ถูกต้อง"` |
 | preplace | apply_to | `isValidApplyTo(v)` | `"ต้องเป็น All, ม.X หรือรายการคั่นด้วยจุลภาค"` |
 | curriculum | คาบ/สัปดาห์ | `/^\d+(\.\d+)?$/.test(v) && parseFloat(v) > 0` | `"ต้องเป็นจำนวนบวก"` |
+| room | ห้องทั้งหมด | `v.length > 0` | `"ต้องระบุรหัสห้อง"` |
+| elective | รหัสวิชา | `v.length > 0` | `"ต้องระบุรหัสวิชา"` |
+| elective | ชื่อวิชา (เสรี) | `v.length > 0` | `"ต้องระบุชื่อวิชา"` |
 
 **onEdit must:**
 - Return immediately if editing row 1 (header)
+- Return immediately if editing row 2 AND the row still matches the example data (checked via `isExampleRow_`). If the user has overwritten the example with real data, proceed with validation.
 - Return immediately if sheet is not a known data tab
 - Return immediately if column has no validator
 - Return immediately if cell is blank (clear any previous error styling)
+- When falling through without a specific validator, only clear error/warning backgrounds (red/yellow) — do NOT clear green markers from `applyHighlights`.
 - Wrap everything in try-catch — never throw from onEdit
 - NEVER call `runValidation()` or any cross-tab lookup
+- Teacher name lookup uses `_getCachedTeacherNames()` with `CacheService` (60s TTL) to avoid reading the teacher sheet on every keystroke.
+- Only the **installable** `onEditInstallable` trigger calls `_handleEdit`. The **simple** `onEdit` is a no-op to prevent double execution.
 
 ---
 

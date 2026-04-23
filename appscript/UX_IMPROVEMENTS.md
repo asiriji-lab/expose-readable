@@ -183,12 +183,21 @@ Natural workflow integration — validates without action from user.
 ## Implementation Priority
 
 | Order | Improvement | Effort | Impact | Status |
-|-------|------------|--------|--------|---------|
+|-------|------------|--------|--------|---------| 
 | **1** | 1.3 Example rows in skeleton | 30 min | ⭐⭐⭐⭐ | ✅ Done |
 | **2** | 1.2 Data validation dropdowns | 1 hr | ⭐⭐⭐⭐ | ✅ Done |
 | **3** | 2.2 Conditional formatting rules | 1.5 hr | ⭐⭐⭐⭐ | ✅ Done |
 | **4** | 1.1 Cell-level coloring + notes | 2 hr | ⭐⭐⭐⭐⭐ | ✅ Done |
 | **5** | 1.4 onEdit live validation | 3 hr | ⭐⭐⭐⭐⭐ | ✅ Done |
+| **5a** | Fix: Row 2 overwrite validation | 15 min | ⭐⭐⭐⭐⭐ | ✅ Done |
+| **5b** | Fix: Duplicate trigger execution | 10 min | ⭐⭐⭐⭐ | ✅ Done |
+| **5c** | Fix: Preserve green row markers | 10 min | ⭐⭐⭐ | ✅ Done |
+| **5d** | Fix: Cache teacher names (60s TTL) | 20 min | ⭐⭐⭐ | ✅ Done |
+| **5e** | Add: room/elective live validators | 20 min | ⭐⭐⭐ | ✅ Done |
+| **5f** | Add: preplace conditional formatting | 15 min | ⭐⭐ | ✅ Done |
+| **5g** | Add: Header validation hint notes | 15 min | ⭐⭐⭐ | ✅ Done |
+| **5h** | Fix: Example row notes on all cells | 5 min | ⭐⭐ | ✅ Done |
+| **5i** | Fix: Guard CF against non-boolean | 5 min | ⭐ | ✅ Done |
 | **6** | 2.1 Status dashboard tab | 2 hr | ⭐⭐⭐ | ⬜ Next |
 | **7** | 3.1 Deep link to cell (web app) | 1 hr | ⭐⭐⭐ | ⬜ Next |
 | **8** | 3.2 Pre-submit gate (web app) | 2 hr | ⭐⭐⭐ | ⬜ Next |

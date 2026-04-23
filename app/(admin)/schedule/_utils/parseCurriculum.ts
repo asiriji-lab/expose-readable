@@ -308,12 +308,14 @@ function resolveVariant(subjectCode: string): 'green' | 'red' {
  * Adapter for DevTestPanel: converts papaparse string[][] back to CSV text
  * and delegates to parseCurriculumCSV.
  */
-export function parseCurriculumRows(rows: string[][]): ParseResult {
+export function parseCurriculumRows(rows: any[][]): ParseResult {
     const csvText = rows.map(row =>
-        row.map(cell => cell.includes(',') || cell.includes('"')
-            ? `"${cell.replace(/"/g, '""')}"`
-            : cell
-        ).join(',')
+        row.map(cell => {
+            const strCell = String(cell ?? '');
+            return strCell.includes(',') || strCell.includes('"')
+                ? `"${strCell.replace(/"/g, '""')}"`
+                : strCell;
+        }).join(',')
     ).join('\n');
     return parseCurriculumCSV(csvText);
 }
