@@ -17,6 +17,7 @@ var TAB_VALIDATORS = {
 
 // Phase mapping for referential checks
 var REF_VALIDATORS = {
+  'room':       validateRoomRefs,
   'curriculum': validateCurriculumRefs,
   'elective':   validateElectiveRefs,
   'student':    validateStudentRefs,
@@ -65,8 +66,8 @@ var TAB_DEFS = [
   },
   {
     name: 'room',
-    headers: ['ห้องทั้งหมด', 'หมายเหตุ', 'ประเภท', 'ประเภทห้อง'],
-    exampleRow: ['101', 'ห้องปฏิบัติการวิทย์', 'ห้องเรียนพิเศษ', 'specialist'],
+    headers: ['room_id', 'ชื่อห้อง', 'ชั้นเรียนประจำ', 'ประเภท'],
+    exampleRow: ['LAB1', 'ห้องปฏิบัติการวิทย์', '', 'LAB'],
   },
   {
     name: 'teacher',
@@ -75,8 +76,8 @@ var TAB_DEFS = [
   },
   {
     name: 'student',
-    headers: ['นักเรียน', 'ชั้น', 'ห้อง', 'ห้องประจำ', 'หลักสูตร'],
-    exampleRow: ['1/1', 'ม.1', '1', '101', 'วิทย์-คณิต'],
+    headers: ['นักเรียน', 'ชั้น', 'ห้อง', 'หลักสูตร'],
+    exampleRow: ['1/1', 'ม.1', '1', 'วิทย์-คณิต'],
   },
   {
     name: 'preplace',
@@ -115,8 +116,7 @@ var TAB_VALIDATIONS = {
     { column: 'apply_to', values: ['All', 'ม.1', 'ม.2', 'ม.3', 'ม.4', 'ม.5', 'ม.6'] },
   ],
   'room': [
-    { column: 'ประเภท', values: ['ห้องเรียนปกติ', 'ห้องเรียนพิเศษ', 'ห้องปฏิบัติการ', 'โรงยิม', 'สนาม'] },
-    { column: 'ประเภทห้อง', values: ['general', 'homeroom', 'specialist'] },
+    { column: 'ประเภท', values: ['exclude'] },
   ],
 };
 
@@ -228,9 +228,9 @@ var CELL_VALIDATORS = {
     },
   },
   'room': {
-    'ห้องทั้งหมด': {
+    'room_id': {
       check: function(v) { return v.length > 0; },
-      msg: 'ต้องระบุรหัสห้อง',
+      msg: 'ต้องระบุroom_id',
     },
   },
   'elective': {

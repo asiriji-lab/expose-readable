@@ -12,17 +12,21 @@ export function buildLookups(phase1Results: ValidationResult[]): LookupTables {
   const periodResult  = phase1Results.find((r) => r.tabName === 'period');
   const preplaceResult = phase1Results.find((r) => r.tabName === 'preplace');
 
-  // ── Room lookups (3-way: ID | alias/note | category/type) ──────────────
+  // ── Room lookups (3-way: ID | room_name | tags) ─────────────────────────
   const roomIds   = new Set<string>();
   const roomNotes = new Set<string>();
   const roomTypes = new Set<string>();
   for (const row of roomResult?.parsedRows ?? []) {
-    const id = sanitize(row['ห้องทั้งหมด']);
-    const note = sanitize(row['หมายเหตุ']);
-    const type = sanitize(row['ประเภท']);
+    const id      = sanitize(row['room_id']);
+    const name    = sanitize(row['ชื่อห้อง']);
+    const tagsRaw = sanitize(row['ประเภท']);
     if (id) roomIds.add(id);
-    if (note) roomNotes.add(note);
-    if (type) roomTypes.add(type);
+    if (name) roomNotes.add(name);
+    if (tagsRaw) {
+      for (const tag of tagsRaw.split(',').map((t) => t.trim()).filter(Boolean)) {
+        roomTypes.add(tag);
+      }
+    }
   }
 
   // ── Teacher lookups ─────────────────────────────────────────────────────

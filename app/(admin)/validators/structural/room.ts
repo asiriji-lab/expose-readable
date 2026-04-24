@@ -1,13 +1,15 @@
 import { TabData, ValidationError, ValidationResult } from '../types';
 import { isMarkerRow, sanitize } from '../utils/parsers';
 
-const REQUIRED_HEADERS = ['ห้องทั้งหมด'];
-const VALID_ROOM_TYPES = new Set(['general', 'homeroom', 'specialist']);
+const REQUIRED_HEADERS = ['room_id'];
+const INVALID_TAGS = new Set(['homeroom']); // reserved word moved to class_id column
 
 /**
  * RM-1: Required columns must be present.
- * RM-2: "ห้องทั้งหมด" (room ID) must be non-empty for every data row.
+ * RM-2: "room_id" must be non-empty for every data row.
  * RM-3: No duplicate room IDs.
+ * RM-4: 'ประเภท' must not contain reserved tag "homeroom" (use ชั้นเรียนประจำ instead).
+ * RM-5: 'ชั้นเรียนประจำ' and 'ประเภท' should not both be filled.
  */
 export function validateRoom(data: TabData): ValidationResult {
   const errors: ValidationError[] = [];
@@ -37,10 +39,11 @@ export function validateRoom(data: TabData): ValidationResult {
     return { tabName: 'room', valid: false, errors, warnings, rowCount: 0, parsedRows: [] };
   }
 
-  const roomIdx     = headers.indexOf('ห้องทั้งหมด');
-  const roomTypeIdx = headers.indexOf('ประเภทห้อง');
+  const roomIdx  = headers.indexOf('room_id');
+  const classIdx = headers.indexOf('ชั้นเรียนประจำ');
+  const tagsIdx  = headers.indexOf('ประเภท');
   const parsedRows: Record<string, string>[] = [];
-  const seen = new Map<string, number>(); // roomId → first row number
+  const seen = new Map<string, number>();
 
   for (let r = 1; r < data.length; r++) {
     const row = data[r];
@@ -52,37 +55,44 @@ export function validateRoom(data: TabData): ValidationResult {
 
     // RM-2: room ID non-empty
     if (!roomId) {
-      errors.push({ row: rowNum, col: roomIdx + 1, column: 'ห้องทั้งหมด', value: roomId, message: `Row ${rowNum}, 'ห้องทั้งหมด': Room ID is required.`, severity: 'error' });
+      errors.push({ row: rowNum, col: roomIdx + 1, column: 'room_id', value: roomId, message: `Row ${rowNum}, 'room_id': ต้องระบุroom_id`, severity: 'error' });
       continue;
     }
 
     // RM-3: no duplicates
     if (seen.has(roomId)) {
       errors.push({
-        row: rowNum,
-        col: roomIdx + 1,
-        column: 'ห้องทั้งหมด',
-        value: roomId,
-        message: `Row ${rowNum}, 'ห้องทั้งหมด': Duplicate room ID "${roomId}" (also row ${seen.get(roomId)}).`,
+        row: rowNum, col: roomIdx + 1, column: 'room_id', value: roomId,
+        message: `Row ${rowNum}, 'room_id': รหัสซ้ำ "${roomId}" (แถว ${seen.get(roomId)})`,
         severity: 'error',
       });
     } else {
       seen.set(roomId, rowNum);
     }
 
-    // RM-4: ประเภทห้อง must be one of general / homeroom / specialist (optional column)
-    if (roomTypeIdx !== -1) {
-      const roomType = sanitize(row[roomTypeIdx]);
-      if (roomType && !VALID_ROOM_TYPES.has(roomType)) {
-        warnings.push({
-          row: rowNum,
-          col: roomTypeIdx + 1,
-          column: 'ประเภทห้อง',
-          value: roomType,
-          message: `Row ${rowNum}, 'ประเภทห้อง': ค่าต้องเป็น general, homeroom หรือ specialist — ได้รับ "${roomType}"`,
-          severity: 'warning',
-        });
+    const tagsVal  = tagsIdx  !== -1 ? sanitize(row[tagsIdx])  : '';
+    const classVal = classIdx !== -1 ? sanitize(row[classIdx]) : '';
+
+    // RM-4: warn if 'ประเภท' contains reserved tag 'homeroom'
+    if (tagsVal) {
+      for (const tag of tagsVal.split(',').map((t) => t.trim()).filter(Boolean)) {
+        if (INVALID_TAGS.has(tag.toLowerCase())) {
+          warnings.push({
+            row: rowNum, col: tagsIdx + 1, column: 'ประเภท', value: tagsVal,
+            message: `Row ${rowNum}, 'ประเภท': แท็ก "${tag}" ไม่ถูกต้อง — ใช้คอลัมน์ 'ชั้นเรียนประจำ' แทน`,
+            severity: 'warning',
+          });
+        }
       }
+    }
+
+    // RM-5: homeroom room should not also have tags
+    if (classVal && tagsVal) {
+      warnings.push({
+        row: rowNum, col: tagsIdx + 1, column: 'ประเภท', value: tagsVal,
+        message: `Row ${rowNum}: ห้อง homeroom ไม่ควรมี 'ประเภท' — ระบุ 'ชั้นเรียนประจำ' อย่างเดียว`,
+        severity: 'warning',
+      });
     }
 
     const rowMap: Record<string, string> = {};

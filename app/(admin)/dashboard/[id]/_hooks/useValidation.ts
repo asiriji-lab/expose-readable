@@ -19,6 +19,7 @@ import { validateElective } from '../../../validators/structural/elective';
 import { validateCurriculum } from '../../../validators/structural/curriculum';
 import { buildLookups } from '../../../validators/referential/lookups';
 import { validateStudentRefs } from '../../../validators/referential/studentRefs';
+import { validateRoomRefs } from '../../../validators/referential/roomRefs';
 import { validateScoutRefs } from '../../../validators/referential/scoutRefs';
 import { validateElectiveRefs } from '../../../validators/referential/electiveRefs';
 import { validateCurriculumRefs } from '../../../validators/referential/curriculumRefs';
@@ -92,13 +93,16 @@ export function useValidation(sheetData: SheetData) {
     const curriculumStructural = validateCurriculum(source['curriculum'] ?? []);
 
     // Referential checks layered on top
+    const roomPhase1    = phase1Results.find((r) => r.tabName === 'room')!;
     const studentPhase1 = phase1Results.find((r) => r.tabName === 'student')!;
-    const scoutRef = validateScoutRefs(scoutStructural, lookups);
-    const electiveRef = validateElectiveRefs(electiveStructural, lookups);
+    const roomRef       = validateRoomRefs(roomPhase1, lookups);
+    const scoutRef      = validateScoutRefs(scoutStructural, lookups);
+    const electiveRef   = validateElectiveRefs(electiveStructural, lookups);
     const curriculumRef = validateCurriculumRefs(curriculumStructural, lookups);
-    const studentRef = validateStudentRefs(studentPhase1, lookups);
+    const studentRef    = validateStudentRefs(studentPhase1, lookups);
 
-    // Update student state with Phase 2 errors merged in
+    // Update room/student state with Phase 2 errors merged in
+    setTabState('room',    { status: deriveStatus(roomRef),    result: roomRef });
     setTabState('student', { status: deriveStatus(studentRef), result: studentRef });
 
     const phase2Results: [TabName, ValidationResult][] = [

@@ -33,10 +33,10 @@ const TAB_COLUMN_MAP: Record<string, Record<string, string>> = {
     'เวลา': 'period_time',
   },
   room: {
-    'ห้องทั้งหมด': 'room_id',
-    'หมายเหตุ': 'note',
-    'ประเภท': 'tag',
-    'ประเภทห้อง': 'room_type',
+    'room_id': 'room_id',
+    'ชื่อห้อง': 'room_name',
+    'ชั้นเรียนประจำ': 'class_id',
+    'ประเภท': 'tags',
   },
   teacher: {
     'ชื่อ': 'teacher_name',
@@ -48,7 +48,6 @@ const TAB_COLUMN_MAP: Record<string, Record<string, string>> = {
     'ชั้นเรียน': 'class_id',
     'ชั้น': 'grade',
     'ห้อง': 'section',
-    'ห้องประจำ': 'default_room',
     'หลักสูตร': 'curriculum',
   },
   preplace: {

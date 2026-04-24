@@ -70,13 +70,13 @@ function validateRoom(data) {
     return { valid: false, errors: [_err(1, 1, 'Tab "room" is empty.')], warnings: [] };
 
   var headers = data[0].map(function(h) { return sanitize(h); });
-  errors = errors.concat(_checkRequiredHeaders(headers, ['ห้องทั้งหมด']));
+  errors = errors.concat(_checkRequiredHeaders(headers, ['room_id']));
   if (errors.length) return { valid: false, errors: errors, warnings: warnings };
 
-  var roomIdx     = headers.indexOf('ห้องทั้งหมด');
-  var roomTypeIdx = headers.indexOf('ประเภทห้อง');
+  var roomIdx  = headers.indexOf('room_id');
+  var classIdx = headers.indexOf('ชั้นเรียนประจำ');
+  var tagsIdx  = headers.indexOf('ประเภท');
   var seen = {};
-  var validRoomTypes = { 'general': true, 'homeroom': true, 'specialist': true };
 
   for (var r = 1; r < data.length; r++) {
     var row      = data[r];
@@ -85,19 +85,32 @@ function validateRoom(data) {
     if (!roomId && _isEmptyRow(row)) continue;
     if (isMarkerRow(row)) continue;
     if (!roomId) {
-      errors.push(_err(sheetRow, roomIdx + 1, 'ห้องทั้งหมด: ต้องระบุรหัสห้อง'));
+      errors.push(_err(sheetRow, roomIdx + 1, 'room_id: ต้องระบุroom_id'));
       continue;
     }
     if (seen[roomId]) {
-      errors.push(_err(sheetRow, roomIdx + 1, 'ห้องทั้งหมด: รหัสห้องซ้ำ "' + roomId + '" (แถว ' + seen[roomId] + ')'));
+      errors.push(_err(sheetRow, roomIdx + 1, 'room_id: รหัสซ้ำ "' + roomId + '" (แถว ' + seen[roomId] + ')'));
     } else {
       seen[roomId] = sheetRow;
     }
-    if (roomTypeIdx !== -1) {
-      var roomType = sanitize(row[roomTypeIdx]);
-      if (roomType && !validRoomTypes[roomType]) {
-        warnings.push(_err(sheetRow, roomTypeIdx + 1, 'ประเภทห้อง: ต้องเป็น general, homeroom หรือ specialist — ได้รับ "' + roomType + '"'));
+
+    var tagsVal  = tagsIdx  !== -1 ? sanitize(row[tagsIdx])  : '';
+    var classVal = classIdx !== -1 ? sanitize(row[classIdx]) : '';
+
+    // RM-4: warn if tags contain reserved word 'homeroom'
+    if (tagsVal) {
+      var tagList = tagsVal.split(',');
+      for (var t = 0; t < tagList.length; t++) {
+        var tag = sanitize(tagList[t]).toLowerCase();
+        if (tag === 'homeroom') {
+          warnings.push(_warn(sheetRow, tagsIdx + 1, 'ประเภท: แท็ก "homeroom" ไม่ถูกต้อง — ใช้คอลัมน์ "ชั้นเรียนประจำ" แทน'));
+        }
       }
+    }
+
+    // RM-5: homeroom should not also have tags
+    if (classVal && tagsVal) {
+      warnings.push(_warn(sheetRow, tagsIdx + 1, 'ประเภท: ห้อง homeroom ไม่ควรมี "ประเภท" — ระบุ "ชั้นเรียนประจำ" อย่างเดียว'));
     }
   }
   return { valid: errors.length === 0, errors: errors, warnings: warnings };
@@ -305,21 +318,31 @@ function buildGASLookups(allData) {
     roomNotes: {},
     roomTypes: {},
     teacherNames: [],
-    gradeToSections: {} // grade -> map of section -> true
+    gradeToSections: {}, // grade -> map of section -> true
+    classIds: {}         // class_id -> true
   };
 
   // 1. Room Lookups
   var roomData = allData['room'];
   if (roomData && roomData.length > 1) {
     var h = roomData[0].map(function(c) { return sanitize(c); });
-    var idIdx   = h.indexOf('ห้องทั้งหมด');
-    var noteIdx = h.indexOf('หมายเหตุ');
-    var typeIdx = h.indexOf('ประเภท');
+    var idIdx   = h.indexOf('room_id');
+    var nameIdx = h.indexOf('ชื่อห้อง');
+    var tagsIdx = h.indexOf('ประเภท');
     for (var r = 1; r < roomData.length; r++) {
       if (_isEmptyRow(roomData[r]) || isMarkerRow(roomData[r])) continue;
       if (idIdx !== -1) { var id = sanitize(roomData[r][idIdx]); if (id) lookups.roomIds[id] = true; }
-      if (noteIdx !== -1) { var note = sanitize(roomData[r][noteIdx]); if (note) lookups.roomNotes[note] = true; }
-      if (typeIdx !== -1) { var type = sanitize(roomData[r][typeIdx]); if (type) lookups.roomTypes[type] = true; }
+      if (nameIdx !== -1) { var name = sanitize(roomData[r][nameIdx]); if (name) lookups.roomNotes[name] = true; }
+      if (tagsIdx !== -1) {
+        var tagsRaw = sanitize(roomData[r][tagsIdx]);
+        if (tagsRaw) {
+          var tagList = tagsRaw.split(',');
+          for (var t = 0; t < tagList.length; t++) {
+            var tag = sanitize(tagList[t]);
+            if (tag) lookups.roomTypes[tag] = true;
+          }
+        }
+      }
     }
   }
 
@@ -337,14 +360,16 @@ function buildGASLookups(allData) {
     }
   }
 
-  // 3. Student Grade Lookups
+  // 3. Student Grade + Class Lookups
   var studentData = allData['student'];
   if (studentData && studentData.length > 1) {
     var h = studentData[0].map(function(c) { return sanitize(c); });
-    var gradeIdx = h.indexOf('ชั้น');
-    var sectIdx  = h.indexOf('ห้อง');
+    var classColIdx = h.indexOf('นักเรียน');
+    var gradeIdx    = h.indexOf('ชั้น');
+    var sectIdx     = h.indexOf('ห้อง');
     for (var r = 1; r < studentData.length; r++) {
       if (_isEmptyRow(studentData[r]) || isMarkerRow(studentData[r])) continue;
+      if (classColIdx !== -1) { var cid = sanitize(studentData[r][classColIdx]); if (cid) lookups.classIds[cid] = true; }
       var g = sanitize(studentData[r][gradeIdx]);
       var s = parseInt(sanitize(studentData[r][sectIdx]), 10);
       if (g && !isNaN(s)) {
@@ -469,21 +494,27 @@ function validateElectiveRefs(data, lookups) {
   return { valid: errors.length === 0, errors: errors, warnings: warnings };
 }
 
+// ห้องประจำ removed from student sheet — no referential room checks needed
 function validateStudentRefs(data, lookups) {
+  return { valid: true, errors: [], warnings: [] };
+}
+
+function validateRoomRefs(data, lookups) {
   var errors = [], warnings = [];
-  var headers = data[0].map(function(h) { return sanitize(h); });
-  var roomIdx = headers.indexOf('ห้องประจำ');
+  if (!data || data.length < 2) return { valid: true, errors: [], warnings: [] };
+
+  var headers  = data[0].map(function(h) { return sanitize(h); });
+  var classIdx = headers.indexOf('ชั้นเรียนประจำ');
+  if (classIdx === -1) return { valid: true, errors: [], warnings: [] };
 
   for (var r = 1; r < data.length; r++) {
-    var row = data[r];
+    var row      = data[r];
     var sheetRow = r + 1;
     if (_isEmptyRow(row) || isMarkerRow(row)) continue;
 
-    var rooms = splitAndSanitize(row[roomIdx]);
-    for (var i = 0; i < rooms.length; i++) {
-      if (!_resolveRoom(rooms[i], lookups)) {
-        errors.push(_err(sheetRow, roomIdx + 1, 'ห้องประจำ: ไม่พบห้อง "' + rooms[i] + '" ในแท็บ room'));
-      }
+    var classId = sanitize(row[classIdx]);
+    if (classId && !lookups.classIds[classId]) {
+      errors.push(_err(sheetRow, classIdx + 1, 'ชั้นเรียนประจำ: ไม่พบ "' + classId + '" ในแท็บ student'));
     }
   }
   return { valid: errors.length === 0, errors: errors, warnings: warnings };
