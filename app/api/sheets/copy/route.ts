@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAuthUser } from '@/utils/auth/server';
 
 /**
  * POST /api/sheets/copy
- * 
+ *
  * Acts as a secure messenger between the Dashboard and the Google Apps Script.
+ * Email is read from the server-side auth cookie — not from the request body.
  */
 export async function POST(req: NextRequest) {
   try {
-    const { userEmail, title } = await req.json();
+    const { title } = await req.json();
+    const authUser = await getAuthUser();
+    const userEmail = authUser?.email ?? null;
     const gasUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
 
     if (!gasUrl) {

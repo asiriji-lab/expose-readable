@@ -13,7 +13,6 @@ import { useGoogleSheet } from './_hooks/useGoogleSheet';
 import { TabName } from '../../validators/types';
 import SessionInfoCard, { SessionInfo } from './_components/SessionInfoCard';
 import { submitScheduleJob, getScheduleRecord } from '@/lib/api/scheduleApi';
-import { supabase } from '@/lib/supabase';
 import Papa from 'papaparse';
 import { stripMarkerRows } from './_utils/csvHelpers';
 
@@ -79,14 +78,10 @@ export default function SessionDetailPage() {
   const handleCreateSkeleton = useCallback(async () => {
     setIsCreatingSheet(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const userEmail = session?.user?.email;
-
       const res = await fetch('/api/sheets/copy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userEmail,
           title: sessionInfo.name?.trim() || undefined,
         }),
       });
