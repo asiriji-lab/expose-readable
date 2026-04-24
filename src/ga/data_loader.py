@@ -511,11 +511,23 @@ def get_lesson_available_slots(
         key = f"student:{cid}"
         if key in free_slots:
             available &= free_slots[key]
-    # BUG-4 FIX: intersect required room free slots
-    for rid in lesson.required_rooms:
-        key = f"room:{rid}"
+    # Room constraint: single required room → intersection (must use that room).
+    # Multiple required rooms → UNION then intersect (lesson can use any one of them;
+    # a slot is available if at least one room is free at that time).
+    if len(lesson.required_rooms) == 1:
+        key = f"room:{lesson.required_rooms[0]}"
         if key in free_slots:
             available &= free_slots[key]
+    elif len(lesson.required_rooms) > 1:
+        room_union: Set[Tuple[str, str]] = set()
+        any_known = False
+        for rid in lesson.required_rooms:
+            key = f"room:{rid}"
+            if key in free_slots:
+                room_union |= free_slots[key]
+                any_known = True
+        if any_known:
+            available &= room_union
     return list(available)
 
 

@@ -222,8 +222,10 @@ class FeasibilityChecker:
                 teacher_demand[tid] += ppw
             for cid in lesson.student_classes:
                 student_demand[cid] += ppw
-            for rid in lesson.required_rooms:
-                room_demand[rid] += ppw
+            # Multiple required_rooms = alternatives: lesson uses exactly ONE.
+            # Attribute demand only when a single room is required.
+            if len(lesson.required_rooms) == 1:
+                room_demand[lesson.required_rooms[0]] += ppw
 
         for tid, demand in teacher_demand.items():
             free_count = len(self.free_slots.get(f"teacher:{tid}", self.all_slots))
@@ -268,14 +270,42 @@ class FeasibilityChecker:
             needed = lesson.periods_per_week
             label = f"{lesson.subject_id} (class {'/'.join(lesson.student_classes)})"
 
+            if len(available) >= needed:
+                continue
+
+            # Build per-entity slot counts for diagnostics
+            teacher_counts = {
+                tid: len(self.free_slots.get(f"teacher:{tid}", self.all_slots))
+                for tid in lesson.teacher_ids
+            }
+            student_counts = {
+                cid: len(self.free_slots.get(f"student:{cid}", self.all_slots))
+                for cid in lesson.student_classes
+            }
+
+            teacher_info = " | ".join(f"{t}: {c} slots" for t, c in teacher_counts.items()) or "no teachers"
+            student_info = " | ".join(f"{c}: {n} slots" for c, n in student_counts.items()) or "no classes"
+
+            detail = (
+                f"{label}: only {len(available)} slots in intersection but needs {needed} periods\n"
+                f"        teacher slots : {teacher_info}\n"
+                f"        student slots : {student_info}"
+            )
+
+            if lesson.required_rooms:
+                room_counts = {
+                    rid: len(self.free_slots.get(f"room:{rid}", self.all_slots))
+                    for rid in lesson.required_rooms
+                }
+                room_info = " | ".join(f"{r}: {c} slots" for r, c in room_counts.items())
+                detail += f"\n        room slots    : {room_info} ({'alternatives' if len(lesson.required_rooms) > 1 else 'required'})"
+
             if len(available) == 0:
                 report.add('ERROR', 'lesson_slots', lesson.lesson_id,
-                    f"{label}: 0 slots available — teacher and class schedules "
-                    f"have no free overlap at all")
-            elif len(available) < needed:
-                report.add('ERROR', 'lesson_slots', lesson.lesson_id,
-                    f"{label}: only {len(available)} slots available "
-                    f"but needs {needed} periods")
+                    detail.replace(f"only {len(available)} slots in intersection",
+                                   "0 slots in intersection — no free overlap at all"))
+            else:
+                report.add('ERROR', 'lesson_slots', lesson.lesson_id, detail)
 
     # =========================================================================
     # CHECK 3: Block structure feasibility
@@ -344,30 +374,42 @@ class FeasibilityChecker:
             if len(available_days) < n_blocks:
                 label = f"{lesson.subject_id} (class {'/'.join(lesson.student_classes)})"
 
-                # Per-entity free-day breakdown to show which entity is the bottleneck
-                teacher_days: Dict[str, set] = {}
+                # Per-entity free-day breakdown (with per-day slot counts to reveal slot-level gaps)
+                def _day_slot_summary(slots: Set[Tuple[str, str]]) -> str:
+                    by_day: Dict[str, int] = defaultdict(int)
+                    for d, _ in slots:
+                        by_day[d] += 1
+                    return '{' + ', '.join(f"{d}:{by_day[d]}" for d in sorted(by_day)) + '}'
+
+                teacher_info_parts = []
                 for tid in lesson.teacher_ids:
                     t_slots = self.free_slots.get(f"teacher:{tid}", self.all_slots)
-                    teacher_days[tid] = {d for d, _ in t_slots}
+                    teacher_info_parts.append(f"{tid}: {_day_slot_summary(t_slots)}")
+                teacher_info = " | ".join(teacher_info_parts) or "no teachers"
 
-                student_days: Dict[str, set] = {}
+                student_info_parts = []
                 for cid in lesson.student_classes:
                     s_slots = self.free_slots.get(f"student:{cid}", self.all_slots)
-                    student_days[cid] = {d for d, _ in s_slots}
+                    student_info_parts.append(f"{cid}: {_day_slot_summary(s_slots)}")
+                student_info = " | ".join(student_info_parts) or "no classes"
 
-                teacher_info = " | ".join(
-                    f"{t}: {sorted(d)}" for t, d in teacher_days.items()
-                ) or "no teachers"
-                student_info = " | ".join(
-                    f"{c}: {sorted(d)}" for c, d in student_days.items()
-                ) or "no classes"
-
-                report.add('ERROR', 'day_diversity', lesson.lesson_id,
+                detail = (
                     f"{label}: needs {n_blocks} separate days for its blocks "
                     f"(pattern={lesson.block_pattern}) but intersection only has "
                     f"{len(available_days)} day(s): {sorted(available_days)}\n"
-                    f"        teacher free days : {teacher_info}\n"
-                    f"        student free days : {student_info}")
+                    f"        teacher free slots: {teacher_info}\n"
+                    f"        student free slots: {student_info}"
+                )
+
+                if lesson.required_rooms:
+                    room_info_parts = []
+                    for rid in lesson.required_rooms:
+                        r_slots = self.free_slots.get(f"room:{rid}", self.all_slots)
+                        room_info_parts.append(f"{rid}: {_day_slot_summary(r_slots)}")
+                    room_label = 'alternatives' if len(lesson.required_rooms) > 1 else 'required'
+                    detail += f"\n        room free slots  : {' | '.join(room_info_parts)} ({room_label})"
+
+                report.add('ERROR', 'day_diversity', lesson.lesson_id, detail)
 
     # =========================================================================
     # PUBLIC API
