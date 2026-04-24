@@ -347,7 +347,7 @@ function buildGASLookups(allData) {
           var tagList = tagsRaw.split(',');
           for (var t = 0; t < tagList.length; t++) {
             var tag = sanitize(tagList[t]);
-            if (tag) lookups.roomTypes[tag] = true;
+            if (tag && tag.toLowerCase() !== 'exclude') lookups.roomTypes[tag] = true;
           }
         }
       }
@@ -426,11 +426,13 @@ function validateCurriculumRefs(data, lookups) {
       }
     }
 
-    // 2. Rooms (Atomic)
+    // 2. Rooms (id/name=hard, tag=soft, exclude=forbidden)
     var rooms = splitAndSanitize(row[roomIdx]);
     for (var i = 0; i < rooms.length; i++) {
-      if (!_resolveRoom(rooms[i], lookups)) {
-        errors.push(_err(sheetRow, roomIdx + 1, 'ห้องเรียน: ไม่พบห้อง "' + rooms[i] + '" ในแท็บ room'));
+      if (rooms[i].toLowerCase() === 'exclude') {
+        errors.push(_err(sheetRow, roomIdx + 1, 'ห้องเรียน: ไม่สามารถใช้แท็ก "exclude" เป็นห้องเรียนได้ — ระบุรหัสห้องตรงๆ แทน'));
+      } else if (!_resolveRoom(rooms[i], lookups)) {
+        errors.push(_err(sheetRow, roomIdx + 1, 'ห้องเรียน: ไม่พบ "' + rooms[i] + '" — ต้องเป็น room_id, ชื่อห้อง, หรือแท็กที่มีอยู่ในแท็บ room'));
       }
     }
 

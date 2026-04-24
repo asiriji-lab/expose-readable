@@ -34,13 +34,19 @@ export function validateCurriculumRefs(
       }
     }
 
-    // 2. Room Check (Supports multiple)
+    // 2. Room Check (Supports multiple — id/name=hard, tag=soft, exclude=forbidden)
     const rooms = splitAndSanitize(row['ห้องเรียน']);
     for (const rRef of rooms) {
-      if (!resolveRoom(rRef, lookups)) {
+      if (rRef.toLowerCase() === 'exclude') {
         errors.push({
           row: rowNum, col: -1, column: 'ห้องเรียน', value: rRef,
-          message: `Row ${rowNum}, 'ห้องเรียน': ไม่พบห้อง "${rRef}" ในระบบ`,
+          message: `Row ${rowNum}, 'ห้องเรียน': ไม่สามารถใช้แท็ก "exclude" เป็นห้องเรียนได้ — ระบุรหัสห้องตรงๆ แทน`,
+          severity: 'error'
+        });
+      } else if (!resolveRoom(rRef, lookups)) {
+        errors.push({
+          row: rowNum, col: -1, column: 'ห้องเรียน', value: rRef,
+          message: `Row ${rowNum}, 'ห้องเรียน': ไม่พบ "${rRef}" — ต้องเป็น room_id, ชื่อห้อง, หรือแท็กที่มีอยู่ในแท็บ room`,
           severity: 'error'
         });
       }

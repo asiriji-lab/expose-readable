@@ -24,7 +24,7 @@ export function buildLookups(phase1Results: ValidationResult[]): LookupTables {
     if (name) roomNotes.add(name);
     if (tagsRaw) {
       for (const tag of tagsRaw.split(',').map((t) => t.trim()).filter(Boolean)) {
-        roomTypes.add(tag);
+        if (tag.toLowerCase() !== 'exclude') roomTypes.add(tag);
       }
     }
   }
