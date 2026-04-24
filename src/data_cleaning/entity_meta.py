@@ -67,9 +67,20 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
                 'department': dept if dept and dept != 'nan' else '',
             }
 
+    # ── Build homeroom map from room sheet (class_id column) ────────────────
+    _EMPTY_VALS = {'', 'nan', 'none'}
+    homeroom_from_room: Dict[str, str] = {}  # class_id → room_id
+
+    if df_room is not None and not df_room.empty:
+        for _, row in df_room.iterrows():
+            rid = str(row.get('room_id', '')).strip()
+            cid = str(row.get('class_id', '')).strip()
+            if rid and rid.lower() not in _EMPTY_VALS and cid and cid.lower() not in _EMPTY_VALS:
+                homeroom_from_room[cid] = rid
+
     # ── Class codes / meta (from student.csv) ───────────────────────────────
-    class_default_room: Dict[str, str] = {}
     class_level: Dict[str, str] = {}
+    class_codes_set: set = set()
 
     if df_student is not None and not df_student.empty:
         for _, row in df_student.iterrows():
@@ -88,25 +99,24 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
                 continue
             grade_num = m.group(1)
             class_code = f"{grade_num}/{section}"
-            if class_code not in class_default_room:
-                dr = str(row.get('default_room', '')).strip()
-                class_default_room[class_code] = '' if dr in ('nan', 'None', '') else dr
+            if class_code not in class_codes_set:
+                class_codes_set.add(class_code)
                 class_level[class_code] = f"ม.{grade_num}"
 
     class_codes = sorted(
-        class_default_room.keys(),
+        class_codes_set,
         key=lambda c: tuple(int(x) for x in c.split('/'))
     )
     class_meta = {
         code: {
-            'defaultRoom': class_default_room[code],
+            'defaultRoom': homeroom_from_room.get(code, ''),
             'level': class_level.get(code, ''),
         }
         for code in class_codes
     }
 
     # ── Room codes / meta ────────────────────────────────────────────────────
-    homeroom_ids = {v for v in class_default_room.values() if v}
+    homeroom_room_ids = set(homeroom_from_room.values())
     room_codes: List[str] = []
     room_meta: Dict = {}
 
@@ -115,9 +125,16 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
             rid = str(row.get('room_id', '')).strip()
             if not rid or rid == 'nan':
                 continue
-            note = str(row.get('note', '')).strip()
-            name = note if note and note != 'nan' else rid
-            room_type = 'homeroom' if rid in homeroom_ids else 'specialist'
+            room_name = str(row.get('room_name', '')).strip()
+            name = room_name if room_name and room_name != 'nan' else rid
+            cid = str(row.get('class_id', '')).strip()
+            tags = str(row.get('tags', '')).strip()
+            if cid and cid.lower() not in _EMPTY_VALS:
+                room_type = 'homeroom'
+            elif tags and tags.lower() not in _EMPTY_VALS:
+                room_type = 'specialist'
+            else:
+                room_type = 'general'
             room_codes.append(rid)
             room_meta[rid] = {'name': name, 'type': room_type}
 

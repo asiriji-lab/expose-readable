@@ -94,14 +94,14 @@ class ScheduleJsonExporter:
         df = self.manager.get_sheet_data('room')
         if df is not None:
             for _, row in df.iterrows():
-                rid  = str(row.get('room_id', '')).strip()
-                note = str(row.get('note',    '')).strip()
-                tag  = str(row.get('tag',     '')).strip()
+                rid       = str(row.get('room_id',   '')).strip()
+                room_name = str(row.get('room_name', '')).strip()
+                tags      = str(row.get('tags',      '')).strip()
                 if not rid or rid == 'nan':
                     continue
                 meta[rid] = {
-                    'name': note if note and note != 'nan' else rid,
-                    'tag':  tag  if tag  and tag  != 'nan' else None,
+                    'name': room_name if room_name and room_name != 'nan' else rid,
+                    'tag':  tags if tags and tags != 'nan' else None,
                 }
         return meta
 

@@ -37,17 +37,16 @@ prepalce_column = {
 }
 
 room_column = {
-    'ห้องทั้งหมด': 'room_id',
-    'หมายเหตุ': 'note',
-    'ประเภท': 'tag',
-    'ประเภทห้อง': 'room_type',
+    'room_id': 'room_id',
+    'ชื่อห้อง': 'room_name',
+    'ชั้นเรียนประจำ': 'class_id',
+    'ประเภท': 'tags',
 }
 
 student_column = {
     'นักเรียน': 'class_id',
     'ชั้น': 'grade',
     'ห้อง': 'section',
-    'ห้องประจำ': 'default_room',
     'หลักสูตร': 'curriculum'
 }
 

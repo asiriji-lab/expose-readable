@@ -370,32 +370,20 @@ def build_room_type_data(
     """
     Returns (homeroom_map, homeroom_room_to_class, general_rooms, specialist_rooms).
 
-    homeroom_map          : class_id  -> room_id   (from student.default_room)
-    homeroom_room_to_class: room_id   -> class_id  (reverse of homeroom_map)
+    homeroom_map          : class_id  -> room_id   (from room.class_id)
+    homeroom_room_to_class: room_id   -> class_id  (reverse)
     general_rooms         : [room_id] available to any lesson without required_rooms
     specialist_rooms      : {room_id} excluded from free pool; only via curriculum.room
 
-    Room type resolution order (explicit room_type column wins):
-      1. explicit room_type column value  ('general' | 'homeroom' | 'specialist')
-      2. room_id found in homeroom_map    -> 'homeroom'
-      3. tag column non-empty             -> 'specialist'
-      4. fallback                         -> 'general'
+    Room type resolution (room sheet only):
+      1. class_id column filled  -> homeroom (excluded from general pool)
+      2. tags column non-empty   -> specialist (excluded from general pool)
+      3. fallback                -> general
     """
-    df_room    = manager.get_sheet_data('room')
-    df_student = manager.get_sheet_data('student')
+    df_room = manager.get_sheet_data('room')
 
-    # Build homeroom map from student sheet (source of truth for homeroom ownership)
     homeroom_map: Dict[str, str] = {}
-    if df_student is not None and 'default_room' in df_student.columns:
-        for _, row in df_student.iterrows():
-            class_id = str(row.get('class_id', '')).strip()
-            room_id  = str(row.get('default_room', '')).strip()
-            if class_id and room_id and room_id not in ('', 'nan', 'None'):
-                homeroom_map[class_id] = room_id
-
-    homeroom_room_ids: set = set(homeroom_map.values())
-    homeroom_room_to_class: Dict[str, str] = {v: k for k, v in homeroom_map.items()}
-
+    homeroom_room_to_class: Dict[str, str] = {}
     general_rooms:    List[str] = []
     specialist_rooms: set       = set()
 
@@ -407,25 +395,21 @@ def build_room_type_data(
             if not room_id or room_id.lower() in _EMPTY:
                 continue
 
-            explicit = str(row.get('room_type', '')).strip().lower()
-            tag      = str(row.get('tag',       '')).strip().lower()
+            class_id = str(row.get('class_id', '')).strip()
+            tags     = str(row.get('tags',     '')).strip()
 
-            if explicit and explicit not in _EMPTY:
-                resolved = explicit
-            elif room_id in homeroom_room_ids:
-                resolved = 'homeroom'
-            elif tag and tag not in _EMPTY:
-                resolved = 'specialist'
-            else:
-                resolved = 'general'
-
-            if resolved == 'general':
-                general_rooms.append(room_id)
-            else:
+            if class_id and class_id.lower() not in _EMPTY:
+                homeroom_map[class_id] = room_id
+                homeroom_room_to_class[room_id] = class_id
                 specialist_rooms.add(room_id)
+            elif tags and tags.lower() not in _EMPTY:
+                specialist_rooms.add(room_id)
+            else:
+                general_rooms.append(room_id)
 
+    homeroom_room_ids = set(homeroom_map.values())
     print(f"  [GA] Room pool — general:{len(general_rooms)}  "
-          f"homeroom:{len(homeroom_room_ids)}  specialist:{len(specialist_rooms)}")
+          f"homeroom:{len(homeroom_room_ids)}  specialist:{len(specialist_rooms) - len(homeroom_room_ids)}")
     return homeroom_map, homeroom_room_to_class, general_rooms, specialist_rooms
 
 

@@ -3,51 +3,49 @@ from typing import Dict, List, Union, Any
 import re
 from src.data_cleaning.columns import csv_column_mapping
 
-# helper funciton to create map for room_name / tag -> 'room_id'
+# helper funciton to create map for room_name / tags -> 'room_id'
 def create_room_lookup(df_room: pd.DataFrame) -> Dict[str, List[str]]:
-    room_cols = ['room_id', 'note', 'tag']
-    if not all(col in df_room.columns for col in room_cols):
-        print(f"🚨 ERROR: Room DataFrame is missing required columns: {room_cols}. Skipping lookup creation.")
+    if 'room_id' not in df_room.columns:
+        print("🚨 ERROR: Room DataFrame missing 'room_id' column. Skipping lookup creation.")
         return {}
 
     tag_to_rooms = {}
-    
+
+    df_room = df_room.copy()
     df_room['room_id'] = df_room['room_id'].astype(str).str.strip()
-    df_room['note'] = df_room['note'].fillna('').astype(str).str.strip()
-    df_room['tag'] = df_room['tag'].fillna('').astype(str).str.strip()
+    df_room['room_name'] = df_room['room_name'].fillna('').astype(str).str.strip() if 'room_name' in df_room.columns else ''
+    df_room['tags'] = df_room['tags'].fillna('').astype(str).str.strip() if 'tags' in df_room.columns else ''
+
+    _SKIP = {'', 'nan', 'none'}
 
     for _, row in df_room.iterrows():
         room_id = row['room_id']
-        raw_note = row['note']
-        raw_tags = row['tag']
-        
-        if not room_id:
+        raw_name = str(row.get('room_name', '')).strip()
+        raw_tags = str(row.get('tags', '')).strip()
+
+        if not room_id or room_id.lower() in _SKIP:
             continue
-            
+
         all_keys = set()
-        
-        # Add values from the 'constraints' column
-        const_keys = [c.strip() for c in raw_note.split(',') if c.strip()]
-        all_keys.update(const_keys)
-        
-        # Add values from the 'tag' column
-        tag_keys = [t.strip() for t in raw_tags.split(',') if t.strip()]
+
+        if raw_name and raw_name.lower() not in _SKIP:
+            all_keys.add(raw_name)
+
+        tag_keys = [t.strip() for t in raw_tags.split(',') if t.strip() and t.strip().lower() not in _SKIP]
         all_keys.update(tag_keys)
-        
-        # 2. Map the room's ID back to itself (for direct lookup by ID)
+
         if room_id not in tag_to_rooms:
             tag_to_rooms[room_id] = []
         if room_id not in tag_to_rooms[room_id]:
             tag_to_rooms[room_id].append(room_id)
-        
-        # 3. Map all collected keys (constraints/tags) to the room ID
+
         for key in all_keys:
             if key not in tag_to_rooms:
                 tag_to_rooms[key] = []
             if room_id not in tag_to_rooms[key]:
                 tag_to_rooms[key].append(room_id)
-                
-    print(f"✅ Room requirement lookup generated (using constraints and tag columns). Total unique lookup keys: {len(tag_to_rooms)}")
+
+    print(f"✅ Room requirement lookup generated (room_name and tags). Total unique lookup keys: {len(tag_to_rooms)}")
     return tag_to_rooms
 
 # helper funciton to create map for teacher_name -> 'teacher_id'

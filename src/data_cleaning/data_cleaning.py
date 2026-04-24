@@ -79,9 +79,9 @@ def rename_csv_columns(input_data: Dict[str, pd.DataFrame], csv_column_mapping: 
 # Keys are the English column names (post-rename) so the cleaner functions
 # can check .empty and return early without KeyErrors.
 _EMPTY_STUBS: dict[str, pd.DataFrame] = {
-    'student':    pd.DataFrame(columns=['class_id', 'grade', 'section', 'default_room', 'curriculum']),
+    'student':    pd.DataFrame(columns=['class_id', 'grade', 'section', 'curriculum']),
     'teacher':    pd.DataFrame(columns=['teacher_id', 'teacher_name', 'available_slots', 'unavailable_slots', 'constraint']),
-    'room':       pd.DataFrame(columns=['room_id', 'note', 'tag', 'room_type']),
+    'room':       pd.DataFrame(columns=['room_id', 'room_name', 'class_id', 'tags']),
     'elective':   pd.DataFrame(columns=['subject_id', 'subject_name', 'teacher', 'room']),
     'scout':      pd.DataFrame(columns=[]),
 }
