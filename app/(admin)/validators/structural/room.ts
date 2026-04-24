@@ -2,7 +2,6 @@ import { TabData, ValidationError, ValidationResult } from '../types';
 import { isMarkerRow, sanitize } from '../utils/parsers';
 
 const REQUIRED_HEADERS = ['room_id'];
-const INVALID_TAGS = new Set(['homeroom']); // reserved word moved to class_id column
 
 /**
  * RM-1: Required columns must be present.
@@ -73,24 +72,27 @@ export function validateRoom(data: TabData): ValidationResult {
     const tagsVal  = tagsIdx  !== -1 ? sanitize(row[tagsIdx])  : '';
     const classVal = classIdx !== -1 ? sanitize(row[classIdx]) : '';
 
-    // RM-4: warn if 'ประเภท' contains reserved tag 'homeroom'
-    if (tagsVal) {
-      for (const tag of tagsVal.split(',').map((t) => t.trim()).filter(Boolean)) {
-        if (INVALID_TAGS.has(tag.toLowerCase())) {
-          warnings.push({
-            row: rowNum, col: tagsIdx + 1, column: 'ประเภท', value: tagsVal,
-            message: `Row ${rowNum}, 'ประเภท': แท็ก "${tag}" ไม่ถูกต้อง — ใช้คอลัมน์ 'ชั้นเรียนประจำ' แทน`,
-            severity: 'warning',
-          });
-        }
-      }
+    const hasHomeroomTag = tagsVal
+      ? tagsVal.split(',').map((t) => t.trim().toLowerCase()).includes('homeroom')
+      : false;
+    const nonHomeroomTags = tagsVal
+      ? tagsVal.split(',').map((t) => t.trim()).filter((t) => t.toLowerCase() !== 'homeroom' && t)
+      : [];
+
+    // RM-4: tag=homeroom requires class_id
+    if (hasHomeroomTag && !classVal) {
+      errors.push({
+        row: rowNum, col: tagsIdx + 1, column: 'ประเภท', value: tagsVal,
+        message: `Row ${rowNum}, 'ประเภท': แท็ก "homeroom" ต้องระบุ 'ชั้นเรียนประจำ' ด้วย`,
+        severity: 'error',
+      });
     }
 
-    // RM-5: homeroom room should not also have tags
-    if (classVal && tagsVal) {
+    // RM-5: homeroom room should not mix with other capability tags
+    if (classVal && nonHomeroomTags.length > 0) {
       warnings.push({
         row: rowNum, col: tagsIdx + 1, column: 'ประเภท', value: tagsVal,
-        message: `Row ${rowNum}: ห้อง homeroom ไม่ควรมี 'ประเภท' — ระบุ 'ชั้นเรียนประจำ' อย่างเดียว`,
+        message: `Row ${rowNum}: ห้อง homeroom ไม่ควรมีแท็กอื่น — ได้รับ "${nonHomeroomTags.join(',')}"`,
         severity: 'warning',
       });
     }

@@ -47,6 +47,7 @@ export default function SessionDetailPage() {
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
 
   const [isCreatingSheet, setIsCreatingSheet] = useState(false);
+  const [isFetchingSheet, setIsFetchingSheet] = useState(false);
 
   // When navigating to an existing job (non-new), load status + sheet_url from DB
   useEffect(() => {
@@ -125,11 +126,14 @@ export default function SessionDetailPage() {
   }, [resetStates, setSheetUrl]);
 
   const handleValidate = useCallback(async () => {
+    setIsFetchingSheet(true);
     resetStates();
     if (connectedSheetId) {
       const result = await fetchSheet(connectedSheetId);
+      setIsFetchingSheet(false);
       if (result) runValidation(result.data);
     } else {
+      setIsFetchingSheet(false);
       runValidation(sheetData);
     }
   }, [connectedSheetId, sheetData, resetStates, fetchSheet, runValidation]);
@@ -248,7 +252,7 @@ export default function SessionDetailPage() {
         {(generationState === 'idle' || generationState === 'generating') && (
           <ValidationSection
             tabStates={tabStates}
-            isRunning={isRunning}
+            isRunning={isFetchingSheet || isRunning}
             missingTabs={missingTabs}
             onValidate={handleValidate}
             onTabClick={setOpenTab}
@@ -279,7 +283,7 @@ export default function SessionDetailPage() {
             if (openTab) updateTabRow(openTab, rowIndex, key, value);
           }}
           onRevalidate={handleValidate}
-          isRunning={isRunning}
+          isRunning={isFetchingSheet || isRunning}
         />
       </main>
     </div>

@@ -26,11 +26,17 @@ export async function POST(req: NextRequest) {
     const response = await fetch(gasUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        email: userEmail, 
-        title: title 
+      body: JSON.stringify({                                                                                                                                           
+        email: userEmail,                                                                                                                                              
+        title: title                                                                                                                                                   
       }),
     });
+    const contentType = response.headers.get('content-type') ?? '';                                                                                                    
+    if (!contentType.includes('application/json')) {                                                                                                                   
+      const text = await response.text();                                                                                                                              
+      console.error('[/api/sheets/copy] GAS returned non-JSON:', text.slice(0, 200));                                                                                  
+      throw new Error(`Google Apps Script returned non-JSON (status ${response.status}). Response: ${text.slice(0, 300)}`);                                               
+    }
 
     const data = await response.json();
 

@@ -106,9 +106,9 @@ export const TAB_ALIASES: Record<TabName, string[]> = {
  */
 export function isMarkerRow(row: string[]): boolean {
   if (!row || row.length === 0) return false;
-  const first = (row[0] ?? '').trim();
+  const first = String(row[0] ?? '').trim();
   if (!first) return false;
-  const restEmpty = row.slice(1).every((c) => !(c ?? '').trim());
+  const restEmpty = row.slice(1).every((c) => !String(c ?? '').trim());
   if (!restEmpty) return false;
   if (/^ม\.[1-6]$/.test(first)) return true;
   if (/:\s*$/.test(first)) return true;
@@ -121,9 +121,9 @@ export function isMarkerRow(row: string[]): boolean {
  */
 function isColonMarkerRow(row: string[]): boolean {
   if (!row || row.length === 0) return false;
-  const first = (row[0] ?? '').trim();
+  const first = String(row[0] ?? '').trim();
   if (!first) return false;
-  const restEmpty = row.slice(1).every((c) => !(c ?? '').trim());
+  const restEmpty = row.slice(1).every((c) => !String(c ?? '').trim());
   return restEmpty && /:\s*$/.test(first);
 }
 
