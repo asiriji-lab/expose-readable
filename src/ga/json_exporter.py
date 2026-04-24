@@ -387,6 +387,43 @@ class ScheduleJsonExporter:
                         "class":        class_str,
                     }
 
+        # ── Inject locked lessons (fixed-period curriculum rows from preschedule) ──
+        for locked in getattr(self.manager, 'locked_lessons', []):
+            t_names = [self._teacher_name(tid) for tid in locked.get('teacher_ids', [])]
+            t_name = t_names[0] if t_names else None
+            classes = locked.get('student_classes', [])
+            class_str = classes[0] if classes else None
+            room_str = locked.get('room')
+
+            for (day, label) in locked.get('slots', []):
+                key = (day, label)
+
+                for tid in locked.get('teacher_ids', []):
+                    if key not in teacher_ga[tid]:
+                        teacher_ga[tid][key] = {
+                            "subject_id":   locked['subject_id'],
+                            "subject_name": locked['subject_name'],
+                            "class":        class_str,
+                            "room":         room_str,
+                        }
+
+                for cid in classes:
+                    if key not in student_ga[cid]:
+                        student_ga[cid][key] = {
+                            "subject_id":   locked['subject_id'],
+                            "subject_name": locked['subject_name'],
+                            "teacher":      t_name,
+                            "room":         room_str,
+                        }
+
+                if room_str and key not in room_ga[room_str]:
+                    room_ga[room_str][key] = {
+                        "subject_id":   locked['subject_id'],
+                        "subject_name": locked['subject_name'],
+                        "teacher":      t_name,
+                        "class":        class_str,
+                    }
+
         # Post-pass: annotate teacher cells with teaching_type when multiple
         # teachers share the same (day, slot, class, subject).
         # Same room → 'team'; different rooms → 'split'.

@@ -8,7 +8,7 @@ import re
 import numpy as np
 import pandas as pd
 from collections import defaultdict
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 def _parse_list_field(value: Any) -> List[str]:
@@ -24,6 +24,17 @@ def _parse_list_field(value: Any) -> List[str]:
         except Exception:
             pass
     return [x.strip() for x in s.split(',') if x.strip()]
+
+
+def _parse_constraint_type_em(constraint_str: Any) -> Optional[str]:
+    if constraint_str is None or (isinstance(constraint_str, float) and np.isnan(constraint_str)):
+        return None
+    s = str(constraint_str).upper().replace(' ', '')
+    if not s or s in ('NAN', 'NONE'):
+        return None
+    if 'TYPE=MULTI_CLASS_TEAM' in s:
+        return 'MULTI_CLASS_TEAM'
+    return None
 
 
 def _subject_variant(subject_id: str, subject_name: str) -> str:
@@ -191,6 +202,7 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
             rooms = _parse_list_field(row.get('room')) if row.get('room') is not None else []
             assignment_room = rooms[0] if rooms else ''
             variant = _subject_variant(sid, sname)
+            constraint_type = _parse_constraint_type_em(row.get('constraint', ''))
 
             for tid in tids:
                 if sid not in workload_map[tid]:
@@ -201,15 +213,26 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
                         'assignments': [],
                         'totalPeriods': 0,
                     }
-                for class_code in classes:
+
+                if constraint_type == 'MULTI_CLASS_TEAM':
+                    # All classes share the same slot — one combined assignment per row.
+                    # This keeps sum(assignment.periodsPerWeek) == totalPeriods.
                     workload_map[tid][sid]['assignments'].append({
-                        'classCode': class_code,
+                        'classCode': ','.join(classes),
+                        'studentClasses': classes,
                         'room': assignment_room,
                         'periodsPerWeek': ppw,
+                        'isMultiClass': True,
                     })
-                # totalPeriods counts actual periods the teacher is present —
-                # for multi-class lessons all classes share the same slot, so
-                # add ppw once regardless of how many classes are in the row.
+                else:
+                    for class_code in classes:
+                        workload_map[tid][sid]['assignments'].append({
+                            'classCode': class_code,
+                            'room': assignment_room,
+                            'periodsPerWeek': ppw,
+                        })
+
+                # Teacher is physically present ppw periods regardless of class count.
                 workload_map[tid][sid]['totalPeriods'] += ppw
 
         for tid, subject_entries in workload_map.items():

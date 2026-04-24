@@ -1,8 +1,44 @@
+import ast
+import numpy as np
 import pandas as pd
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import re
 from src.preschedule.scheduleManager import ScheduleManager
 from src.types import PeriodItemData
+
+
+def _parse_list_field(value: Any) -> List[str]:
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return []
+    s = str(value).strip()
+    if not s or s in ('nan', 'None'):
+        return []
+    if s.startswith('['):
+        try:
+            items = ast.literal_eval(s)
+            return [str(i).strip() for i in items if i]
+        except Exception:
+            pass
+    return [x.strip() for x in s.split(',') if x.strip()]
+
+
+def _parse_constraint_type(constraint_str: Any) -> Optional[str]:
+    if constraint_str is None or (isinstance(constraint_str, float) and np.isnan(constraint_str)):
+        return None
+    s = str(constraint_str).upper().replace(' ', '')
+    if not s or s in ('NAN', 'NONE'):
+        return None
+    if 'TYPE=MULTI_CLASS_TEAM' in s:
+        return 'MULTI_CLASS_TEAM'
+    if 'TYPE=TEAM' in s:
+        return 'TEAM'
+    if 'TYPE=SEPERATE_SLOT' in s:
+        return 'SEPERATE_SLOT'
+    if 'TYPE=SUB_GROUP' in s:
+        return 'SUB_GROUP'
+    if 'TYPE=TEACHER_SPLIT' in s:
+        return 'TEACHER_SPLIT'
+    return None
 
 
 class PrescheduleProcessor:
@@ -50,7 +86,10 @@ class PrescheduleProcessor:
         
         # Task 5: Assign Scout Sessions
         results['task5'] = self.task5_assign_scout_sessions()
-        
+
+        # Task 6: Lock fixed curriculum lessons (MULTI_CLASS_TEAM with fixed_period)
+        results['task6'] = self.task6_lock_fixed_curriculum_lessons()
+
         # Generate final report
         results['summary'] = self._generate_summary()
         
@@ -449,6 +488,122 @@ class PrescheduleProcessor:
 
     
     
+    # ========================================================================
+    # TASK 6: Lock Fixed Curriculum Lessons
+    # ========================================================================
+
+    def task6_lock_fixed_curriculum_lessons(self) -> Dict:
+        """
+        Pre-place curriculum rows that have a fixed_period value.
+        These rows are skipped by the GA (they already have their slot).
+        Each placed lesson is stored in manager.locked_lessons so the
+        JSON exporter can include them as normal editable lessons in the output.
+        """
+        print("\n--- TASK 6: Lock Fixed Curriculum Lessons ---")
+
+        df_curriculum = self.manager.get_sheet_data('curriculum')
+        if df_curriculum is None:
+            return {"status": "skipped", "reason": "curriculum sheet not found"}
+
+        locked_count = 0
+        failed_count = 0
+        locked_lesson_counter = 0
+
+        for idx, row in df_curriculum.iterrows():
+            fixed_period_raw = row.get('fixed_period')
+            fp_str = str(fixed_period_raw).strip() if fixed_period_raw is not None else ''
+            if fp_str in ('', 'nan', 'None'):
+                continue
+
+            constraint_type = _parse_constraint_type(row.get('constraint', ''))
+
+            # Skip SUB_GROUP — the GA handles these via fixed_period as a slot hint.
+            if constraint_type == 'SUB_GROUP':
+                continue
+
+            subject_id = str(row.get('subject_id', '')).strip()
+            subject_name = str(row.get('subject_name', '')).strip()
+            if not subject_id or subject_id == 'nan':
+                continue
+
+            teacher_ids = _parse_list_field(row.get('teacher'))
+            student_classes = _parse_list_field(row.get('student_class'))
+            if not student_classes:
+                print(f"  [LOCKED] Row {idx} ({subject_id}): no student classes — skipped.")
+                continue
+
+            rooms = _parse_list_field(row.get('room'))
+            room_id = rooms[0] if rooms else None
+
+            ppw_raw = row.get('periods_per_week')
+            try:
+                ppw = int(float(ppw_raw)) if ppw_raw is not None else 1
+            except (ValueError, TypeError):
+                ppw = 1
+
+            block_pattern = str(row.get('block_pattern', str(ppw))).strip()
+            if not block_pattern or block_pattern == 'nan':
+                block_pattern = str(ppw)
+
+            # For non-MULTI_CLASS_TEAM rows, place each class independently.
+            # For MULTI_CLASS_TEAM, place all classes together (one entry per slot).
+            if constraint_type == 'MULTI_CLASS_TEAM':
+                class_groups = [student_classes]
+            else:
+                class_groups = [[c] for c in student_classes]
+
+            parsed_slots = self._parse_period_range(fp_str)
+            if not parsed_slots:
+                print(f"  [LOCKED] Row {idx} ({subject_id}): could not parse fixed_period '{fp_str}' — skipped.")
+                continue
+
+            for class_group in class_groups:
+                placed_slot_labels: List[Tuple[str, str]] = []
+
+                for day, period_label in parsed_slots:
+                    period_col = self._find_period_column(period_label)
+                    if not period_col:
+                        print(f"  [LOCKED] Period '{period_label}' not found, skipping.")
+                        continue
+
+                    ok = self.manager.place_locked_lesson(
+                        day=day,
+                        period_col=period_col,
+                        subject_id=subject_id,
+                        teacher_ids=teacher_ids,
+                        student_classes=class_group,
+                        room_id=room_id,
+                    )
+                    if ok:
+                        placed_slot_labels.append((day, period_label))
+                    else:
+                        failed_count += 1
+
+                if placed_slot_labels:
+                    locked_lesson_counter += 1
+                    self.manager.locked_lessons.append({
+                        'lesson_id': f"LOCKED_{locked_lesson_counter:04d}",
+                        'subject_id': subject_id,
+                        'subject_name': subject_name,
+                        'teacher_ids': teacher_ids,
+                        'student_classes': class_group,
+                        'room': room_id,
+                        'slots': placed_slot_labels,
+                        'block_pattern': block_pattern,
+                        'constraint_type': constraint_type,
+                    })
+                    locked_count += 1
+
+        print(f"✅ Locked {locked_count} curriculum lesson(s) into grids.")
+        if failed_count:
+            print(f"⚠️  {failed_count} slot placement(s) failed (conflicts).")
+
+        return {
+            "status": "success",
+            "locked": locked_count,
+            "failed": failed_count,
+        }
+
     # ========================================================================
     # HELPER METHODS
     # ========================================================================

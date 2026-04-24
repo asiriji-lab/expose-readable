@@ -10,16 +10,21 @@ class ScheduleManager:
     def __init__(self):
         self.periods: List[PeriodItemData] = []
         self.weekdays: List[str] = ["MON", "TUE", "WED", "THU", "FRI"]
-        
+
         self.template_grid: Optional[pd.DataFrame] = None
-        
+
         self.student_grids: Dict[str, pd.DataFrame] = {}
         self.teacher_grids: Dict[str, pd.DataFrame] = {}
         self.room_grids: Dict[str, pd.DataFrame] = {}
-        
+
         self.conflicts: List[Dict[str, Any]] = []
-        
+
         self.sheets: Dict[str, pd.DataFrame] = {}
+
+        # Curriculum lessons with fixed slots pre-placed in preschedule.
+        # Each entry: {subject_id, subject_name, teacher_ids, student_classes,
+        #              room, slots: [(day, period_label)], block_pattern}
+        self.locked_lessons: List[Dict[str, Any]] = []
 
     def initialize_grids(self, periods: List[PeriodItemData]) -> str:
         """Creates the template DataFrame based on structured period data"""
@@ -108,7 +113,65 @@ class ScheduleManager:
             r_grid.at[day, period_col] = r_value
 
         return "SUCCESS: Slot scheduled."
-    
+
+    def place_locked_lesson(
+        self,
+        day: str,
+        period_col: str,
+        subject_id: str,
+        teacher_ids: List[str],
+        student_classes: List[str],
+        room_id: Optional[str],
+    ) -> bool:
+        """
+        Mark all entity grids as occupied for a fixed/locked curriculum lesson.
+        All student_classes, teacher_ids, and room are placed atomically.
+        Returns True on success; logs a conflict and returns False if any slot is taken.
+        """
+        occupied_msgs: List[str] = []
+
+        for cid in student_classes:
+            g = self._get_or_create_grid("student", cid)
+            if pd.notna(g.at[day, period_col]):
+                occupied_msgs.append(f"Class {cid} busy with {g.at[day, period_col]}")
+
+        for tid in teacher_ids:
+            g = self._get_or_create_grid("teacher", tid)
+            if pd.notna(g.at[day, period_col]):
+                occupied_msgs.append(f"Teacher {tid} busy with {g.at[day, period_col]}")
+
+        if room_id:
+            g = self._get_or_create_grid("room", room_id)
+            if pd.notna(g.at[day, period_col]):
+                occupied_msgs.append(f"Room {room_id} busy with {g.at[day, period_col]}")
+
+        if occupied_msgs:
+            self.conflicts.append({
+                "type": "locked_lesson",
+                "subject_id": subject_id,
+                "day": day,
+                "period": period_col,
+                "reason": "; ".join(occupied_msgs),
+            })
+            return False
+
+        classes_str = ','.join(student_classes)
+        teachers_str = ','.join(teacher_ids)
+
+        for cid in student_classes:
+            g = self._get_or_create_grid("student", cid)
+            g.at[day, period_col] = subject_id
+
+        for tid in teacher_ids:
+            g = self._get_or_create_grid("teacher", tid)
+            g.at[day, period_col] = f"{classes_str} ({subject_id}) at {room_id or 'NoRoomListed'}"
+
+        if room_id:
+            g = self._get_or_create_grid("room", room_id)
+            g.at[day, period_col] = f"{classes_str} ({subject_id}) with {teachers_str}"
+
+        return True
+
     def load_sheet_data(self, sheet_name: str, data: pd.DataFrame) -> str:
         """Loads a pandas DataFrame into the manager"""
         self.sheets[sheet_name] = data
