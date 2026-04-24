@@ -34,7 +34,23 @@ def _parse_constraint_type_em(constraint_str: Any) -> Optional[str]:
         return None
     if 'TYPE=MULTI_CLASS_TEAM' in s:
         return 'MULTI_CLASS_TEAM'
+    if 'TYPE=TEACHER_SPLIT' in s:
+        return 'TEACHER_SPLIT'
     return None
+
+
+def _parse_block_pattern_em(pattern: Any) -> List[int]:
+    if pattern is None or (isinstance(pattern, float) and np.isnan(pattern)):
+        return [1]
+    s = str(pattern).strip()
+    if not s or s == 'nan':
+        return [1]
+    try:
+        if '-' in s:
+            return [int(x) for x in s.split('-')]
+        return [int(float(s))]
+    except ValueError:
+        return [1]
 
 
 def _subject_variant(subject_id: str, subject_name: str) -> str:
@@ -204,7 +220,16 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
             variant = _subject_variant(sid, sname)
             constraint_type = _parse_constraint_type_em(row.get('constraint', ''))
 
-            for tid in tids:
+            # TEACHER_SPLIT: pair each teacher with their block size from block_pattern
+            block_pattern_raw = row.get('block_pattern')
+            block_sizes = _parse_block_pattern_em(block_pattern_raw)
+            is_teacher_split = (
+                constraint_type == 'TEACHER_SPLIT'
+                and len(tids) == len(block_sizes)
+                and len(tids) > 1
+            )
+
+            for t_idx, tid in enumerate(tids):
                 if sid not in workload_map[tid]:
                     workload_map[tid][sid] = {
                         'subjectCode': sid,
@@ -215,8 +240,7 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
                     }
 
                 if constraint_type == 'MULTI_CLASS_TEAM':
-                    # All classes share the same slot — one combined assignment per row.
-                    # This keeps sum(assignment.periodsPerWeek) == totalPeriods.
+                    # All classes share one slot — teacher physically present ppw times.
                     workload_map[tid][sid]['assignments'].append({
                         'classCode': ','.join(classes),
                         'studentClasses': classes,
@@ -224,16 +248,29 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
                         'periodsPerWeek': ppw,
                         'isMultiClass': True,
                     })
+                    workload_map[tid][sid]['totalPeriods'] += ppw
+
+                elif is_teacher_split:
+                    # Each teacher teaches their own block per class, not full ppw.
+                    teacher_ppw = block_sizes[t_idx]
+                    for class_code in classes:
+                        workload_map[tid][sid]['assignments'].append({
+                            'classCode': class_code,
+                            'room': assignment_room,
+                            'periodsPerWeek': teacher_ppw,
+                        })
+                    workload_map[tid][sid]['totalPeriods'] += teacher_ppw * len(classes)
+
                 else:
+                    # Default / TEAM / SEPERATE_SLOT / SUB_GROUP:
+                    # GA creates one lesson per class — teacher teaches ppw × num_classes periods.
                     for class_code in classes:
                         workload_map[tid][sid]['assignments'].append({
                             'classCode': class_code,
                             'room': assignment_room,
                             'periodsPerWeek': ppw,
                         })
-
-                # Teacher is physically present ppw periods regardless of class count.
-                workload_map[tid][sid]['totalPeriods'] += ppw
+                    workload_map[tid][sid]['totalPeriods'] += ppw * len(classes)
 
         for tid, subject_entries in workload_map.items():
             teacher_workload[tid] = list(subject_entries.values())

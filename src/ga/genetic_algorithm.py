@@ -51,7 +51,7 @@ class GeneticAlgorithm:
     PENALTY_STUDENT_CONFLICT    = 100
     PENALTY_ROOM_CONFLICT       = 75   # raised from 50 — double-booked room makes slot unusable
     PENALTY_BLOCK_VIOLATION     = 80   # raised from 30 — non-consecutive is not a cheap option
-    PENALTY_PERIOD_COUNT        = 20
+    PENALTY_PERIOD_COUNT        = 150  # raised from 20 — unplaced period must cost more than any single conflict
     PENALTY_SEPERATE_SLOT       = 100  # two lessons in same SEPERATE_SLOT group share a slot
     PENALTY_SUB_GROUP           = 100  # lessons in same SUB_GROUP group are NOT at the same slot
     PENALTY_HOMEROOM_VIOLATION  = 100  # lesson placed in a homeroom belonging to another class
@@ -175,9 +175,22 @@ class GeneticAlgorithm:
         self._stopped_early: bool = False
         self._current_generation: int = 0
 
+        # ── Diagnostic counters (reset each epoch by IslandGA) ─────────────
+        self._mutation_stats: Dict[str, int] = defaultdict(int)
+        self._restart_count: int = 0
+
         print(f"  [GA] Teaching columns : {len(self.teaching_cols)}")
         print(f"  [GA] Lessons to place : {len(self.lessons)}")
         print(f"  [GA] Teacher groups   : {len(self._teacher_groups)}")
+
+        # Warn about zero-slot lessons — structurally unplaceable due to overcrowded preschedule.
+        zero_slot = [l for l in self.lessons if not self._lesson_slots_cache[l.lesson_id]]
+        if zero_slot:
+            print(f"  [GA] WARNING: {len(zero_slot)} lesson(s) have zero available slots "
+                  f"(preschedule filled all entity slots) — will force-place with conflicts:")
+            for l in zero_slot:
+                print(f"       {l.lesson_id} {l.subject_id}/{','.join(l.student_classes)} "
+                      f"teachers={l.teacher_ids} ppw={l.periods_per_week}")
 
     # =========================================================================
     # HELPERS
@@ -202,19 +215,22 @@ class GeneticAlgorithm:
             hr = self.homeroom_map.get(lesson.student_classes[0])
             if hr:
                 return hr
-        # 3. Soft: curriculum specifies preferred tag(s) — pick from matching rooms.
-        #    Exclude rooms that belong to another class as homeroom.
+        # 3. Soft: curriculum specifies preferred tag(s).
+        #    Pool = tagged rooms + general rooms so the GA can explore both.
+        #    Tagged rooms get 2× weight to bias toward the preference while
+        #    still allowing general rooms to be picked.
         if lesson.preferred_tags:
             lesson_class_set = set(lesson.student_classes)
-            pool: List[str] = []
+            tagged: List[str] = []
             for tag in lesson.preferred_tags:
                 for rid in self._tag_to_rooms.get(tag, []):
                     owner = self.homeroom_room_to_class.get(rid)
                     if owner is None or owner in lesson_class_set:
-                        pool.append(rid)
+                        tagged.append(rid)
+            # Union of tagged (2× weight) + general rooms
+            pool = tagged + tagged + self.room_list
             if pool:
                 return random.choice(pool)
-            # Tag pool empty (all occupied by other homerooms) — fall through to general
         # 4. General pool.
         if self.room_list:
             return random.choice(self.room_list)
@@ -367,23 +383,36 @@ class GeneticAlgorithm:
     # IMPROVEMENT 1: GREEDY CONSTRUCTIVE INITIALIZATION
     # =========================================================================
 
-    def _create_chromosome_greedy(self) -> Chromosome:
+    def _create_chromosome_greedy(self, pure: bool = False) -> Chromosome:
         """
-        Build a chromosome by placing lessons in order of most-constrained first
-        (fewest available slots -> scheduled first), tracking committed slots
-        within the chromosome so each new lesson avoids conflicts with
-        already-placed ones.
+        Build a chromosome using a greedy conflict-aware constructor.
+        Each call uses a different random lesson ordering so the 60% greedy
+        chromosomes in the initial population are diverse rather than near-copies.
 
-        Result: initial chromosomes start with near-zero conflicts rather than
-        hundreds, so the GA refines rather than recovers.
+        pure=True: strict most-constrained-first (used for the single seed
+                   chromosome to guarantee one high-quality starting point).
+        pure=False (default): random order with a constraint-level bias —
+                   highly constrained lessons still tend to go first but the
+                   exact sequence differs every call.
         """
         c = Chromosome()
 
-        # Sort lessons: most constrained (fewest available slots) first
-        sorted_lessons = sorted(
-            self.lessons,
-            key=lambda l: len(self._lesson_slots_cache[l.lesson_id])
-        )
+        if pure:
+            sorted_lessons = sorted(
+                self.lessons,
+                key=lambda l: len(self._lesson_slots_cache[l.lesson_id])
+            )
+        else:
+            # Random ordering biased toward most-constrained first.
+            # Noise range ≈ 25% of the slot-count spread so constrained lessons
+            # still tend to be placed early but ordering varies each call.
+            slot_counts = [len(self._lesson_slots_cache[l.lesson_id]) for l in self.lessons]
+            spread = max(slot_counts) - min(slot_counts) if slot_counts else 1
+            noise = max(1, spread * 0.25)
+            sorted_lessons = sorted(
+                self.lessons,
+                key=lambda l: len(self._lesson_slots_cache[l.lesson_id]) + random.uniform(0, noise)
+            )
 
         # Per-entity committed slots for this chromosome build pass
         # key: "teacher:T001" / "student:1/1" / "room:C103"
@@ -417,14 +446,21 @@ class GeneticAlgorithm:
             if room != "NO_ROOM":
                 local_committed |= committed_per_entity[f"room:{room}"]
 
-            # Slots free for this lesson within this chromosome
             lesson_free = list(base_available - local_committed)
-            if not lesson_free:
-                lesson_free = list(base_available) or list(self.all_slots)
-
-            # A shared committed set so _assign_blocks can update it inline
-            block_committed: Set[Tuple[str, str]] = set(local_committed)
-            assignments = self._assign_blocks(lesson, lesson_free, room, committed=block_committed)
+            if lesson_free:
+                # Happy path: conflict-free slots exist within this chromosome.
+                block_committed: Set[Tuple[str, str]] = set(local_committed)
+                assignments = self._assign_blocks(lesson, lesson_free, room, committed=block_committed)
+            else:
+                # All preschedule-free slots for this lesson are already taken by
+                # other lessons placed earlier in this chromosome.  Force-place by
+                # ignoring chromosome-level committed slots — this will generate a
+                # conflict that the fitness function penalises, but a placed lesson
+                # with a conflict (penalty ≤ 150) is cheaper than an unplaced
+                # lesson (ppw × PENALTY_PERIOD_COUNT = ppw × 150).
+                # committed=None tells _assign_blocks not to subtract anything.
+                fallback = list(base_available) or list(self.all_slots)
+                assignments = self._assign_blocks(lesson, fallback, room, committed=None)
 
             # Register the newly committed slots back to each entity
             placed_slots = {(ts.day, ts.period_col) for ts, _ in assignments}
@@ -454,16 +490,19 @@ class GeneticAlgorithm:
 
     def initialize_population(self):
         """
-        80% greedy chromosomes + 20% random for initial diversity.
-        Greedy ones start near-feasible; random ones maintain exploration breadth.
+        1 pure greedy seed (most-constrained-first) + 59% greedy with random
+        lesson ordering + 40% fully random.  Each greedy chromosome processes
+        lessons in a different sequence so the initial population is diverse
+        rather than 80% near-identical near-copies of the same greedy solution.
         """
-        print(f"  [GA] Initializing population of {self.population_size} "
-              f"(80% greedy + 20% random)...")
-        n_greedy = int(self.population_size * 0.8)
+        n_greedy = max(1, int(self.population_size * 0.6))
         n_random = self.population_size - n_greedy
+        print(f"  [GA] Initializing population of {self.population_size} "
+              f"(1 pure greedy seed + {n_greedy - 1} random-order greedy + {n_random} random)...")
         self.population = (
-            [self._create_chromosome_greedy() for _ in range(n_greedy)] +
-            [self._create_chromosome_random()  for _ in range(n_random)]
+            [self._create_chromosome_greedy(pure=True)] +
+            [self._create_chromosome_greedy(pure=False) for _ in range(n_greedy - 1)] +
+            [self._create_chromosome_random() for _ in range(n_random)]
         )
         print(f"  [GA] Population initialized.")
 
@@ -571,14 +610,20 @@ class GeneticAlgorithm:
                 for ts, room in chromosome.genes.get(lesson.lesson_id, []):
                     if not room or room == 'NO_ROOM':
                         continue
-                    # Homeroom violation: lesson uses another class's homeroom
                     owner = self.homeroom_room_to_class.get(room)
                     if owner is not None and owner not in lesson_class_set:
+                        # Wrong class's homeroom
                         violations['homeroom_violation'] += 1
-                    # Specialist room violation: lesson uses a specialist room
-                    # it didn't explicitly request (required_rooms not set)
-                    elif room in self._specialist_rooms and not lesson.required_rooms:
-                        violations['specialist_room'] += 1
+                    elif owner is None and room in self._specialist_rooms and not lesson.required_rooms:
+                        # Tagged specialist room — only penalise if lesson has no preferred-tag claim.
+                        # A lesson with preferred_tags that matches this room's tags has a soft claim
+                        # and should not be penalised (it was sent here by _pick_room on purpose).
+                        room_is_preferred = any(
+                            room in self._tag_to_rooms.get(tag, [])
+                            for tag in lesson.preferred_tags
+                        )
+                        if not room_is_preferred:
+                            violations['specialist_room'] += 1
 
         fitness = (
             violations['teacher_conflict']   * self.PENALTY_TEACHER_CONFLICT   +
@@ -719,11 +764,14 @@ class GeneticAlgorithm:
     # IMPROVEMENT 3: TARGETED SINGLE-BLOCK MUTATION
     # =========================================================================
 
-    def _find_conflicted_slots(self, chromosome: Chromosome) -> Dict[str, Set[Tuple[str, str]]]:
+    def _build_conflict_state(self, chromosome: Chromosome):
         """
-        Return a dict mapping lesson_id -> set of (day, period_col) slots
-        that are currently in a conflict (teacher, student, or room clash).
-        Used by targeted mutation to know exactly which slots to move.
+        Build occupancy maps and conflicted-slot index in one pass.
+
+        Returns:
+            conflicted   : lesson_id -> set of (day, period_col) in conflict
+            teacher_usage: teacher_id -> slot -> [lesson_ids]
+            student_usage: class_id   -> slot -> [lesson_ids]
         """
         teacher_usage: Dict[str, Dict[Tuple[str, str], List[str]]] = defaultdict(lambda: defaultdict(list))
         student_usage: Dict[str, Dict[Tuple[str, str], List[str]]] = defaultdict(lambda: defaultdict(list))
@@ -740,7 +788,6 @@ class GeneticAlgorithm:
                     room_usage[room][sk].append(lesson.lesson_id)
 
         conflicted: Dict[str, Set[Tuple[str, str]]] = defaultdict(set)
-
         for usage in (teacher_usage, student_usage, room_usage):
             for _entity, slots in usage.items():
                 for sk, lids in slots.items():
@@ -748,23 +795,102 @@ class GeneticAlgorithm:
                         for lid in lids:
                             conflicted[lid].add(sk)
 
+        return conflicted, teacher_usage, student_usage
+
+    def _find_conflicted_slots(self, chromosome: Chromosome) -> Dict[str, Set[Tuple[str, str]]]:
+        """Thin wrapper kept for callers that only need the conflicted dict."""
+        conflicted, _, _ = self._build_conflict_state(chromosome)
         return conflicted
+
+    def _apply_swap_blocker(
+        self,
+        chromosome: Chromosome,
+        lesson: 'Lesson',
+        conflicted: Dict[str, Set[Tuple[str, str]]],
+        teacher_usage: Dict[str, Dict[Tuple[str, str], List[str]]],
+        student_usage: Dict[str, Dict[Tuple[str, str], List[str]]],
+    ) -> bool:
+        """
+        Human-like repair: when a lesson's conflict is caused by exactly ONE
+        entity type being busy (teacher OR student — not both), find the lesson
+        that is occupying that entity at the slot and try to move it elsewhere.
+
+        Examples:
+          - MON_7: teacher busy, class free, room free
+            → find the lesson holding the teacher at MON_7, move it
+          - THU_3: student busy, teacher free, room free
+            → find the lesson holding the student at THU_3, move it
+
+        Does nothing when both teacher and student are simultaneously busy
+        (would need to move two lessons — too disruptive for one step).
+        """
+        lid = lesson.lesson_id
+        bad_slots = conflicted.get(lid)
+        if not bad_slots:
+            return False
+
+        for bad_slot in bad_slots:
+            # Identify which entities of THIS lesson are conflicted at bad_slot
+            teacher_blocker_lids: Set[str] = set()
+            student_blocker_lids: Set[str] = set()
+
+            for tid in lesson.teacher_ids:
+                for other_lid in teacher_usage.get(tid, {}).get(bad_slot, []):
+                    if other_lid != lid:
+                        teacher_blocker_lids.add(other_lid)
+
+            for cid in lesson.student_classes:
+                for other_lid in student_usage.get(cid, {}).get(bad_slot, []):
+                    if other_lid != lid:
+                        student_blocker_lids.add(other_lid)
+
+            # "Almost free" condition: only teacher busy OR only student busy
+            only_teacher_busy = bool(teacher_blocker_lids) and not student_blocker_lids
+            only_student_busy = bool(student_blocker_lids) and not teacher_blocker_lids
+
+            if not only_teacher_busy and not only_student_busy:
+                continue  # both conflict or neither — skip this slot
+
+            blocker_lid = random.choice(
+                list(teacher_blocker_lids if only_teacher_busy else student_blocker_lids)
+            )
+            blocker_lesson = self.lesson_map.get(blocker_lid)
+            if not blocker_lesson or blocker_lid in self._fixed_slots:
+                continue  # can't move fixed-period lessons
+
+            # Find a new slot for the blocker that avoids the current bad_slot
+            available = [
+                s for s in (self._lesson_slots_cache[blocker_lid] or list(self.all_slots))
+                if s != bad_slot
+            ]
+            if not available:
+                continue
+
+            random.shuffle(available)
+            new_room = self._pick_room(blocker_lesson)
+            new_assignments = self._assign_blocks(blocker_lesson, available, new_room)
+            if new_assignments:
+                chromosome.genes[blocker_lid] = new_assignments
+                return True
+
+        return False
 
     def _mutate(self, chromosome: Chromosome):
         """
-        Three mutation operators applied per lesson with probability mutation_rate:
+        Mutation operators applied per lesson with probability mutation_rate:
 
-        1. targeted_block (60%): Find a conflicted slot for this lesson and
-           replace only THAT block with a new non-conflicting placement.
-           If no conflict exists, skip — don't disturb a working gene.
-
-        2. room (25%): Change the room assignment for all blocks of a lesson.
-
-        3. full_slot (15%): Full random re-assignment (same as original baseline).
-           Kept as a low-probability escape from local optima.
+        1. targeted_block (40%): Move a conflicted block to a free slot.
+        2. swap_blocker   (15%): Human-like repair — move the lesson that is
+                                  blocking a desired slot (only when a single
+                                  entity type is busy; teacher OR student).
+        3. room           (15%): Change room assignment.
+        4. full_slot      (10%): Full random re-assignment.
+        5. explore        (20%): Neighbourhood shift ±3 positions.
         """
-        # PERF-2: Lazy — compute conflict map only when a targeted_block mutation actually fires
-        conflicted_slots: Optional[Dict[str, Set[Tuple[str, str]]]] = None
+        # Lazily built on first use; shared across all lessons in one _mutate call.
+        conflicted_slots:  Optional[Dict[str, Set[Tuple[str, str]]]] = None
+        teacher_usage_map: Optional[Dict]                            = None
+        student_usage_map: Optional[Dict]                            = None
 
         for lesson in self.lessons:
             if random.random() > self.mutation_rate:
@@ -783,14 +909,29 @@ class GeneticAlgorithm:
                 continue
 
             mutation_type = random.choices(
-                ['targeted_block', 'room', 'full_slot', 'explore'],
-                weights=[0.50, 0.20, 0.10, 0.20]
+                ['targeted_block', 'swap_blocker', 'room', 'full_slot', 'explore'],
+                weights=[0.40, 0.15, 0.15, 0.10, 0.20]
             )[0]
+
+            # ── swap_blocker ─────────────────────────────────────────────────
+            if mutation_type == 'swap_blocker':
+                if conflicted_slots is None:
+                    conflicted_slots, teacher_usage_map, student_usage_map = \
+                        self._build_conflict_state(chromosome)
+                self._mutation_stats['swap_blocker_attempt'] += 1
+                hit = self._apply_swap_blocker(
+                    chromosome, lesson,
+                    conflicted_slots, teacher_usage_map, student_usage_map,
+                )
+                if hit:
+                    self._mutation_stats['swap_blocker_hit'] += 1
+                continue
 
             # ── targeted_block ───────────────────────────────────────────────
             if mutation_type == 'targeted_block':
                 if conflicted_slots is None:
-                    conflicted_slots = self._find_conflicted_slots(chromosome)
+                    conflicted_slots, teacher_usage_map, student_usage_map = \
+                        self._build_conflict_state(chromosome)
                 bad_slots = conflicted_slots.get(lid, set())
                 if not bad_slots:
                     continue  # lesson is fine — don't touch it
@@ -867,6 +1008,7 @@ class GeneticAlgorithm:
                     else:
                         new_gene.append((ts, rm))
                 chromosome.genes[lid] = new_gene
+                self._mutation_stats['targeted_block'] += 1
 
             # ── room ─────────────────────────────────────────────────────────
             elif mutation_type == 'room':
@@ -878,12 +1020,112 @@ class GeneticAlgorithm:
                     chromosome.genes[lid] = [
                         (ts, new_room) for ts, _ in chromosome.genes[lid]
                     ]
+                    self._mutation_stats['room'] += 1
 
             # ── full_slot ────────────────────────────────────────────────────
             elif mutation_type == 'full_slot':
                 available = self._lesson_slots_cache[lid] or list(self.all_slots)
                 room = self._pick_room(lesson)
                 chromosome.genes[lid] = self._assign_blocks(lesson, available, room)
+                self._mutation_stats['full_slot'] += 1
+
+            # ── explore ──────────────────────────────────────────────────────
+            # Shift one random block by 1-3 positions to escape local optima
+            # without a full re-assignment. Works on non-conflicted slots too,
+            # so it acts as a neighbourhood search independent of conflict state.
+            elif mutation_type == 'explore':
+                current = chromosome.genes.get(lid, [])
+                if not current:
+                    continue
+                block_sizes = sorted(self._block_sizes[lid], reverse=True)
+                block_of_idx: List[int] = []
+                for bi, bs in enumerate(block_sizes):
+                    block_of_idx.extend([bi] * bs)
+
+                # Pick a random block to shift
+                target_block = random.randrange(len(block_sizes))
+                target_size  = block_sizes[target_block]
+                kept_slots = {
+                    (ts.day, ts.period_col)
+                    for i, (ts, _) in enumerate(current)
+                    if i < len(block_of_idx) and block_of_idx[i] != target_block
+                }
+
+                # Build candidate pool: nearby slots (±3 positions) from any
+                # current slot of that block, filtered by lesson slot cache.
+                block_slots = [
+                    (ts.day, ts.period_col)
+                    for i, (ts, _) in enumerate(current)
+                    if i < len(block_of_idx) and block_of_idx[i] == target_block
+                ]
+                pool: Set[Tuple[str, str]] = set()
+                cache_set = set(self._lesson_slots_cache[lid]) if self._lesson_slots_cache[lid] else self.all_slots
+                for day, col in block_slots:
+                    idx = self._col_idx.get(col, -1)
+                    if idx < 0:
+                        continue
+                    for delta in range(-3, 4):
+                        ni = idx + delta
+                        if 0 <= ni < len(self.teaching_cols):
+                            candidate = (day, self.teaching_cols[ni])
+                            if candidate in cache_set and candidate not in kept_slots:
+                                pool.add(candidate)
+
+                if not pool:
+                    # Fall back to full random re-assignment when neighbourhood is empty
+                    available = self._lesson_slots_cache[lid] or list(self.all_slots)
+                    room = self._pick_room(lesson)
+                    chromosome.genes[lid] = self._assign_blocks(lesson, available, room)
+                    continue
+
+                pool_list = list(pool)
+                random.shuffle(pool_list)
+                pool_set = set(pool_list)
+                new_slots: Optional[List[Tuple[str, str]]] = None
+                for start in pool_list:
+                    if start[0] in {s[0] for s in kept_slots}:
+                        continue
+                    consecutive = get_consecutive_slots(
+                        start, target_size, self.teaching_cols, self._col_idx
+                    )
+                    if consecutive and all(s in pool_set for s in consecutive):
+                        new_slots = consecutive
+                        break
+
+                if new_slots is None:
+                    continue
+
+                room = current[0][1] if current else self._pick_room(lesson)
+                new_gene: List[Tuple[TimeSlot, str]] = []
+                new_block_iter = iter(new_slots)
+                for i, (ts, rm) in enumerate(current):
+                    bi = block_of_idx[i] if i < len(block_of_idx) else -1
+                    if bi == target_block:
+                        try:
+                            s = next(new_block_iter)
+                            new_gene.append((TimeSlot(s[0], s[1]), room))
+                        except StopIteration:
+                            new_gene.append((ts, rm))
+                    else:
+                        new_gene.append((ts, rm))
+                chromosome.genes[lid] = new_gene
+                self._mutation_stats['explore'] += 1
+
+    def reset_epoch_stats(self) -> None:
+        """Reset per-epoch diagnostic counters. Called by IslandGA at epoch start."""
+        self._mutation_stats = defaultdict(int)
+        self._restart_count  = 0
+
+    def unassigned_summary(self, chromosome: Chromosome) -> Tuple[int, int]:
+        """Return (n_lessons_missing, n_periods_missing) for a chromosome."""
+        n_lessons = n_periods = 0
+        for lesson in self.lessons:
+            assigned = len(chromosome.genes.get(lesson.lesson_id, []))
+            expected = self._expected_periods[lesson.lesson_id]
+            if assigned < expected:
+                n_lessons += 1
+                n_periods += expected - assigned
+        return n_lessons, n_periods
 
     # =========================================================================
     # IMPROVEMENT 4: LOWER TOURNAMENT SIZE (set at __init__ default = 3)
@@ -901,28 +1143,39 @@ class GeneticAlgorithm:
 
     def _restart_bottom_half(self):
         """
-        Replace the bottom 50% of the population with fresh greedy chromosomes.
-        The top 50% (including best known solution) are kept intact.
-        This injects diversity without losing the best solutions found so far.
+        Diversity injection on stagnation: keep top 25%, perturb middle 25%
+        with extra mutations, replace bottom 50% with fresh chromosomes.
+        Replaces less than before, preserving more accumulated gene patterns.
         """
         self.population.sort(key=lambda c: c.fitness)
-        keep = self.population[:self.population_size // 2]
+        n = self.population_size
+        n_keep    = max(self.elite_size, n // 4)        # top 25% kept intact
+        n_perturb = n // 4                              # next 25% get extra mutations
+        n_fresh   = n - n_keep - n_perturb              # bottom 50% replaced
+        n_greedy  = n_fresh // 2
+        n_random  = n_fresh - n_greedy
 
-        # GA-2: 50% greedy + 50% random for diversity
-        n_fresh  = self.population_size // 2
-        n_greedy = n_fresh // 2
-        n_random = n_fresh - n_greedy
-        print(f"  [GA] ⟳ Stagnation restart — reseeding bottom {n_fresh} "
-              f"({n_greedy} greedy + {n_random} random)...")
+        print(f"  [GA] ⟳ Stagnation restart — keep {n_keep} | perturb {n_perturb} "
+              f"| replace {n_fresh} ({n_greedy} greedy + {n_random} random)...")
+
+        keep    = self.population[:n_keep]
+        perturb = [c.copy() for c in self.population[n_keep:n_keep + n_perturb]]
+        for c in perturb:
+            # Apply 3× extra mutation passes to escape local basin
+            for _ in range(3):
+                self._mutate(c)
+            self.evaluate_fitness(c)
+
         fresh = (
-            [self._create_chromosome_greedy() for _ in range(n_greedy)] +
-            [self._create_chromosome_random()  for _ in range(n_random)]
+            [self._create_chromosome_greedy(pure=False) for _ in range(n_greedy)] +
+            [self._create_chromosome_random()            for _ in range(n_random)]
         )
         for c in fresh:
             self.evaluate_fitness(c)
 
-        self.population = keep + fresh
+        self.population = keep + perturb + fresh
         self._gens_without_improvement = 0
+        self._restart_count += 1
 
     # =========================================================================
     # ISLAND GA HELPER — evolve for a fixed number of generations

@@ -53,12 +53,12 @@ _ISLAND_GA_DEFAULTS = dict(
     migration_interval=50,
     migration_rate=0.1,
     topology='ring',
-    mutation_rate=0.015,
+    mutation_rate=0.03,       # raised from 0.015 — 0.015 was too conservative for high-conflict starts
     crossover_rate=0.9,
-    tournament_size=9,
+    tournament_size=5,        # lowered from 9 — reduces selection pressure, preserves diversity
     max_generations=5000,
     elite_size=10,
-    stagnation_limit=50,
+    stagnation_limit=150,     # raised from 50 — was == migration_interval, caused restart every epoch
     catastrophic_after=3,
     min_improvement=500,
     window_size=1000,
