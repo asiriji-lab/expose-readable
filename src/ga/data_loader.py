@@ -164,8 +164,23 @@ def build_lessons_from_manager(manager: ScheduleManager) -> List['Lesson']:
         raise ValueError("Curriculum sheet not found in ScheduleManager.")
 
     valid_rooms: Set[str] = set()
-    if df_room is not None:
-        valid_rooms = {str(r).strip() for r in df_room['room_id'] if str(r).strip()}
+    room_name_to_id: Dict[str, str] = {}  # room_name (alias) -> room_id for hard resolution
+    room_tags: Set[str] = set()           # all known non-exclude tags for soft classification
+    if df_room is not None and 'room_id' in df_room.columns:
+        _EMPTY_VALS = {'', 'nan', 'none'}
+        for _, rrow in df_room.iterrows():
+            rid  = str(rrow.get('room_id',   '')).strip()
+            rname = str(rrow.get('room_name', '')).strip()
+            rtags = str(rrow.get('tags',      '')).strip()
+            if not rid or rid.lower() in _EMPTY_VALS:
+                continue
+            valid_rooms.add(rid)
+            if rname and rname.lower() not in _EMPTY_VALS:
+                room_name_to_id[rname.lower()] = rid
+            if rtags and rtags.lower() not in _EMPTY_VALS:
+                for t in [x.strip().lower() for x in rtags.split(',') if x.strip()]:
+                    if t != 'exclude':
+                        room_tags.add(t)
 
     valid_class_ids: Set[str] = set(manager.student_grids.keys())
 
@@ -208,9 +223,19 @@ def build_lessons_from_manager(manager: ScheduleManager) -> List['Lesson']:
             print(f"  [GA] Warning: row {idx} ({row.get('subject_id','?')}) has no valid classes — skipped.")
             continue
 
-        required_rooms = _parse_list_field(row.get('room'))
-        if valid_rooms:
-            required_rooms = [r for r in required_rooms if r in valid_rooms]
+        # Classify curriculum.room values: id/name -> hard (required_rooms), tag -> soft (preferred_tags)
+        _raw_rooms = _parse_list_field(row.get('room'))
+        required_rooms: List[str] = []
+        preferred_tags: List[str] = []
+        for ref in _raw_rooms:
+            ref_lower = ref.lower()
+            if ref in valid_rooms:
+                required_rooms.append(ref)
+            elif ref_lower in room_name_to_id:
+                required_rooms.append(room_name_to_id[ref_lower])
+            elif ref_lower in room_tags:
+                preferred_tags.append(ref_lower)
+            # unknown refs silently dropped (feasibility checker reports them)
 
         block_pattern = str(row.get('block_pattern', '')).strip()
         if not block_pattern or block_pattern == 'nan':
@@ -238,6 +263,7 @@ def build_lessons_from_manager(manager: ScheduleManager) -> List['Lesson']:
                 periods_per_week=periods_per_week,
                 block_pattern=block_pattern,
                 required_rooms=required_rooms,
+                preferred_tags=preferred_tags,
                 fixed_period=None,
                 constraint_type=constraint_type,
                 constraint_group_id=constraint_group_id,
@@ -260,6 +286,7 @@ def build_lessons_from_manager(manager: ScheduleManager) -> List['Lesson']:
                     periods_per_week=periods_per_week,
                     block_pattern=block_pattern,
                     required_rooms=required_rooms,
+                preferred_tags=preferred_tags,
                     fixed_period=None,
                     constraint_type=constraint_type,
                     constraint_group_id=constraint_group_id,
@@ -288,6 +315,7 @@ def build_lessons_from_manager(manager: ScheduleManager) -> List['Lesson']:
                             periods_per_week=bs,
                             block_pattern=str(bs),
                             required_rooms=required_rooms,
+                preferred_tags=preferred_tags,
                             fixed_period=None,
                             constraint_type='TEACHER_SPLIT',
                             constraint_group_id=constraint_group_id,
@@ -308,6 +336,7 @@ def build_lessons_from_manager(manager: ScheduleManager) -> List['Lesson']:
                         periods_per_week=periods_per_week,
                         block_pattern=block_pattern,
                         required_rooms=required_rooms,
+                preferred_tags=preferred_tags,
                         fixed_period=None,
                         constraint_type='TEACHER_SPLIT',
                         constraint_group_id=constraint_group_id,
@@ -331,6 +360,7 @@ def build_lessons_from_manager(manager: ScheduleManager) -> List['Lesson']:
                     periods_per_week=periods_per_week,
                     block_pattern=block_pattern,
                     required_rooms=required_rooms,
+                preferred_tags=preferred_tags,
                     fixed_period=sub_group_fp,
                     constraint_type=constraint_type,
                     constraint_group_id=constraint_group_id,
@@ -351,6 +381,7 @@ def build_lessons_from_manager(manager: ScheduleManager) -> List['Lesson']:
                     periods_per_week=periods_per_week,
                     block_pattern=block_pattern,
                     required_rooms=required_rooms,
+                preferred_tags=preferred_tags,
                     fixed_period=None,
                 )
                 lessons.append(lesson)
@@ -368,16 +399,19 @@ def build_room_type_data(
     manager: ScheduleManager,
 ) -> tuple:
     """
-    Returns (homeroom_map, homeroom_room_to_class, general_rooms, specialist_rooms).
+    Returns (homeroom_map, homeroom_room_to_class, general_rooms, specialist_rooms, tag_to_rooms).
 
     homeroom_map          : class_id  -> room_id   (from room.class_id)
     homeroom_room_to_class: room_id   -> class_id  (reverse)
     general_rooms         : [room_id] available to any lesson without required_rooms
     specialist_rooms      : {room_id} excluded from free pool; only via curriculum.room
+    tag_to_rooms          : tag       -> [room_id] for tag-based soft preference
+                            Rooms tagged "exclude" are in specialist_rooms but NOT in tag_to_rooms.
 
     Room type resolution (room sheet only):
       1. class_id column filled  -> homeroom (excluded from general pool)
       2. tags column non-empty   -> specialist (excluded from general pool)
+         2a. tag="exclude"       -> specialist but invisible to tag-based selection
       3. fallback                -> general
     """
     df_room = manager.get_sheet_data('room')
@@ -386,6 +420,7 @@ def build_room_type_data(
     homeroom_room_to_class: Dict[str, str] = {}
     general_rooms:    List[str] = []
     specialist_rooms: set       = set()
+    tag_to_rooms:     Dict[str, List[str]] = {}
 
     _EMPTY = {'', 'nan', 'none'}
 
@@ -396,21 +431,26 @@ def build_room_type_data(
                 continue
 
             class_id = str(row.get('class_id', '')).strip()
-            tags     = str(row.get('tags',     '')).strip()
+            tags_raw = str(row.get('tags', '')).strip()
 
             if class_id and class_id.lower() not in _EMPTY:
                 homeroom_map[class_id] = room_id
                 homeroom_room_to_class[room_id] = class_id
                 specialist_rooms.add(room_id)
-            elif tags and tags.lower() not in _EMPTY:
+            elif tags_raw and tags_raw.lower() not in _EMPTY:
                 specialist_rooms.add(room_id)
+                # Register non-exclude tags in tag_to_rooms
+                for tag in [t.strip().lower() for t in tags_raw.split(',') if t.strip()]:
+                    if tag != 'exclude':
+                        tag_to_rooms.setdefault(tag, []).append(room_id)
             else:
                 general_rooms.append(room_id)
 
     homeroom_room_ids = set(homeroom_map.values())
     print(f"  [GA] Room pool — general:{len(general_rooms)}  "
-          f"homeroom:{len(homeroom_room_ids)}  specialist:{len(specialist_rooms) - len(homeroom_room_ids)}")
-    return homeroom_map, homeroom_room_to_class, general_rooms, specialist_rooms
+          f"homeroom:{len(homeroom_room_ids)}  specialist:{len(specialist_rooms) - len(homeroom_room_ids)}  "
+          f"tags:{len(tag_to_rooms)}")
+    return homeroom_map, homeroom_room_to_class, general_rooms, specialist_rooms, tag_to_rooms
 
 
 # =============================================================================

@@ -107,6 +107,7 @@ class GeneticAlgorithm:
             self.homeroom_room_to_class, # room_id   -> class_id
             self._general_rooms,         # free pool
             self._specialist_rooms,      # exclusive pool (curriculum.room only)
+            self._tag_to_rooms,          # tag -> [room_id] (exclude tag omitted)
         ) = build_room_type_data(schedule_manager)
 
         self.room_list: List[str] = self._get_room_list()
@@ -193,7 +194,7 @@ class GeneticAlgorithm:
         return list(self.manager.room_grids.keys())
 
     def _pick_room(self, lesson: Lesson) -> str:
-        # 1. Curriculum specifies required room(s) — use those.
+        # 1. Hard: curriculum specifies required room(s) by id/name — must use.
         if lesson.required_rooms:
             return random.choice(lesson.required_rooms)
         # 2. Single-class lesson — prefer the class's designated homeroom.
@@ -201,7 +202,20 @@ class GeneticAlgorithm:
             hr = self.homeroom_map.get(lesson.student_classes[0])
             if hr:
                 return hr
-        # 3. Multi-class or no homeroom — pick from general pool.
+        # 3. Soft: curriculum specifies preferred tag(s) — pick from matching rooms.
+        #    Exclude rooms that belong to another class as homeroom.
+        if lesson.preferred_tags:
+            lesson_class_set = set(lesson.student_classes)
+            pool: List[str] = []
+            for tag in lesson.preferred_tags:
+                for rid in self._tag_to_rooms.get(tag, []):
+                    owner = self.homeroom_room_to_class.get(rid)
+                    if owner is None or owner in lesson_class_set:
+                        pool.append(rid)
+            if pool:
+                return random.choice(pool)
+            # Tag pool empty (all occupied by other homerooms) — fall through to general
+        # 4. General pool.
         if self.room_list:
             return random.choice(self.room_list)
         return "NO_ROOM"

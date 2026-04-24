@@ -33,7 +33,8 @@ class Lesson:
     student_classes: List[str]   # full class_ids e.g. ["1/1", "1/2"]
     periods_per_week: int
     block_pattern: str           # "1", "2", "2-1", "2-2", etc.
-    required_rooms: List[str]    # resolved room IDs (may be empty)
+    required_rooms: List[str]    # resolved room IDs (hard constraint — must use)
+    preferred_tags: List[str]    # tag-based soft preference (fallback to general if no match)
     fixed_period: Optional[str]
     # Constraint fields — populated from curriculum 'constraint' column
     constraint_type: Optional[str] = None          # TEAM | MULTI_CLASS_TEAM | SEPERATE_SLOT | SUB_GROUP | TEACHER_SPLIT
