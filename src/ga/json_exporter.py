@@ -348,6 +348,10 @@ class ScheduleJsonExporter:
         student_ga: Dict[str, Dict] = defaultdict(dict)
         room_ga:    Dict[str, Dict] = defaultdict(dict)
 
+        # Tracks lessons that were overwritten at a slot by a later-processed lesson.
+        # These lessons are fully placed in the chromosome but invisible in the grid.
+        conflict_slots: List[Dict] = []
+
         for lesson_id, slots in self.chromosome.genes.items():
             lesson = lesson_lookup.get(lesson_id)
             if not lesson:
@@ -358,36 +362,58 @@ class ScheduleJsonExporter:
                 key      = (ts.day, label)
                 room_str = room if room and room != "NO_ROOM" else None
 
-                # Teacher rows cell
                 class_str = lesson.student_classes[0] if lesson.student_classes else None
+                t_name    = self._teacher_name(lesson.teacher_ids[0]) if lesson.teacher_ids else None
+
+                def _conflict_entry(entity_type: str, entity_id: str) -> Dict:
+                    return {
+                        "lesson_id":      lesson_id,
+                        "subject_id":     lesson.subject_id,
+                        "subject_name":   lesson.subject_name,
+                        "student_classes": lesson.student_classes,
+                        "teacher_ids":    lesson.teacher_ids,
+                        "entity_type":    entity_type,
+                        "entity_id":      entity_id,
+                        "day":            ts.day,
+                        "period":         label,
+                    }
+
                 for tid in lesson.teacher_ids:
-                    teacher_ga[tid][key] = {
-                        "subject_id":   lesson.subject_id,
-                        "subject_name": lesson.subject_name,
-                        "class":        class_str,
-                        "room":         room_str,
-                    }
+                    if key in teacher_ga[tid]:
+                        conflict_slots.append(_conflict_entry("teacher", tid))
+                    else:
+                        teacher_ga[tid][key] = {
+                            "subject_id":   lesson.subject_id,
+                            "subject_name": lesson.subject_name,
+                            "class":        class_str,
+                            "room":         room_str,
+                        }
 
-                # Student/class rows cell
-                t_name = self._teacher_name(lesson.teacher_ids[0]) if lesson.teacher_ids else None
                 for cid in lesson.student_classes:
-                    student_ga[cid][key] = {
-                        "subject_id":   lesson.subject_id,
-                        "subject_name": lesson.subject_name,
-                        "teacher":      t_name,
-                        "room":         room_str,
-                    }
+                    if key in student_ga[cid]:
+                        conflict_slots.append(_conflict_entry("student", cid))
+                    else:
+                        student_ga[cid][key] = {
+                            "subject_id":   lesson.subject_id,
+                            "subject_name": lesson.subject_name,
+                            "teacher":      t_name,
+                            "room":         room_str,
+                        }
 
-                # Room rows cell
                 if room_str:
-                    room_ga[room_str][key] = {
-                        "subject_id":   lesson.subject_id,
-                        "subject_name": lesson.subject_name,
-                        "teacher":      t_name,
-                        "class":        class_str,
-                    }
+                    if key in room_ga[room_str]:
+                        conflict_slots.append(_conflict_entry("room", room_str))
+                    else:
+                        room_ga[room_str][key] = {
+                            "subject_id":   lesson.subject_id,
+                            "subject_name": lesson.subject_name,
+                            "teacher":      t_name,
+                            "class":        class_str,
+                        }
 
         # ── Inject locked lessons (fixed-period curriculum rows from preschedule) ──
+        # Locked lessons always overwrite GA lessons at the same slot — preschedule
+        # takes priority over GA assignments.
         for locked in getattr(self.manager, 'locked_lessons', []):
             t_names = [self._teacher_name(tid) for tid in locked.get('teacher_ids', [])]
             t_name = t_names[0] if t_names else None
@@ -399,24 +425,22 @@ class ScheduleJsonExporter:
                 key = (day, label)
 
                 for tid in locked.get('teacher_ids', []):
-                    if key not in teacher_ga[tid]:
-                        teacher_ga[tid][key] = {
-                            "subject_id":   locked['subject_id'],
-                            "subject_name": locked['subject_name'],
-                            "class":        class_str,
-                            "room":         room_str,
-                        }
+                    teacher_ga[tid][key] = {
+                        "subject_id":   locked['subject_id'],
+                        "subject_name": locked['subject_name'],
+                        "class":        class_str,
+                        "room":         room_str,
+                    }
 
                 for cid in classes:
-                    if key not in student_ga[cid]:
-                        student_ga[cid][key] = {
-                            "subject_id":   locked['subject_id'],
-                            "subject_name": locked['subject_name'],
-                            "teacher":      t_name,
-                            "room":         room_str,
-                        }
+                    student_ga[cid][key] = {
+                        "subject_id":   locked['subject_id'],
+                        "subject_name": locked['subject_name'],
+                        "teacher":      t_name,
+                        "room":         room_str,
+                    }
 
-                if room_str and key not in room_ga[room_str]:
+                if room_str:
                     room_ga[room_str][key] = {
                         "subject_id":   locked['subject_id'],
                         "subject_name": locked['subject_name'],
@@ -499,4 +523,5 @@ class ScheduleJsonExporter:
             "students":        students,
             "rooms":           rooms,
             "unfilled_slots":  self._build_unfilled_slots(lessons),
+            "conflict_slots":  conflict_slots,
         }
