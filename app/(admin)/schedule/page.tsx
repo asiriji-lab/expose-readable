@@ -11,13 +11,42 @@ import ScheduleDndProvider from './_components/ScheduleDndProvider';
 import EditOverlay from './_components/EditOverlay';
 import FilterDropdown from './_components/FilterDropdown';
 import AdminHeader from '../_components/AdminHeader';
+import ConflictWarningDialog, { PendingDropState } from './_components/ConflictWarningDialog';
+import EjectionNotice from './_components/EjectionNotice';
 import { computeOverlayData } from './_utils/overlayUtils';
-import { moveItem, hasConflict, removeItemFromDataset, autoEjectConflicts } from './_utils/scheduleLogic';
-import { FullDataset, ScheduleItem, ScheduleData, ViewMode, OverlayCellData, EntityType, DragPayload, EntityMeta, GroupedSlots } from './_types/schedule.types';
+import {
+    moveItem,
+    hasConflict,
+    removeItemFromDataset,
+    autoEjectConflicts,
+    findConflictsAtSlot,
+    checkSwapFeasibility,
+    swapItems,
+} from './_utils/scheduleLogic';
+import {
+    FullDataset,
+    ScheduleItem,
+    ScheduleData,
+    ViewMode,
+    OverlayCellData,
+    EntityType,
+    DragPayload,
+    EntityMeta,
+    GroupedSlots,
+} from './_types/schedule.types';
 import OverlayInspectPopover from './_components/OverlayInspectPopover';
 import UpdateSourcePanel from './_components/UpdateSourcePanel';
 import BandHoverTooltip from './_components/BandHoverTooltip';
-import { transformToFullDataset, getTeacherCodes, getClassCodes, getRoomCodes, emptyDataset, deriveEntityMetaFromSchedule, BackendSchedule } from '@/lib/api/transform';
+import {
+    transformToFullDataset,
+    reconcileFullDataset,
+    getTeacherCodes,
+    getClassCodes,
+    getRoomCodes,
+    emptyDataset,
+    deriveEntityMetaFromSchedule,
+    BackendSchedule,
+} from '@/lib/api/transform';
 
 function SchedulePageContent() {
     const router = useRouter();
@@ -31,6 +60,28 @@ function SchedulePageContent() {
     const [entityMeta, setEntityMeta] = useState<EntityMeta | null>(null);
     const [sheetUrl, setSheetUrl] = useState<string | null>(null);
     const [isSourcePanelOpen, setIsSourcePanelOpen] = useState(false);
+
+    // ─── Dirty / save-guard ───────────────────────────────────────────────────
+    const [isDirty, setIsDirty] = useState(false);
+
+    useEffect(() => {
+        const handler = (e: BeforeUnloadEvent) => {
+            if (!isDirty) return;
+            e.preventDefault();
+            e.returnValue = '';
+        };
+        window.addEventListener('beforeunload', handler);
+        return () => window.removeEventListener('beforeunload', handler);
+    }, [isDirty]);
+
+    // ─── Conflict warning dialog ──────────────────────────────────────────────
+    const [pendingDrop, setPendingDrop] = useState<PendingDropState | null>(null);
+
+    // ─── Ejection notice (non-dismissing, undo support) ───────────────────────
+    const [ejectionNotice, setEjectionNotice] = useState<{
+        ejected: ScheduleItem[];
+        previousDataset: FullDataset;
+    } | null>(null);
 
     // ─── Derived filter options ───────────────────────────────────────────────
     const teacherCodes = useMemo(() => dataset ? getTeacherCodes(dataset) : [], [dataset]);
@@ -61,49 +112,105 @@ function SchedulePageContent() {
     // ─── Load schedule on mount ───────────────────────────────────────────────
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        const jobId = params.get('job_id');
+        const scheduleId = params.get('schedule_id');
 
-        if (jobId) {
+        if (scheduleId) {
             const loadSchedule = async () => {
                 try {
-                    const cached = sessionStorage.getItem(`schedule_cache_${jobId}`);
-                    const cachedMeta = sessionStorage.getItem(`entity_meta_cache_${jobId}`);
-                    const cachedSheetUrl = sessionStorage.getItem(`sheet_url_cache_${jobId}`);
-                    if (cached) {
-                        const raw = JSON.parse(cached) as BackendSchedule;
-                        const { dataset: transformed, groupedSlots: gs } = transformToFullDataset(raw);
-                        const { dataset: clean } = autoEjectConflicts(transformed);
-                        setDataset(clean);
-                        setGroupedSlots(gs);
-                        setJobName(raw.config?.academic_year || 'ตารางสอน');
-                        if (cachedMeta) setEntityMeta(JSON.parse(cachedMeta) as EntityMeta);
-                        if (cachedSheetUrl) setSheetUrl(cachedSheetUrl);
-                        return;
+                    const cachedDataset = sessionStorage.getItem(`schedule_dataset_cache_${scheduleId}`);
+                    const cachedMeta = sessionStorage.getItem(`entity_meta_cache_${scheduleId}`);
+                    const cachedSheetUrl = sessionStorage.getItem(`sheet_url_cache_${scheduleId}`);
+
+                    console.log('[load] keys in storage:', {
+                        hasDatasetCache: !!cachedDataset,
+                        hasRawCache: !!sessionStorage.getItem(`schedule_cache_${scheduleId}`),
+                        hasMeta: !!cachedMeta,
+                    });
+
+                    // Post-save cache: already-transformed FullDataset — skip transform entirely
+                    if (cachedDataset) {
+                        try {
+                            const { dataset: ds, groupedSlots: gs } = JSON.parse(cachedDataset) as { dataset: FullDataset; groupedSlots: GroupedSlots };
+                            console.log('[load] HIT dataset cache — teachers type:', Array.isArray((ds as any).teachers) ? 'array(OLD)' : 'object(new)', 'keys:', Object.keys((ds as any).teachers ?? {}).slice(0, 3));
+                            setDataset(ds);
+                            setGroupedSlots(gs ?? {});
+                            if (cachedMeta) setEntityMeta(JSON.parse(cachedMeta) as EntityMeta);
+                            if (cachedSheetUrl) setSheetUrl(cachedSheetUrl);
+                            return;
+                        } catch {
+                            // Corrupted — clear and fall through to network fetch
+                            sessionStorage.removeItem(`schedule_dataset_cache_${scheduleId}`);
+                        }
                     }
 
-                    const res = await fetch(`/api/schedule/record?schedule_id=${encodeURIComponent(jobId)}`);
+                    // Original raw BackendSchedule cache — needs transform
+                    const cached = sessionStorage.getItem(`schedule_cache_${scheduleId}`);
+                    if (cached) {
+                        try {
+                            console.log('[load] HIT raw cache (BackendSchedule) — this is OLD format');
+                            const raw = JSON.parse(cached) as BackendSchedule;
+                            const { dataset: transformed, groupedSlots: gs } = transformToFullDataset(raw);
+                            const { dataset: clean } = autoEjectConflicts(transformed);
+                            setDataset(clean);
+                            setGroupedSlots(gs);
+                            setJobName(raw.config?.academic_year || 'ตารางสอน');
+                            if (cachedMeta) setEntityMeta(JSON.parse(cachedMeta) as EntityMeta);
+                            if (cachedSheetUrl) setSheetUrl(cachedSheetUrl);
+                            return;
+                        } catch {
+                            // Corrupted (e.g. wrong format from old save bug) — clear and fall through
+                            sessionStorage.removeItem(`schedule_cache_${scheduleId}`);
+                        }
+                    }
+
+                    console.log('[load] MISS all caches — fetching from network');
+                    const res = await fetch(`/api/schedule/record?schedule_id=${encodeURIComponent(scheduleId)}`, { cache: 'no-store' });
                     const data = await res.json();
 
                     if (!res.ok) throw new Error(data?.error ?? 'Backend error');
 
-                    const raw: BackendSchedule | null = data.schedule?.data ?? null;
-                    let meta: EntityMeta | null = data.schedule?.entity_meta ?? null;
+                    // Try multiple response shapes the backend may return
+                    const raw: BackendSchedule | null =
+                        data.schedule?.data ??   // { schedule: { data: BackendSchedule } }
+                        data.data ??             // { data: BackendSchedule }
+                        null;
+                    let meta: EntityMeta | null =
+                        data.schedule?.entity_meta ??
+                        data.entity_meta ??
+                        null;
 
                     if (raw) {
-                        const { dataset: transformed, groupedSlots: gs } = transformToFullDataset(raw);
-                        const { dataset: clean } = autoEjectConflicts(transformed);
-                        setDataset(clean);
-                        setGroupedSlots(gs);
-                        sessionStorage.setItem(`schedule_cache_${jobId}`, JSON.stringify(raw));
-                        // If the backend didn't return entity_meta, derive it from the schedule data.
-                        if (!meta) {
-                            try { meta = deriveEntityMetaFromSchedule(raw); } catch { /* non-fatal */ }
+                        const rawAny = raw as any;
+                        let transformed: FullDataset;
+                        let gs: GroupedSlots;
+
+                        if (Array.isArray(rawAny.teachers)) {
+                            console.log('[load] network: teachers is ARRAY → BackendSchedule, running transform');
+                            // Normal BackendSchedule (arrays) — transform + conflict-eject required
+                            ({ dataset: transformed, groupedSlots: gs } = transformToFullDataset(raw));
+                            if (!meta) {
+                                try { meta = deriveEntityMetaFromSchedule(raw); } catch { /* non-fatal */ }
+                            }
+                            const { dataset: clean } = autoEjectConflicts(transformed);
+                            setDataset(clean);
+                            setGroupedSlots(gs);
+                            console.log('[load] writing to schedule_cache (raw BackendSchedule)');
+                            sessionStorage.setItem(`schedule_cache_${scheduleId}`, JSON.stringify(raw));
+                        } else {
+                            console.log('[load] network: teachers is OBJECT → FullDataset, using directly. keys:', Object.keys(rawAny.teachers ?? {}).slice(0, 3));
+                            // Already FullDataset (manually saved) — reconcile only (no conflict-eject)
+                            // Reconcile heals old data: fills missing class/room slots and empty teacher codes
+                            const fullDataset = reconcileFullDataset(rawAny as FullDataset);
+                            gs = {};
+                            setDataset(fullDataset);
+                            setGroupedSlots(gs);
+                            console.log('[load] writing to schedule_dataset_cache (FullDataset)');
+                            sessionStorage.setItem(`schedule_dataset_cache_${scheduleId}`, JSON.stringify({ dataset: fullDataset, groupedSlots: gs }));
                         }
                         if (meta) {
                             setEntityMeta(meta);
-                            sessionStorage.setItem(`entity_meta_cache_${jobId}`, JSON.stringify(meta));
-                            // Best-effort: write entity_meta to DB so future loads don't need to derive it.
-                            fetch(`/api/schedule/record?schedule_id=${encodeURIComponent(jobId)}`, {
+                            sessionStorage.setItem(`entity_meta_cache_${scheduleId}`, JSON.stringify(meta));
+                            fetch(`/api/schedule/record?schedule_id=${encodeURIComponent(scheduleId)}`, {
                                 method: 'PUT',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ entity_meta: meta }),
@@ -113,10 +220,10 @@ function SchedulePageContent() {
                         const fetchedSheetUrl = data.schedule?.sheet_url ?? null;
                         setSheetUrl(fetchedSheetUrl);
                         if (fetchedSheetUrl) {
-                            sessionStorage.setItem(`sheet_url_cache_${jobId}`, fetchedSheetUrl);
+                            sessionStorage.setItem(`sheet_url_cache_${scheduleId}`, fetchedSheetUrl);
                         }
                     } else {
-                        console.warn('[SchedulePage] Unexpected result shape:', data);
+                        console.warn('[SchedulePage] No schedule data found. Full response:', JSON.stringify(data, null, 2));
                         setDataset(emptyDataset());
                     }
                 } catch (err: any) {
@@ -172,6 +279,7 @@ function SchedulePageContent() {
             setDataset(clean);
             setGroupedSlots(gs);
             setJobName(payload.job_name || 'Imported Schedule');
+            setIsDirty(true);
             alert('JSON imported successfully!');
         } catch (e) {
             console.error('Import error:', e);
@@ -206,11 +314,12 @@ function SchedulePageContent() {
 
     const handleDeleteJob = async () => {
         const params = new URLSearchParams(window.location.search);
-        const jobId = params.get('job_id');
-        if (!jobId) return;
+        const scheduleId = params.get('schedule_id');
+        if (!scheduleId) return;
+        if (isDirty && !confirm('You have unsaved changes. Delete schedule without saving?')) return;
         if (!confirm('Delete this schedule? This cannot be undone.')) return;
         try {
-            const res = await fetch(`/api/schedule/delete?job_id=${encodeURIComponent(jobId)}`, { method: 'DELETE' });
+            const res = await fetch(`/api/schedule/delete?schedule_id=${encodeURIComponent(scheduleId)}`, { method: 'DELETE' });
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
                 throw new Error(data?.error ?? 'Delete failed');
@@ -225,8 +334,8 @@ function SchedulePageContent() {
 
     const handleSaveSchedule = async () => {
         const params = new URLSearchParams(window.location.search);
-        const jobId = params.get('job_id');
-        if (!jobId || !dataset) return;
+        const scheduleId = params.get('schedule_id');
+        if (!scheduleId || !dataset) return;
 
         try {
             const exportData = {
@@ -235,7 +344,7 @@ function SchedulePageContent() {
                 classes: dataset.classes,
                 rooms: dataset.rooms,
             };
-            const res = await fetch(`/api/schedule/record?schedule_id=${encodeURIComponent(jobId)}`, {
+            const res = await fetch(`/api/schedule/record?schedule_id=${encodeURIComponent(scheduleId)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ data: exportData, entity_meta: entityMeta }),
@@ -244,6 +353,14 @@ function SchedulePageContent() {
                 const data = await res.json().catch(() => ({}));
                 throw new Error(data?.error ?? 'Save failed');
             }
+            // Write already-transformed dataset cache (different format from raw BackendSchedule cache)
+            sessionStorage.setItem(
+                `schedule_dataset_cache_${scheduleId}`,
+                JSON.stringify({ dataset, groupedSlots }),
+            );
+            // Remove stale raw cache so it doesn't shadow the dataset cache on next load
+            sessionStorage.removeItem(`schedule_cache_${scheduleId}`);
+            setIsDirty(false);
             alert('Schedule saved successfully.');
         } catch (e) {
             console.error('Save error:', e);
@@ -253,31 +370,131 @@ function SchedulePageContent() {
 
     const handleMetaRefreshed = (newMeta: EntityMeta) => {
         const params = new URLSearchParams(window.location.search);
-        const jobId = params.get('job_id');
+        const scheduleId = params.get('schedule_id');
         setEntityMeta(newMeta);
-        if (jobId) {
-            sessionStorage.setItem(`entity_meta_cache_${jobId}`, JSON.stringify(newMeta));
+        if (scheduleId) {
+            sessionStorage.setItem(`entity_meta_cache_${scheduleId}`, JSON.stringify(newMeta));
         }
     };
+
+    // ─── Back with dirty guard ────────────────────────────────────────────────
+    const handleBack = () => {
+        if (isDirty && !confirm('You have unsaved changes. Leave without saving?')) return;
+        router.back();
+    };
+
+    // ─── Core drop execution ──────────────────────────────────────────────────
+    const executeDrop = useCallback((
+        targetDay: string,
+        targetSlot: number,
+        item: ScheduleItem,
+        source: 'GRID' | 'SIDEBAR',
+        sourceDay?: string,
+        sourceSlot?: number,
+    ) => {
+        if (!dataset) return;
+        const prev = dataset;
+        const { dataset: newDataset, ejected } = moveItem(
+            prev, item, targetDay, targetSlot,
+            source === 'GRID' ? sourceDay : undefined,
+            source === 'GRID' ? sourceSlot : undefined,
+        );
+        setDataset(newDataset);
+        setIsDirty(true);
+        if (ejected.length > 0) {
+            setEjectionNotice({ ejected, previousDataset: prev });
+        } else {
+            setEjectionNotice(null);
+        }
+    }, [dataset]);
+
+    const executeSwap = useCallback((
+        itemA: ScheduleItem, dayA: string, slotA: number,
+        itemB: ScheduleItem, dayB: string, slotB: number,
+    ) => {
+        if (!dataset) return;
+        setDataset(swapItems(dataset, itemA, dayA, slotA, itemB, dayB, slotB));
+        setIsDirty(true);
+        setEjectionNotice(null);
+    }, [dataset]);
 
     // ─── Grid drag-drop ───────────────────────────────────────────────────────
-    const handleGridDrop = (targetDay: string, targetSlot: number, payload: DragPayload) => {
+    const handleGridDrop = useCallback((targetDay: string, targetSlot: number, payload: DragPayload) => {
         const { source, item, day: sourceDay, slot: sourceSlot } = payload;
-        if (viewMode === 'all') {
-            setDataset(prev => {
-                if (!prev) return prev;
-                const { dataset: newDataset } = moveItem(
-                    prev, item, targetDay, targetSlot,
-                    source === 'GRID' ? sourceDay : undefined,
-                    source === 'GRID' ? sourceSlot : undefined,
-                );
-                return newDataset;
-            });
-        }
-    };
+        if (viewMode !== 'all' || !dataset) return;
 
+        // Same-cell no-op
+        if (source === 'GRID' && sourceDay === targetDay && sourceSlot === targetSlot) return;
+
+        // Build virtual dataset without the source item (for GRID→GRID)
+        const virtualDataset =
+            source === 'GRID' && sourceDay && sourceSlot !== undefined
+                ? removeItemFromDataset(dataset, item, sourceDay, sourceSlot)
+                : dataset;
+
+        const conflicts = findConflictsAtSlot(virtualDataset, targetDay, targetSlot, item);
+
+        if (conflicts.length === 0) {
+            executeDrop(targetDay, targetSlot, item, source, sourceDay, sourceSlot);
+            return;
+        }
+
+        // Has conflicts — show warning dialog
+        const isTeamSplit = conflicts.some(
+            c => c.existingItem.teachingType === 'team' || c.existingItem.teachingType === 'split',
+        );
+
+        let canSwap = false;
+        if (
+            source === 'GRID' &&
+            sourceDay &&
+            sourceSlot !== undefined &&
+            conflicts.length === 1 &&
+            !isTeamSplit
+        ) {
+            canSwap = checkSwapFeasibility(
+                dataset, item, sourceDay, sourceSlot,
+                conflicts[0].existingItem, targetDay, targetSlot,
+            );
+        }
+
+        setPendingDrop({
+            targetDay, targetSlot, item, conflicts, isTeamSplit, canSwap,
+            source, sourceDay, sourceSlot,
+        });
+    }, [viewMode, dataset, executeDrop]);
+
+    // ─── Conflict dialog callbacks ────────────────────────────────────────────
+    const handleConfirmDrop = useCallback((editedItem: ScheduleItem) => {
+        if (!pendingDrop) return;
+        const { targetDay, targetSlot, source, sourceDay, sourceSlot } = pendingDrop;
+        setPendingDrop(null);
+        executeDrop(targetDay, targetSlot, editedItem, source, sourceDay, sourceSlot);
+    }, [pendingDrop, executeDrop]);
+
+    const handleSwapDrop = useCallback(() => {
+        if (!pendingDrop?.canSwap || !pendingDrop.sourceDay || pendingDrop.sourceSlot === undefined) return;
+        const { item, sourceDay, sourceSlot, targetDay, targetSlot, conflicts } = pendingDrop;
+        setPendingDrop(null);
+        executeSwap(item, sourceDay, sourceSlot, conflicts[0].existingItem, targetDay, targetSlot);
+    }, [pendingDrop, executeSwap]);
+
+    const handleCancelDrop = useCallback(() => setPendingDrop(null), []);
+
+    // ─── Ejection notice callbacks ────────────────────────────────────────────
+    const handleUndo = useCallback(() => {
+        if (!ejectionNotice) return;
+        setDataset(ejectionNotice.previousDataset);
+        setIsDirty(true);
+        setEjectionNotice(null);
+    }, [ejectionNotice]);
+
+    const handleAcceptEjection = useCallback(() => setEjectionNotice(null), []);
+
+    // ─── Unschedule (drag to sidebar) ─────────────────────────────────────────
     const handleUnschedule = (item: ScheduleItem, day: string, slot: number) => {
         setDataset(prev => prev ? removeItemFromDataset(prev, item, day, slot) : prev);
+        setIsDirty(true);
     };
 
     const handleSidebarDrop = (payload: DragPayload) => {
@@ -299,6 +516,7 @@ function SchedulePageContent() {
         [dataset, viewMode],
     );
 
+    // ─── Edit overlay ─────────────────────────────────────────────────────────
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingParams, setEditingParams] = useState<{ day: string; slot: number } | null>(null);
     const [editingItem, setEditingItem] = useState<ScheduleItem | null>(null);
@@ -353,7 +571,7 @@ function SchedulePageContent() {
     };
 
     const handleModalSave = (data: Partial<ScheduleItem>) => {
-        if (!editingParams) return;
+        if (!editingParams || !dataset) return;
         const { day, slot } = editingParams;
         const newItem: ScheduleItem = {
             teacher: data.teacher ?? '',
@@ -365,14 +583,19 @@ function SchedulePageContent() {
             subject: data.subject ?? '',
             variant: data.variant ?? '_activity',
         };
-        setDataset(prev => {
-            if (!prev) return prev;
-            const currentItem = activeSchedule[day]?.[slot];
-            let current: FullDataset = prev;
-            if (currentItem) current = removeItemFromDataset(current, currentItem, day, slot);
-            const { dataset: updated } = moveItem(current, newItem, day, slot);
-            return updated;
-        });
+
+        const prev = dataset;
+        // Explicitly remove the original item first (fixes orphaned-item bug)
+        let current = editingItem
+            ? removeItemFromDataset(prev, editingItem, day, slot)
+            : prev;
+        const { dataset: updated, ejected } = moveItem(current, newItem, day, slot);
+
+        setDataset(updated);
+        setIsDirty(true);
+        if (ejected.length > 0) {
+            setEjectionNotice({ ejected, previousDataset: prev });
+        }
         setIsModalOpen(false);
         setEditingParams(null);
         setEditingItem(null);
@@ -386,7 +609,7 @@ function SchedulePageContent() {
                 <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 min-w-0">
                         <button
-                            onClick={() => router.back()}
+                            onClick={handleBack}
                             className="flex items-center gap-1 text-foreground-muted hover:text-foreground transition-colors shrink-0"
                         >
                             <ChevronLeft className="w-4 h-4" />
@@ -395,6 +618,11 @@ function SchedulePageContent() {
                         <div className="h-5 w-px bg-border hidden sm:block" />
                         <div className="flex items-center gap-2 min-w-0">
                             <h2 className="text-sm font-bold text-foreground truncate">{jobName}</h2>
+                            {isDirty && (
+                                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-semibold shrink-0">
+                                    Unsaved
+                                </span>
+                            )}
                             {loadError && (
                                 <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-semibold shrink-0" title={loadError}>
                                     Load error
@@ -550,6 +778,7 @@ function SchedulePageContent() {
                 initialData={editingItem}
                 entityMeta={entityMeta}
             />
+
             {hoverTooltip && (
                 <BandHoverTooltip
                     item={hoverTooltip.item}
@@ -557,6 +786,7 @@ function SchedulePageContent() {
                     anchorRect={hoverTooltip.rect}
                 />
             )}
+
             <OverlayInspectPopover
                 isOpen={bandInspect !== null}
                 onClose={() => setBandInspect(null)}
@@ -567,13 +797,35 @@ function SchedulePageContent() {
                 focusedEntity={bandInspect?.entityType ?? activeEntity}
                 groupedSlots={groupedSlots}
             />
+
             <UpdateSourcePanel
                 isOpen={isSourcePanelOpen}
                 onClose={() => setIsSourcePanelOpen(false)}
-                jobId={new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('job_id') ?? ''}
+                jobId={new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('schedule_id') ?? ''}
                 sheetUrl={sheetUrl}
                 onMetaRefreshed={handleMetaRefreshed}
             />
+
+            {/* Conflict warning dialog */}
+            {pendingDrop && dataset && (
+                <ConflictWarningDialog
+                    pendingDrop={pendingDrop}
+                    dataset={dataset}
+                    entityMeta={entityMeta}
+                    onConfirm={handleConfirmDrop}
+                    onSwap={handleSwapDrop}
+                    onCancel={handleCancelDrop}
+                />
+            )}
+
+            {/* Ejection notice */}
+            {ejectionNotice && (
+                <EjectionNotice
+                    ejected={ejectionNotice.ejected}
+                    onUndo={handleUndo}
+                    onAccept={handleAcceptEjection}
+                />
+            )}
         </div>
     );
 }

@@ -26,11 +26,13 @@ function doPost(e) {
       || '14hgR1XI-RgqPjc6pKhfdPxR7DbX8Gejrbl4P68PrOgE';
 
     var template = DriveApp.getFileById(templateId);
-    var copy = template.makeCopy(title, DriveApp.getRootFolder());
+    var copy = _withRetry(function() {
+      return template.makeCopy(title, DriveApp.getRootFolder());
+    });
 
-    copy.addEditor(userEmail);
-    copy.addEditor('sheet-bot@absolute-runner-331411.iam.gserviceaccount.com');
-    copy.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    _withRetry(function() { copy.addEditor(userEmail); });
+    _withRetry(function() { copy.addEditor('sheet-bot@absolute-runner-331411.iam.gserviceaccount.com'); });
+    _withRetry(function() { copy.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); });
 
     var spreadsheetId = copy.getId();
     var spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/edit';
@@ -54,6 +56,18 @@ function _jsonResponse(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function _withRetry(fn, maxAttempts) {
+  maxAttempts = maxAttempts || 3;
+  for (var i = 0; i < maxAttempts; i++) {
+    try {
+      return fn();
+    } catch (err) {
+      if (i === maxAttempts - 1) throw err;
+      Utilities.sleep((Math.pow(2, i) * 1000) + Math.floor(Math.random() * 500));
+    }
+  }
 }
 
 function _handleReadSheet(spreadsheetId) {

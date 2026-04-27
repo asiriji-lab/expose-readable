@@ -16,7 +16,7 @@ async function proxyScheduleRecord(req: NextRequest, method: 'GET' | 'PUT') {
   }
 
   try {
-    const upstreamInit: RequestInit = { method };
+    const upstreamInit: RequestInit = { method, cache: 'no-store' };
     if (method === 'PUT') {
       const body = await req.json();
       upstreamInit.body = JSON.stringify(body);

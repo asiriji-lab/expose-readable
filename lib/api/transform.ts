@@ -279,7 +279,54 @@ export function transformToFullDataset(schedule: BackendSchedule): { dataset: Fu
     }
   }
 
-  return { dataset: { teachers, classes, rooms }, groupedSlots };
+  const dataset = reconcileFullDataset({ teachers, classes, rooms });
+  return { dataset, groupedSlots };
+}
+
+
+// ---------------------------------------------------------------------------
+// Reconcile a FullDataset so teachers map is the source of truth.
+// Fixes two classes of inconsistency that come from BackendSchedule transforms
+// (student/room cells omit teacher codes) and from old saved data:
+//   1. classes/rooms entries with teacher: '' → filled from teachers map
+//   2. slots present in teachers but absent from classes or rooms → added
+// ---------------------------------------------------------------------------
+export function reconcileFullDataset(dataset: FullDataset): FullDataset {
+  const teachers = dataset.teachers;
+  const classes: FullDataset['classes'] = JSON.parse(JSON.stringify(dataset.classes));
+  const rooms: FullDataset['rooms']     = JSON.parse(JSON.stringify(dataset.rooms));
+
+  for (const [tid, daySlots] of Object.entries(teachers)) {
+    for (const [day, slots] of Object.entries(daySlots)) {
+      for (const [slotStr, item] of Object.entries(slots)) {
+        const slot = Number(slotStr);
+
+        if (item.classCode) {
+          classes[item.classCode] ??= {};
+          classes[item.classCode][day] ??= {};
+          const ex = classes[item.classCode][day][slot];
+          if (!ex) {
+            classes[item.classCode][day][slot] = { ...item };
+          } else if (!ex.teacher) {
+            classes[item.classCode][day][slot] = { ...ex, teacher: tid };
+          }
+        }
+
+        if (item.room) {
+          rooms[item.room] ??= {};
+          rooms[item.room][day] ??= {};
+          const ex = rooms[item.room][day][slot];
+          if (!ex) {
+            rooms[item.room][day][slot] = { ...item };
+          } else if (!ex.teacher) {
+            rooms[item.room][day][slot] = { ...ex, teacher: tid };
+          }
+        }
+      }
+    }
+  }
+
+  return { teachers, classes, rooms };
 }
 
 

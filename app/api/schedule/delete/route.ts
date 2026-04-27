@@ -8,14 +8,14 @@ import { BACKEND_SCHEDULES } from '@/lib/api/backend';
  * Deletes from both the DB schedules table and the file-system job folder.
  */
 export async function DELETE(req: NextRequest) {
-  const job_id = req.nextUrl.searchParams.get('job_id');
+  const schedule_id = req.nextUrl.searchParams.get('schedule_id');
 
-  if (!job_id) {
-    return NextResponse.json({ error: 'Missing job_id' }, { status: 400 });
+  if (!schedule_id) {
+    return NextResponse.json({ error: 'Missing schedule_id' }, { status: 400 });
   }
 
   try {
-    const upstream = await fetch(`${BACKEND_SCHEDULES}/${job_id}`, { method: 'DELETE' });
+    const upstream = await fetch(`${BACKEND_SCHEDULES}/${schedule_id}`, { method: 'DELETE' });
     const data = await upstream.json();
 
     if (!upstream.ok) {

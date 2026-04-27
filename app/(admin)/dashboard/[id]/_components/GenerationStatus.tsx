@@ -63,7 +63,7 @@ export default function GenerationStatus({
           {jobId && (
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
               <Link
-                href={`/schedule?job_id=${encodeURIComponent(jobId)}`}
+                href={`/schedule?schedule_id=${encodeURIComponent(jobId)}`}
                 className={cn(buttonVariants({ variant: 'success', size: 'lg' }))}
               >
                 ดูตารางสอน

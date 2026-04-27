@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import ScheduleCard, { Session } from './ScheduleCard';
 import ScheduleListSkeleton from './ScheduleListSkeleton';
 import EmptyScheduleState from './EmptyScheduleState';
@@ -37,10 +38,13 @@ function formatDate(isoString: string): string {
   }
 }
 
+type SortOrder = 'desc' | 'asc';
+
 export default function ScheduleList() {
   const [schedules, setSchedules] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
   useEffect(() => {
     fetch('/api/schedule/jobs', { cache: 'no-store' })
@@ -54,6 +58,7 @@ export default function ScheduleList() {
             name: job.job_name || job.job_id,
             semester: '',
             lastEdited: formatDate(job.updated_at),
+            updatedAt: job.updated_at,
             status: mapBackendStatus(job.status),
           })),
         );
@@ -61,6 +66,20 @@ export default function ScheduleList() {
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  const sortedSchedules = useMemo(() => {
+    return [...schedules].sort((a, b) => {
+      const ta = new Date(a.updatedAt).getTime();
+      const tb = new Date(b.updatedAt).getTime();
+      return sortOrder === 'desc' ? tb - ta : ta - tb;
+    });
+  }, [schedules, sortOrder]);
+
+  const handleSortLastEdited = () => {
+    setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc');
+  };
+
+  const SortIcon = sortOrder === 'desc' ? ChevronDown : ChevronUp;
 
   return (
     <div className="bg-surface rounded-lg shadow">
@@ -79,7 +98,6 @@ export default function ScheduleList() {
         <EmptyScheduleState />
       ) : (
         <>
-          {/* Table */}
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-border">
               <thead className="bg-background">
@@ -90,8 +108,17 @@ export default function ScheduleList() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-foreground-muted uppercase tracking-wider">
                     ภาคเรียน
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-foreground-muted uppercase tracking-wider">
-                    แก้ไขล่าสุด
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">
+                    <button
+                      onClick={handleSortLastEdited}
+                      className="flex items-center gap-1 text-foreground-muted hover:text-foreground transition-colors group"
+                    >
+                      แก้ไขล่าสุด
+                      <SortIcon
+                        size={13}
+                        className="text-primary group-hover:text-primary transition-colors"
+                      />
+                    </button>
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-foreground-muted uppercase tracking-wider">
                     สถานะ
@@ -102,8 +129,12 @@ export default function ScheduleList() {
                 </tr>
               </thead>
               <tbody className="bg-surface divide-y divide-border">
-                {schedules.map((schedule) => (
-                  <ScheduleCard key={schedule.id} schedule={schedule} />
+                {sortedSchedules.map((schedule) => (
+                  <ScheduleCard
+                    key={schedule.id}
+                    schedule={schedule}
+                    onDelete={(id) => setSchedules(prev => prev.filter(s => s.id !== id))}
+                  />
                 ))}
               </tbody>
             </table>

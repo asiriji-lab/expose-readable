@@ -365,6 +365,40 @@ export function autoEjectConflicts(dataset: FullDataset): {
 }
 
 /**
+ * Check whether itemA (being moved from slotA) and itemB (currently at slotB / the target)
+ * can be cleanly swapped: itemA → slotB, itemB → slotA, with no conflicts for either.
+ * Assumes itemA is being moved from (dayA, slotA) to (dayB, slotB).
+ */
+export function checkSwapFeasibility(
+    dataset: FullDataset,
+    itemA: ScheduleItem, dayA: string, slotA: number,
+    itemB: ScheduleItem, dayB: string, slotB: number,
+): boolean {
+    // Remove both items from the dataset
+    let temp = removeItemFromDataset(dataset, itemA, dayA, slotA);
+    temp = removeItemFromDataset(temp, itemB, dayB, slotB);
+    // Can itemB go to itemA's old slot?
+    return findConflictsAtSlot(temp, dayA, slotA, itemB).length === 0;
+}
+
+/**
+ * Atomically swap two items between slots.
+ * itemA moves from (dayA, slotA) to (dayB, slotB) and vice-versa.
+ * Returns a new dataset — no side effects.
+ */
+export function swapItems(
+    dataset: FullDataset,
+    itemA: ScheduleItem, dayA: string, slotA: number,
+    itemB: ScheduleItem, dayB: string, slotB: number,
+): FullDataset {
+    let current = removeItemFromDataset(dataset, itemA, dayA, slotA);
+    current = removeItemFromDataset(current, itemB, dayB, slotB);
+    current = placeItemInDataset(current, itemA, dayB, slotB);
+    current = placeItemInDataset(current, itemB, dayA, slotA);
+    return current;
+}
+
+/**
  * Count total lessons across all entities (should be consistent).
  */
 export function countLessons(dataset: FullDataset): { teachers: number; classes: number; rooms: number } {

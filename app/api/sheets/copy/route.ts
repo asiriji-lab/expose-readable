@@ -14,6 +14,13 @@ export async function POST(req: NextRequest) {
     const userEmail = authUser?.email ?? null;
     const gasUrl = process.env.GOOGLE_APPS_SCRIPT_URL;
 
+    if (!userEmail) {
+      return NextResponse.json(
+        { error: 'Not authenticated — please log in and try again.' },
+        { status: 401 }
+      );
+    }
+
     if (!gasUrl) {
       return NextResponse.json(
         { error: 'Google Apps Script URL not configured in .env.local' },
@@ -26,10 +33,8 @@ export async function POST(req: NextRequest) {
     const response = await fetch(gasUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({                                                                                                                                           
-        email: userEmail,                                                                                                                                              
-        title: title                                                                                                                                                   
-      }),
+      body: JSON.stringify({ email: userEmail, title: title }),
+      signal: AbortSignal.timeout(20000),
     });
     const contentType = response.headers.get('content-type') ?? '';                                                                                                    
     if (!contentType.includes('application/json')) {                                                                                                                   

@@ -113,7 +113,7 @@ export default function ScheduleDndProvider({
         if (overId === 'sidebar-dropzone') {
             onSidebarDrop(payload);
         }
-    }, [conflictCells, onGridDrop, onSidebarDrop]);
+    }, [onGridDrop, onSidebarDrop]);
 
     // Drag overlay ghost content
     const cellHeight = 3 * ROW_HEIGHT;
