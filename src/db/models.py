@@ -26,6 +26,8 @@ import uuid
 from functools import wraps
 from typing import Dict, List, Optional
 
+from sqlalchemy.orm.attributes import flag_modified
+
 from .database import db, is_available
 from .orm_models import Organization, User, Schedule
 
@@ -271,8 +273,10 @@ def complete_schedule(schedule_id: str, data: Dict,
     sched.status = 'completed'
     sched.progress = 100.0
     sched.data = data
+    flag_modified(sched, 'data')
     if entity_meta is not None:
         sched.entity_meta = entity_meta
+        flag_modified(sched, 'entity_meta')
     db.session.commit()
 
 
@@ -369,6 +373,26 @@ def update_entity_meta(schedule_id: str, entity_meta: Dict) -> None:
     if not sched:
         return
     sched.entity_meta = entity_meta
+    flag_modified(sched, 'entity_meta')
+    db.session.commit()
+
+
+def save_manual_edit(schedule_id: str, data: Dict, entity_meta: Optional[Dict] = None) -> None:
+    """
+    Persist manually-edited schedule data from the frontend.
+
+    Unlike complete_schedule(), this function raises on any error so the
+    caller (PUT route) can return a proper 500 instead of silently returning
+    success while the DB write was rolled back.
+    """
+    sched = db.session.get(Schedule, uuid.UUID(schedule_id))
+    if not sched:
+        raise ValueError(f"Schedule {schedule_id} not found")
+    sched.data = data
+    flag_modified(sched, 'data')
+    if entity_meta is not None:
+        sched.entity_meta = entity_meta
+        flag_modified(sched, 'entity_meta')
     db.session.commit()
 
 

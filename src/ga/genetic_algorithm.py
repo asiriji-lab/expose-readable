@@ -1369,12 +1369,11 @@ class GeneticAlgorithm:
             # Stats
             avg_fitness = sum(c.fitness for c in self.population) / len(self.population)
             stat = {
-                'generation':        gen,
-                'best_fitness':      self.best_chromosome.fitness,
-                'avg_fitness':       avg_fitness,
-                'violations':        self.best_chromosome.violations,
-                'stagnation':        self._gens_without_improvement,
-                'global_stagnation': self._global_stagnation,
+                'generation':  gen,
+                'best_fitness': self.best_chromosome.fitness,
+                'avg_fitness':  avg_fitness,
+                'violations':   self.best_chromosome.violations,
+                'stagnation':   self._gens_without_improvement,
             }
             self.generation_stats.append(stat)
 

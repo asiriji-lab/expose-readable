@@ -161,7 +161,8 @@ def submit_schedule():
           Keys: n_islands, island_population_size, max_generations,
           migration_interval, migration_rate, topology, mutation_rate,
           crossover_rate, tournament_size, elite_size, stagnation_limit,
-          catastrophic_after. Set n_islands=1 to use the standard GA instead.
+          catastrophic_after, block_crossover_rate, min_improvement,
+          window_size. Set n_islands=1 to use the standard GA instead.
       - name: org_id
         in: formData
         type: string
@@ -1130,12 +1131,18 @@ def update_schedule_record(schedule_id):
     if not sched:
         return jsonify({"success": False, "error": "Schedule not found"}), 404
 
-    if schedule_data is not None:
-        # entity_meta is passed through so both are saved atomically.
-        models.complete_schedule(schedule_id, schedule_data, entity_meta)
-    elif entity_meta is not None:
-        # Frontend sent only entity_meta (e.g. first-load derivation) — persist it.
-        models.update_entity_meta(schedule_id, entity_meta)
+    try:
+        if schedule_data is not None:
+            # entity_meta is passed through so both are saved atomically.
+            # Use save_manual_edit (no @_guard) so DB errors surface as 500.
+            models.save_manual_edit(schedule_id, schedule_data, entity_meta)
+        elif entity_meta is not None:
+            # Frontend sent only entity_meta (e.g. first-load derivation) — persist it.
+            models.update_entity_meta(schedule_id, entity_meta)
+    except Exception as exc:
+        current_app.logger.error("[PUT /schedules/%s] save failed: %s", schedule_id, exc)
+        _db.session.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 500
 
     if job_name:
         models.update_schedule_job_name(schedule_id, job_name)
