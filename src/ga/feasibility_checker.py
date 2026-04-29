@@ -227,6 +227,24 @@ class FeasibilityChecker:
             if len(lesson.required_rooms) == 1:
                 room_demand[lesson.required_rooms[0]] += ppw
 
+        # Build tagged room IDs: rooms with tags share demand across the tag pool
+        # (and can fall back to general rooms), so per-room capacity is not a hard limit.
+        tagged_room_ids: Set[str] = set()
+        df_room = self.manager.get_sheet_data('room')
+        if df_room is not None and 'room_id' in df_room.columns:
+            _EMPTY = {'', 'nan', 'none'}
+            for _, rrow in df_room.iterrows():
+                rid = str(rrow.get('room_id', '')).strip()
+                rtags = str(rrow.get('tags', '')).strip()
+                if rid and rid.lower() not in _EMPTY and rtags and rtags.lower() not in _EMPTY:
+                    has_real_tag = any(
+                        t.strip().lower() not in ('', 'exclude')
+                        for t in rtags.split(',')
+                        if t.strip()
+                    )
+                    if has_real_tag:
+                        tagged_room_ids.add(rid)
+
         for tid, demand in teacher_demand.items():
             free_count = len(self.free_slots.get(f"teacher:{tid}", self.all_slots))
             if demand > free_count:
@@ -250,6 +268,10 @@ class FeasibilityChecker:
                     f"({demand/free_count*100:.0f}%)")
 
         for rid, demand in room_demand.items():
+            # Tagged rooms can share demand across same-tag rooms and general rooms —
+            # individual capacity overflow is not infeasible.
+            if rid in tagged_room_ids:
+                continue
             free_count = len(self.free_slots.get(f"room:{rid}", self.all_slots))
             if demand > free_count:
                 report.add('ERROR', 'entity_capacity', f"room:{rid}",
