@@ -78,8 +78,8 @@ function StatusBand({ bandStatus, entityType, height, onClick, onHoverStart, onH
                 className={`w-full border-l-[3px] border-l-violet-400 bg-violet-50 flex items-center justify-center select-none relative ${dimClass}`}
             >
                 <span className="absolute right-1 top-0 bottom-0 flex items-center pointer-events-none">
-                    <svg className="w-2.5 h-2.5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    <svg className="w-2.5 h-2.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                     </svg>
                 </span>
                 <span className="text-[10px] text-violet-600 font-semibold truncate px-1">
@@ -165,6 +165,52 @@ function DraggableSessionBand({
             onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
         >
             <span className="text-[10px] text-emerald-800 font-semibold truncate px-1 pointer-events-none">
+                {displayText ?? bandLabel(item)}
+            </span>
+        </div>
+    );
+}
+
+// ─── Draggable preplace band (teacher only, with warning icon) ───────────────
+
+function DraggablePreplaceBand({
+    item,
+    height,
+    dragId,
+    dragPayload,
+    dim,
+    displayText,
+}: {
+    item: ScheduleItem;
+    height: number;
+    dragId: string;
+    dragPayload: DragPayload;
+    dim?: boolean;
+    displayText?: string | null;
+}) {
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+        id: dragId,
+        data: dragPayload,
+    });
+
+    return (
+        <div
+            ref={setNodeRef}
+            {...listeners}
+            {...attributes}
+            style={{ height }}
+            className={[
+                'w-full border-l-[3px] border-l-violet-400 bg-violet-50 flex items-center justify-center select-none relative',
+                'cursor-grab active:cursor-grabbing',
+                isDragging ? 'opacity-30' : dim ? 'opacity-50' : '',
+            ].join(' ')}
+        >
+            <span className="absolute right-1 top-0 bottom-0 flex items-center pointer-events-none">
+                <svg className="w-2.5 h-2.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+            </span>
+            <span className="text-[10px] text-violet-600 font-semibold truncate px-1 pointer-events-none">
                 {displayText ?? bandLabel(item)}
             </span>
         </div>
@@ -258,6 +304,15 @@ export default function ThreeBandCell({
                     dragId={dragId}
                     dragPayload={dragPayload}
                     onClick={() => onBandClick?.('teacher')}
+                    dim={!!activeEntity && activeEntity !== 'teacher'}
+                    displayText={bandTexts?.[0]}
+                />
+            ) : teacherBand.kind === 'preplace' && dragId && dragPayload && teacherBand.occupyingItem ? (
+                <DraggablePreplaceBand
+                    item={teacherBand.occupyingItem}
+                    height={bandHeight}
+                    dragId={dragId}
+                    dragPayload={dragPayload}
                     dim={!!activeEntity && activeEntity !== 'teacher'}
                     displayText={bandTexts?.[0]}
                 />

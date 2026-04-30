@@ -12,6 +12,7 @@ import EditOverlay from './_components/EditOverlay';
 import FilterDropdown from './_components/FilterDropdown';
 import AdminHeader from '../_components/AdminHeader';
 import ConflictWarningDialog, { PendingDropState } from './_components/ConflictWarningDialog';
+import PreplaceWarningDialog, { PendingPreplaceState } from './_components/PreplaceWarningDialog';
 import EjectionNotice from './_components/EjectionNotice';
 import { computeOverlayData } from './_utils/overlayUtils';
 import {
@@ -80,6 +81,9 @@ function SchedulePageContent() {
 
     // ─── Conflict warning dialog ──────────────────────────────────────────────
     const [pendingDrop, setPendingDrop] = useState<PendingDropState | null>(null);
+
+    // ─── Preplace warning dialog ──────────────────────────────────────────────
+    const [pendingPreplaceDrop, setPendingPreplaceDrop] = useState<PendingPreplaceState | null>(null);
 
     // ─── Ejection notice (non-dismissing, undo support) ───────────────────────
     const [ejectionNotice, setEjectionNotice] = useState<{
@@ -443,6 +447,12 @@ function SchedulePageContent() {
             ? findConflictsForTeamItem(virtualDataset, targetDay, targetSlot, item)
             : findConflictsAtSlot(virtualDataset, targetDay, targetSlot, item);
 
+        // Preplace/elective item — always warn before moving
+        if (item.isPreplace) {
+            setPendingPreplaceDrop({ targetDay, targetSlot, item, conflicts, source, sourceDay, sourceSlot });
+            return;
+        }
+
         if (conflicts.length === 0) {
             executeDrop(targetDay, targetSlot, item, source, sourceDay, sourceSlot);
             return;
@@ -489,6 +499,15 @@ function SchedulePageContent() {
     }, [pendingDrop, executeSwap]);
 
     const handleCancelDrop = useCallback(() => setPendingDrop(null), []);
+
+    const handleConfirmPreplace = useCallback(() => {
+        if (!pendingPreplaceDrop) return;
+        const { targetDay, targetSlot, item, source, sourceDay, sourceSlot } = pendingPreplaceDrop;
+        setPendingPreplaceDrop(null);
+        executeDrop(targetDay, targetSlot, item, source, sourceDay, sourceSlot);
+    }, [pendingPreplaceDrop, executeDrop]);
+
+    const handleCancelPreplace = useCallback(() => setPendingPreplaceDrop(null), []);
 
     // ─── Ejection notice callbacks ────────────────────────────────────────────
     const handleUndo = useCallback(() => {
@@ -826,6 +845,15 @@ function SchedulePageContent() {
                 sheetUrl={sheetUrl}
                 onMetaRefreshed={handleMetaRefreshed}
             />
+
+            {/* Preplace warning dialog */}
+            {pendingPreplaceDrop && (
+                <PreplaceWarningDialog
+                    pendingDrop={pendingPreplaceDrop}
+                    onConfirm={handleConfirmPreplace}
+                    onCancel={handleCancelPreplace}
+                />
+            )}
 
             {/* Conflict warning dialog */}
             {pendingDrop && dataset && (
