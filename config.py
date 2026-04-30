@@ -48,6 +48,7 @@ class Config:
     # Job settings
     JOB_TIMEOUT = int(os.getenv('JOB_TIMEOUT', 600))  # 10 minutes
     JOB_CLEANUP_DAYS = int(os.getenv('JOB_CLEANUP_DAYS', 7))
+    MAX_CONCURRENT_JOBS = int(os.getenv('MAX_CONCURRENT_JOBS', 2))
 
     # PostgreSQL — consumed by Flask-SQLAlchemy
     DATABASE_URL = (

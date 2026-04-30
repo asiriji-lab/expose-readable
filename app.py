@@ -37,6 +37,7 @@ from api.errors import register_error_handlers
 from config import Config
 from src.logger import init_api_logger
 from src.db import database
+from src.ga.job_queue import JobQueue
 
 
 SWAGGER_CONFIG = {
@@ -123,6 +124,9 @@ def create_app(config_class=Config):
         raise EnvironmentError(f"The following variables were not set: {missing_vars}")
     else:
         database.init_db(app)
+
+    # ── Job queue (ThreadPoolExecutor + cancel events) ────────────────────────
+    app.job_queue = JobQueue(max_workers=app.config['MAX_CONCURRENT_JOBS'])
 
     # ── Blueprints & error handlers ───────────────────────────────────────────
     app.register_blueprint(api_bp)

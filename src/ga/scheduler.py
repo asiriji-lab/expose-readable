@@ -32,6 +32,7 @@ from .exporter import ScheduleExporter
 from .json_exporter import ScheduleJsonExporter
 from .job_manager import JobManager
 from .feasibility_checker import FeasibilityChecker
+from .job_queue import JobCancelledError
 
 
 # Canonical filenames expected in the uploads folder (matching input_dataset/)
@@ -101,7 +102,8 @@ def run_scheduler_job(job_id: str,
                       job_manager: Optional[JobManager] = None,
                       progress_callback: Optional[Callable] = None,
                       academic_year: str = "",
-                      semester: int = 1) -> Dict:
+                      semester: int = 1,
+                      cancel_event=None) -> Dict:
     """
     Run a complete scheduling job, mirroring the main.py pipeline.
 
@@ -150,6 +152,7 @@ def run_scheduler_job(job_id: str,
             academic_year=academic_year,
             semester=semester,
             job_logger=job_logger,
+            cancel_event=cancel_event,
         )
     except Exception as exc:
         job_logger.exception("Unhandled exception during job execution: %s", exc)
@@ -168,7 +171,8 @@ def run_scheduler_job(job_id: str,
 
 def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
                               params, job_manager, progress_callback,
-                              academic_year, semester, job_logger=None):
+                              academic_year, semester, job_logger=None,
+                              cancel_event=None):
     log = job_logger or logging.getLogger(__name__)
 
     # ── Step 1: Load raw CSVs ─────────────────────────────────────────────────
@@ -229,6 +233,8 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
         job_manager.update_job_progress(job_id, 'running_ga', 0, data_stats)
 
     def ga_progress(generation, max_gen, stats):
+        if cancel_event and cancel_event.is_set():
+            raise JobCancelledError(f"Job {job_id} cancelled at generation {generation}")
         progress = (generation / max_gen) * 100
         if job_manager:
             job_manager.update_job_progress(job_id, 'running_ga', progress, {

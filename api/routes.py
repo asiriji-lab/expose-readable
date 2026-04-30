@@ -10,7 +10,6 @@ import os
 import uuid
 import json
 import shutil
-import threading
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app, send_file
 from flask_jwt_extended import (
@@ -20,6 +19,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 from src.ga.scheduler import run_scheduler_job
 from src.ga.job_manager import JobManager
+from src.ga.job_queue import JobCancelledError
 from src.utils.file_helpers import allowed_file, get_job_folder, create_zip_archive
 from src.db import database, models
 from src.db.database import db as _db
@@ -35,10 +35,12 @@ api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 # BACKGROUND JOB RUNNER
 # =============================================================================
 
-def _run_job_background(app, job_id, job_folder, params, academic_year, semester):
-    """Run a scheduling job inside a background thread with its own app context."""
+def _run_job_background(app, job_id, job_folder, params, academic_year, semester,
+                        job_queue, *, cancel_event=None):
+    """Run a scheduling job inside a thread-pool thread with its own app context."""
     with app.app_context():
         job_manager = JobManager(app.config['JOBS_FOLDER'])
+        job_manager.update_job_status(job_id, 'created')
         try:
             result = run_scheduler_job(
                 job_id=job_id,
@@ -47,6 +49,7 @@ def _run_job_background(app, job_id, job_folder, params, academic_year, semester
                 job_manager=job_manager,
                 academic_year=academic_year,
                 semester=semester,
+                cancel_event=cancel_event,
             )
             # Write to DB first so data is always present before job_manager
             # signals 'completed' to pollers (get_job_status / get_job_result).
@@ -69,10 +72,16 @@ def _run_job_background(app, job_id, job_folder, params, academic_year, semester
                     result=stored_result,
                     error=result.get('error', 'Unknown error'),
                 )
+        except JobCancelledError:
+            if database.is_available():
+                models.update_schedule_status(job_id, 'cancelled')
+            job_manager.update_job_status(job_id, 'cancelled')
         except Exception as e:
             if database.is_available():
                 models.fail_schedule(job_id, str(e))
             job_manager.update_job_status(job_id, 'failed', error=str(e))
+        finally:
+            job_queue.cleanup(job_id)
 
 
 # =============================================================================
@@ -265,20 +274,20 @@ def submit_schedule():
                             "error": f"Could not read '{key}.csv': {exc}"}), 400
         job_manager.add_file_to_job(job_id, key, dest)
 
-    # ── Launch background thread ──────────────────────────────────────────────
+    # ── Submit to thread pool ─────────────────────────────────────────────────
     app = current_app._get_current_object()
-    thread = threading.Thread(
-        target=_run_job_background,
-        args=(app, job_id, job_folder, params, academic_year, semester),
-        daemon=True,
+    current_app.job_queue.submit(
+        job_id,
+        _run_job_background,
+        app, job_id, job_folder, params, academic_year, semester,
+        current_app.job_queue,
     )
-    thread.start()
 
     return jsonify({
         "success":      True,
         "job_id":       job_id,
         "job_name":     job_name,
-        "message":      "Job queued and running. Poll the status endpoint for updates.",
+        "message":      "Job queued. Poll the status endpoint for updates.",
         "status_url":   f"/api/v1/jobs/{job_id}",
         "result_url":   f"/api/v1/jobs/{job_id}/result",
         "download_url": f"/api/v1/jobs/{job_id}/download",
@@ -581,6 +590,14 @@ def delete_job(job_id):
 
     if not job and db_record is None:
         return jsonify({"success": False, "error": "Job not found"}), 404
+
+    # Signal cancellation before touching files so the running thread exits cleanly.
+    cancel_state = current_app.job_queue.cancel(job_id)
+    if cancel_state == 'cancelled_queued' and job:
+        # Future was queued but never started — mark cancelled now (thread won't run).
+        job_manager.update_job_status(job_id, 'cancelled')
+        if database.is_available():
+            models.update_schedule_status(job_id, 'cancelled')
 
     # Delete file-system job folder and record if they exist.
     if job:

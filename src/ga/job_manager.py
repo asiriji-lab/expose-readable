@@ -44,7 +44,7 @@ class JobManager:
         job = {
             'job_id': job_id,
             'job_name': job_name,
-            'status': 'created',
+            'status': 'queued',
             'params': params,
             'files': {},
             'progress': 0,
