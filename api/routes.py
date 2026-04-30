@@ -79,7 +79,7 @@ def _run_job_background(app, job_id, job_folder, params, academic_year, semester
 # SINGLE SUBMIT ENDPOINT
 # =============================================================================
 
-@api_bp.route('/schedule', methods=['POST'])
+@api_bp.route('/jobs', methods=['POST'])
 def submit_schedule():
     """
     Submit a complete scheduling job in one request.
@@ -279,9 +279,9 @@ def submit_schedule():
         "job_id":       job_id,
         "job_name":     job_name,
         "message":      "Job queued and running. Poll the status endpoint for updates.",
-        "status_url":   f"/api/v1/schedule/{job_id}",
-        "result_url":   f"/api/v1/schedule/{job_id}/result",
-        "download_url": f"/api/v1/schedule/{job_id}/download",
+        "status_url":   f"/api/v1/jobs/{job_id}",
+        "result_url":   f"/api/v1/jobs/{job_id}/result",
+        "download_url": f"/api/v1/jobs/{job_id}/download",
     }), 202
 
 
@@ -316,7 +316,7 @@ def list_jobs():
     })
 
 
-@api_bp.route('/schedule/<job_id>', methods=['GET'])
+@api_bp.route('/jobs/<job_id>', methods=['GET'])
 def get_job_status(job_id):
     """
     Get the status and progress of a scheduling job.
@@ -369,7 +369,7 @@ def get_job_status(job_id):
     })
 
 
-@api_bp.route('/schedule/<job_id>/result', methods=['GET'])
+@api_bp.route('/jobs/<job_id>/result', methods=['GET'])
 def get_job_result(job_id):
     """
     Get the result JSON of a completed scheduling job.
@@ -442,7 +442,7 @@ def get_job_result(job_id):
     return jsonify({"success": False, "error": "Job not found"}), 404
 
 
-@api_bp.route('/schedule/<job_id>/sync-status', methods=['POST'])
+@api_bp.route('/jobs/<job_id>/sync-status', methods=['POST'])
 def sync_job_status(job_id):
     """
     Sync a job's in-memory/filesystem status to the database.
@@ -493,7 +493,7 @@ def sync_job_status(job_id):
     return jsonify({"success": True, "status": job.get('status')})
 
 
-@api_bp.route('/schedule/<job_id>/download', methods=['GET'])
+@api_bp.route('/jobs/<job_id>/download', methods=['GET'])
 def download_results(job_id):
     """
     Download completed schedules as a ZIP archive.
@@ -545,7 +545,7 @@ def download_results(job_id):
     )
 
 
-@api_bp.route('/schedule/<job_id>', methods=['DELETE'])
+@api_bp.route('/jobs/<job_id>', methods=['DELETE'])
 def delete_job(job_id):
     """
     Delete a scheduling job and all its files.
