@@ -34,11 +34,13 @@ export function useJobStatus(jobId: string | null, intervalMs = 3000) {
       } catch (err) {
         if (!active) return;
         setError((err as Error).message);
+        // Retry on transient errors rather than hard-failing
+        timerRef.current = setTimeout(poll, intervalMs);
       }
     }
 
-    poll();
-    timerRef.current = setTimeout(poll, intervalMs);
+    // Delay first poll so backend has time to register the job
+    timerRef.current = setTimeout(poll, 1500);
 
     return () => {
       active = false;

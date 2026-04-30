@@ -49,9 +49,8 @@ export default function GenerationStatus({
       fetch(`/api/schedule/sync-status?job_id=${encodeURIComponent(jobId)}`, { method: 'POST' })
         .catch(() => { /* non-fatal */ });
       onFailed(job?.error || error || 'สร้างตารางไม่สำเร็จ');
-    } else if (error) {
-      onFailed(error);
     }
+    // Network/fetch errors are transient — polling retries, don't hard-fail
   }, [state, jobId, job, error, onCompleted, onFailed]);
 
   if (state === 'completed') {
