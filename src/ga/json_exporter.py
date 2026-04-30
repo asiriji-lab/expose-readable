@@ -77,10 +77,12 @@ class ScheduleJsonExporter:
         return meta
 
     def _build_subject_meta(self) -> Dict[str, str]:
-        """subject_id → subject_name"""
+        """subject_id → subject_name (curriculum + elective)"""
         meta: Dict[str, str] = {}
-        df = self.manager.get_sheet_data('curriculum')
-        if df is not None:
+        for sheet in ('curriculum', 'elective'):
+            df = self.manager.get_sheet_data(sheet)
+            if df is None:
+                continue
             for _, row in df.iterrows():
                 sid   = str(row.get('subject_id',   '')).strip()
                 sname = str(row.get('subject_name', '')).strip()
@@ -172,6 +174,14 @@ class ScheduleJsonExporter:
                     "room":         None,
                     "slot_type":    "preplace",
                 }
+            if class_id in ('NoStudentListed', ''):
+                return {
+                    "subject_id":   subject_id,
+                    "subject_name": self._subject_name(subject_id),
+                    "class":        None,
+                    "room":         room_id,
+                    "slot_type":    "elective",
+                }
             return {
                 "subject_id":   subject_id,
                 "subject_name": self._subject_name(subject_id),
@@ -228,6 +238,14 @@ class ScheduleJsonExporter:
                     "teacher":      None,
                     "class":        None,
                     "slot_type":    "preplace",
+                }
+            if class_id in ('NoStudentListed', ''):
+                return {
+                    "subject_id":   subject_id,
+                    "subject_name": self._subject_name(subject_id),
+                    "teacher":      self._teacher_name(teacher_id),
+                    "class":        None,
+                    "slot_type":    "elective",
                 }
             return {
                 "subject_id":   subject_id,
@@ -352,6 +370,20 @@ class ScheduleJsonExporter:
         # These lessons are fully placed in the chromosome but invisible in the grid.
         conflict_slots: List[Dict] = []
 
+        def _conflict_entry(lesson_id, lesson, ts, label,
+                            entity_type: str, entity_id: str) -> Dict:
+            return {
+                "lesson_id":       lesson_id,
+                "subject_id":      lesson.subject_id,
+                "subject_name":    lesson.subject_name,
+                "student_classes": lesson.student_classes,
+                "teacher_ids":     lesson.teacher_ids,
+                "entity_type":     entity_type,
+                "entity_id":       entity_id,
+                "day":             ts.day,
+                "period":          label,
+            }
+
         for lesson_id, slots in self.chromosome.genes.items():
             lesson = lesson_lookup.get(lesson_id)
             if not lesson:
@@ -362,25 +394,15 @@ class ScheduleJsonExporter:
                 key      = (ts.day, label)
                 room_str = room if room and room != "NO_ROOM" else None
 
-                class_str = lesson.student_classes[0] if lesson.student_classes else None
-                t_name    = self._teacher_name(lesson.teacher_ids[0]) if lesson.teacher_ids else None
-
-                def _conflict_entry(entity_type: str, entity_id: str) -> Dict:
-                    return {
-                        "lesson_id":      lesson_id,
-                        "subject_id":     lesson.subject_id,
-                        "subject_name":   lesson.subject_name,
-                        "student_classes": lesson.student_classes,
-                        "teacher_ids":    lesson.teacher_ids,
-                        "entity_type":    entity_type,
-                        "entity_id":      entity_id,
-                        "day":            ts.day,
-                        "period":         label,
-                    }
+                # Join all classes and all teacher names so multi-class / team
+                # lessons are fully represented in every entity view.
+                class_str = ', '.join(lesson.student_classes) if lesson.student_classes else None
+                t_names   = [self._teacher_name(tid) for tid in lesson.teacher_ids]
+                t_name    = ', '.join(t_names) if t_names else None
 
                 for tid in lesson.teacher_ids:
                     if key in teacher_ga[tid]:
-                        conflict_slots.append(_conflict_entry("teacher", tid))
+                        conflict_slots.append(_conflict_entry(lesson_id, lesson, ts, label, "teacher", tid))
                     else:
                         teacher_ga[tid][key] = {
                             "subject_id":   lesson.subject_id,
@@ -391,7 +413,7 @@ class ScheduleJsonExporter:
 
                 for cid in lesson.student_classes:
                     if key in student_ga[cid]:
-                        conflict_slots.append(_conflict_entry("student", cid))
+                        conflict_slots.append(_conflict_entry(lesson_id, lesson, ts, label, "student", cid))
                     else:
                         student_ga[cid][key] = {
                             "subject_id":   lesson.subject_id,
@@ -402,7 +424,7 @@ class ScheduleJsonExporter:
 
                 if room_str:
                     if key in room_ga[room_str]:
-                        conflict_slots.append(_conflict_entry("room", room_str))
+                        conflict_slots.append(_conflict_entry(lesson_id, lesson, ts, label, "room", room_str))
                     else:
                         room_ga[room_str][key] = {
                             "subject_id":   lesson.subject_id,
@@ -415,11 +437,11 @@ class ScheduleJsonExporter:
         # Locked lessons always overwrite GA lessons at the same slot — preschedule
         # takes priority over GA assignments.
         for locked in getattr(self.manager, 'locked_lessons', []):
-            t_names = [self._teacher_name(tid) for tid in locked.get('teacher_ids', [])]
-            t_name = t_names[0] if t_names else None
-            classes = locked.get('student_classes', [])
-            class_str = classes[0] if classes else None
-            room_str = locked.get('room')
+            t_names   = [self._teacher_name(tid) for tid in locked.get('teacher_ids', [])]
+            t_name    = ', '.join(t_names) if t_names else None
+            classes   = locked.get('student_classes', [])
+            class_str = ', '.join(classes) if classes else None
+            room_str  = locked.get('room')
 
             for (day, label) in locked.get('slots', []):
                 key = (day, label)

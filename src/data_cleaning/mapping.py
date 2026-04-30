@@ -50,7 +50,10 @@ def create_room_lookup(df_room: pd.DataFrame) -> Dict[str, List[str]]:
 
 # helper funciton to create map for teacher_name -> 'teacher_id'
 def create_teacher_lookup(df_teacher: pd.DataFrame) -> dict[str, str]:
-    return df_teacher.set_index('teacher_name')['teacher_id'].to_dict()
+    df = df_teacher.copy()
+    df['teacher_name'] = df['teacher_name'].astype(str).str.strip()
+    df['teacher_id']   = df['teacher_id'].astype(str).str.strip()
+    return df.set_index('teacher_name')['teacher_id'].to_dict()
 
 # create map for elective slots from 'name' -> 'periods'
 def get_elective_dynamic_mapping(input_data: Dict[str, pd.DataFrame]) -> Dict[str, str]:
@@ -63,8 +66,12 @@ def get_elective_dynamic_mapping(input_data: Dict[str, pd.DataFrame]) -> Dict[st
 
     # Map the preplace columns (using the mapping from csv_column_mapping['preplace'])
     preplace_map = csv_column_mapping.get('preplace', {})
-    df_preplace = input_data['preplace'].copy().rename(columns=preplace_map)
+    df_preplace = input_data['preplace'].copy()
+    df_preplace.columns = df_preplace.columns.astype(str).str.strip()
+    df_preplace = df_preplace.rename(columns=preplace_map)
     df_preplace.dropna(subset=['slot_name', 'periods'], inplace=True)
+    df_preplace['slot_name'] = df_preplace['slot_name'].astype(str).str.strip()
+    df_preplace['periods']   = df_preplace['periods'].astype(str).str.strip()
 
     # Create the lookup dictionary: {'เสรีม.ต้น1': 'FRI_2-FRI_3', ...}
     slot_lookup = df_preplace.set_index('slot_name')['periods'].to_dict()

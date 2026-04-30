@@ -28,6 +28,8 @@ def rename_csv_columns(input_data: Dict[str, pd.DataFrame], csv_column_mapping: 
         # Get the DataFrame from the already-copied processed_data dictionary
         # We work on a copy to ensure all original data is preserved
         df_raw = processed_data[key].copy()
+        # Strip whitespace from column names so Thai headers with padding still match
+        df_raw.columns = df_raw.columns.astype(str).str.strip()
         all_raw_cols = df_raw.columns.tolist()
         
         # Determine the FINAL mapping for the current file

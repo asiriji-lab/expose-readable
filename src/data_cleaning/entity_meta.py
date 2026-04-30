@@ -247,6 +247,7 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
                         'room': assignment_room,
                         'periodsPerWeek': ppw,
                         'isMultiClass': True,
+                        'coTeacherIds': tids,
                     })
                     workload_map[tid][sid]['totalPeriods'] += ppw
 
@@ -275,6 +276,76 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
         for tid, subject_entries in workload_map.items():
             teacher_workload[tid] = list(subject_entries.values())
 
+    # ── Teacher groups (TEAM / MULTI_CLASS_TEAM co-teaching) ─────────────────
+    teacher_groups: List[Dict] = []
+
+    if workload_map:
+        # MULTI_CLASS_TEAM: identified by isMultiClass flag and coTeacherIds
+        multi_class_seen: set = set()
+        for tid, subject_map in workload_map.items():
+            for sid, entry in subject_map.items():
+                for a in entry['assignments']:
+                    if not a.get('isMultiClass'):
+                        continue
+                    co_ids = tuple(sorted(a.get('coTeacherIds', [tid])))
+                    student_classes = tuple(sorted(a.get('studentClasses', [])))
+                    room = a.get('room', '')
+                    group_key = (sid, student_classes, room)
+                    if group_key in multi_class_seen:
+                        continue
+                    multi_class_seen.add(group_key)
+                    teacher_groups.append({
+                        'id': '|'.join([sid, room, *sorted(co_ids)]),
+                        'type': 'multi_class_team',
+                        'teachers': [
+                            {'code': t, 'name': teacher_meta.get(t, {}).get('name', t)}
+                            for t in sorted(co_ids)
+                        ],
+                        'subjectCode': sid,
+                        'subject': entry['subject'],
+                        'variant': entry['variant'],
+                        'classCodes': list(student_classes),
+                        'room': room,
+                        'periodsPerWeek': a['periodsPerWeek'],
+                    })
+
+        # TEAM: multiple teachers share same (subject, classCode, room, periodsPerWeek)
+        team_buckets: Dict[tuple, set] = defaultdict(set)
+        for tid, subject_map in workload_map.items():
+            for sid, entry in subject_map.items():
+                for a in entry['assignments']:
+                    if a.get('isMultiClass'):
+                        continue
+                    key = (sid, a['classCode'], a.get('room', ''), a['periodsPerWeek'])
+                    team_buckets[key].add(tid)
+
+        team_seen: set = set()
+        for (sid, class_code, room, ppw), tids_set in team_buckets.items():
+            if len(tids_set) <= 1:
+                continue
+            frozen = frozenset(tids_set)
+            dedup_key = (sid, class_code, room, ppw, frozen)
+            if dedup_key in team_seen:
+                continue
+            team_seen.add(dedup_key)
+            sorted_tids = sorted(tids_set)
+            primary_tid = sorted_tids[0]
+            subject_entry = workload_map[primary_tid].get(sid, {})
+            teacher_groups.append({
+                'id': '|'.join([sid, class_code, room, *sorted_tids]),
+                'type': 'team',
+                'teachers': [
+                    {'code': t, 'name': teacher_meta.get(t, {}).get('name', t)}
+                    for t in sorted_tids
+                ],
+                'subjectCode': sid,
+                'subject': subject_entry.get('subject', sid),
+                'variant': subject_entry.get('variant', '_activity'),
+                'classCodes': [class_code],
+                'room': room,
+                'periodsPerWeek': ppw,
+            })
+
     return {
         'teacher_codes': teacher_codes,
         'teacher_meta': teacher_meta,
@@ -285,4 +356,5 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
         'subjects': subjects,
         'subject_room_map': subject_room_map,
         'teacher_workload': teacher_workload,
+        'teacher_groups': teacher_groups,
     }

@@ -136,10 +136,10 @@ def clean_curriculum(
 
         # C. Clean 'student_class' column
         raw_section_str = row_dict.get('student_class')
-        if pd.isna(raw_section_str) or raw_section_str == '':
+        if pd.isna(raw_section_str) or str(raw_section_str).strip() == '':
             cleaned_sections = current_grade_sections
         else:
-            cleaned_sections = parse_student_class_string(raw_section_str)
+            cleaned_sections = parse_student_class_string(str(raw_section_str).strip())
             valid_sections = [s for s in cleaned_sections if s in current_grade_sections]
             cleaned_sections = valid_sections
 
@@ -256,7 +256,11 @@ def clean_teacher(df_teacher: pd.DataFrame) -> pd.DataFrame:
     
     # clean empty missing or invalid (marker) rows
     df_cleaned.dropna(subset=['teacher_id'], inplace=True)
-    
+
+    # Ensure teacher_id and teacher_name are always trimmed strings
+    df_cleaned['teacher_id']   = df_cleaned['teacher_id'].astype(str).str.strip()
+    df_cleaned['teacher_name'] = df_cleaned['teacher_name'].astype(str).str.strip()
+
     print(f"✅ Teacher marker and invalid rows removed.")
     print("--- Teacher Data Cleaning Complete ---")
     return df_cleaned
