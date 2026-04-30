@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/utils/auth/server';
-import { BACKEND_BASE, BACKEND_SCHEDULE } from '@/lib/api/backend';
+import { BACKEND_BASE, BACKEND_JOBS } from '@/lib/api/backend';
 
 /**
  * POST /api/schedule/generate
@@ -21,7 +21,7 @@ import { BACKEND_BASE, BACKEND_SCHEDULE } from '@/lib/api/backend';
  *   { job_id, job_name, message, status_url, result_url, download_url }
  */
 
-const SCHEDULER_URL = BACKEND_SCHEDULE;
+const SCHEDULER_URL = BACKEND_JOBS;
 
 /**
  * Maps Thai column headers (from the Google Sheet template) to the English

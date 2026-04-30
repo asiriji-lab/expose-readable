@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { BACKEND_SCHEDULE } from '@/lib/api/backend';
+import { BACKEND_JOBS } from '@/lib/api/backend';
 
 /**
  * POST /api/schedule/submit
@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
 
-    const upstream = await fetch(BACKEND_SCHEDULE, {
+    const upstream = await fetch(BACKEND_JOBS, {
       method: 'POST',
       body: form,
     });

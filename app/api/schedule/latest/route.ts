@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { BACKEND_BASE, BACKEND_SCHEDULE } from '@/lib/api/backend';
+import { BACKEND_BASE, BACKEND_JOBS } from '@/lib/api/backend';
 
 /**
  * GET /api/schedule/latest
  *
  * Returns the most recently completed job together with its full schedule JSON.
- * Combines GET /api/v1/jobs/latest → GET /api/v1/schedule/{job_id}/result.
+ * Combines GET /api/v1/jobs/latest → GET /api/v1/jobs/{job_id}/result.
  *
  * Response:
  *   { job_id, job_name, schedule: BackendSchedule }
@@ -31,7 +31,7 @@ export async function GET() {
     }
 
     // Step 2 — fetch the full result.
-    const resultRes = await fetch(`${BACKEND_SCHEDULE}/${job_id}/result`);
+    const resultRes = await fetch(`${BACKEND_JOBS}/${job_id}/result`);
     const resultData = await resultRes.json();
 
     if (!resultRes.ok) {

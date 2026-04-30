@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { BACKEND_SCHEDULE } from '@/lib/api/backend';
+import { BACKEND_JOBS } from '@/lib/api/backend';
 
 /**
  * GET /api/schedule/download?job_id=XXX
  *
- * Proxy to GET {BACKEND_BASE}/api/v1/schedule/{job_id}/download
+ * Proxy to GET {BACKEND_BASE}/api/v1/jobs/{job_id}/download
  * Streams the ZIP archive back to the browser.
  */
 export async function GET(req: NextRequest) {
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const upstream = await fetch(`${BACKEND_SCHEDULE}/${job_id}/download`);
+    const upstream = await fetch(`${BACKEND_JOBS}/${job_id}/download`);
 
     if (!upstream.ok) {
       const data = await upstream.json().catch(() => ({}));

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { BACKEND_SCHEDULE } from '@/lib/api/backend';
+import { BACKEND_JOBS } from '@/lib/api/backend';
 
 /**
  * GET /api/schedule/result?job_id=XXX
  *
- * Proxy to GET {BACKEND}/api/v1/schedule/{job_id}/result
+ * Proxy to GET {BACKEND}/api/v1/jobs/{job_id}/result
  * Returns the full schedule JSON for a completed job.
  */
 export async function GET(req: NextRequest) {
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const upstream = await fetch(`${BACKEND_SCHEDULE}/${job_id}/result`);
+    const upstream = await fetch(`${BACKEND_JOBS}/${job_id}/result`);
     const data = await upstream.json();
 
     if (!upstream.ok) {

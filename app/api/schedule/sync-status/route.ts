@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { BACKEND_SCHEDULE } from '@/lib/api/backend';
+import { BACKEND_JOBS } from '@/lib/api/backend';
 
 /**
  * POST /api/schedule/sync-status?job_id=XXX
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const upstream = await fetch(
-      `${BACKEND_SCHEDULE}/${encodeURIComponent(job_id)}/sync-status`,
+      `${BACKEND_JOBS}/${encodeURIComponent(job_id)}/sync-status`,
       { method: 'POST' },
     );
     const data = await upstream.json();

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { BACKEND_SCHEDULE } from '@/lib/api/backend';
+import { BACKEND_JOBS } from '@/lib/api/backend';
 
-const SCHEDULER_BASE = BACKEND_SCHEDULE;
+const SCHEDULER_BASE = BACKEND_JOBS;
 
 /**
  * GET /api/schedule/status?job_id=XXX
  *
- * Proxy to GET https://dev.winscloud.net/api/v1/schedule/{job_id}
+ * Proxy to GET {BACKEND}/api/v1/jobs/{job_id}
  *
  * Response:
  *   { success, job_id, status, progress, progress_details, error }
