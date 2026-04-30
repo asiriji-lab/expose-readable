@@ -1,4 +1,4 @@
-import type { FullDataset, EntityMeta } from '../_types/schedule.types';
+import type { FullDataset, EntityMeta, TeacherGroup } from '../_types/schedule.types';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
@@ -132,6 +132,48 @@ export function computePaletteData(
             totalPlaced,
             totalRemaining: totalPeriods - totalPlaced,
         };
+    });
+}
+
+// ─── Team Group Palette ───────────────────────────────────────────────────────
+
+export interface TeamGroupPaletteItem {
+    group: TeacherGroup;
+    placed: number;
+    remaining: number;
+}
+
+function countTeamGroupPlaced(group: TeacherGroup, dataset: FullDataset): number {
+    const primaryCode = group.teachers[0]?.code;
+    if (!primaryCode) return 0;
+    const sched = dataset.teachers[primaryCode];
+    if (!sched) return 0;
+
+    let count = 0;
+    for (const day of DAYS) {
+        const slots = sched[day];
+        if (!slots) continue;
+        for (const item of Object.values(slots)) {
+            if (item.subjectCode !== group.subjectCode) continue;
+            if (group.type === 'team') {
+                if (group.classCodes.includes(item.classCode)) count++;
+            } else {
+                // MULTI_CLASS_TEAM: match by room since multiple classes share one slot
+                if (item.room === group.room) count++;
+            }
+        }
+    }
+    return count;
+}
+
+export function computeTeamGroupPaletteData(
+    dataset: FullDataset | null,
+    entityMeta: EntityMeta | null,
+): TeamGroupPaletteItem[] {
+    if (!entityMeta?.teacher_groups?.length) return [];
+    return entityMeta.teacher_groups.map(group => {
+        const placed = dataset ? countTeamGroupPlaced(group, dataset) : 0;
+        return { group, placed, remaining: group.periodsPerWeek - placed };
     });
 }
 

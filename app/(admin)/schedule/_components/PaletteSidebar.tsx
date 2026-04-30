@@ -2,11 +2,13 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useDroppable, useDraggable } from '@dnd-kit/core';
-import { CheckCircle, ChevronDown } from 'lucide-react';
+import { CheckCircle, ChevronDown, Users } from 'lucide-react';
 import { FullDataset, DragPayload, ScheduleItem, EntityMeta } from '../_types/schedule.types';
 import {
     computePaletteData,
     computeGlobalPaletteData,
+    computeTeamGroupPaletteData,
+    TeamGroupPaletteItem,
     PaletteSubjectGroup,
     PaletteClassItem,
 } from '../_utils/paletteUtils';
@@ -218,6 +220,160 @@ function CompletedClassCard({
     );
 }
 
+// ─── Team Group Card ──────────────────────────────────────────────────────────
+
+function TeamGroupCard({
+    item: paletteItem,
+    dragId,
+    entityMeta,
+}: {
+    item: TeamGroupPaletteItem;
+    dragId: string;
+    entityMeta: EntityMeta | null;
+}) {
+    const { group, placed, remaining } = paletteItem;
+    const [selectedRoom, setSelectedRoom] = useState(group.room);
+    useEffect(() => { setSelectedRoom(group.room); }, [group.room]);
+
+    const firstClass = group.classCodes[0] ?? '';
+    const dragItem: ScheduleItem = {
+        teacher: group.teachers[0].code,
+        teacherName: group.teachers[0].name,
+        classCode: firstClass,
+        room: selectedRoom,
+        roomName: entityMeta?.room_meta[selectedRoom]?.name ?? selectedRoom,
+        subjectCode: group.subjectCode,
+        subject: group.subject,
+        variant: group.variant,
+        teachingType: group.type,
+        teamTeachers: group.teachers,
+        teamClassCodes: group.classCodes.length > 1 ? group.classCodes : undefined,
+    };
+    const payload: DragPayload = { source: 'SIDEBAR', item: dragItem };
+
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+        id: `sidebar-team-${dragId}`,
+        data: payload,
+    });
+
+    const progress = group.periodsPerWeek > 0 ? (placed / group.periodsPerWeek) * 100 : 0;
+    const allDone = remaining <= 0;
+
+    return (
+        <div
+            ref={setNodeRef}
+            {...listeners}
+            {...attributes}
+            className={[
+                'relative mx-3 mb-1.5 rounded-lg border overflow-hidden',
+                'cursor-grab active:cursor-grabbing select-none transition-opacity',
+                isDragging ? 'opacity-40' : '',
+                allDone
+                    ? 'bg-success-light border-success-border opacity-60'
+                    : `bg-surface ${variantPalette(group.variant).cardBorder}`,
+            ].join(' ')}
+        >
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${allDone ? 'bg-success' : variantPalette(group.variant).accent}`} />
+
+            <div className="pl-3 pr-2 pt-2 pb-2">
+                {/* Subject + badge */}
+                <div className="flex items-center justify-between gap-1 mb-1">
+                    <span className="text-xs font-bold text-foreground truncate">{group.subjectCode}</span>
+                    <span className={[
+                        'text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0',
+                        allDone ? 'bg-success-light text-success border border-success-border' : 'bg-primary/10 text-primary',
+                    ].join(' ')}>
+                        {placed}/{group.periodsPerWeek}
+                    </span>
+                </div>
+
+                {/* Teachers list */}
+                <div className="flex items-center gap-1 mb-1">
+                    <Users size={9} className="text-foreground-muted/60 shrink-0" />
+                    <span className="text-[9px] text-foreground-muted truncate">
+                        {group.teachers.map(t => t.name).join(' + ')}
+                    </span>
+                </div>
+
+                {/* Classes */}
+                <div className="text-[9px] text-foreground-muted/60 mb-1 truncate">
+                    {group.classCodes.join(', ')}
+                </div>
+
+                {/* Room dropdown */}
+                <select
+                    value={selectedRoom}
+                    onChange={e => setSelectedRoom(e.target.value)}
+                    onPointerDown={e => e.stopPropagation()}
+                    className="w-full text-[9px] border border-border rounded px-1.5 py-0.5 bg-surface-alt text-foreground cursor-pointer mb-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                    {(entityMeta?.room_codes ?? []).map(r => (
+                        <option key={r} value={r}>
+                            {r} — {entityMeta?.room_meta[r]?.name ?? r}
+                        </option>
+                    ))}
+                </select>
+
+                {/* Progress bar */}
+                <div className="w-full h-1 bg-border rounded-full overflow-hidden">
+                    <div
+                        className={`h-full rounded-full transition-all duration-300 ${allDone ? 'bg-success' : 'bg-primary/60'}`}
+                        style={{ width: `${Math.min(progress, 100)}%` }}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Team Lessons Section ─────────────────────────────────────────────────────
+
+function TeamLessonsSection({
+    items,
+    entityMeta,
+}: {
+    items: TeamGroupPaletteItem[];
+    entityMeta: EntityMeta | null;
+}) {
+    const [expanded, setExpanded] = useState(true);
+    if (items.length === 0) return null;
+
+    const totalRemaining = items.reduce((s, i) => s + i.remaining, 0);
+
+    return (
+        <div className="mb-1 border-b border-border pb-1">
+            <button
+                onClick={() => setExpanded(!expanded)}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-surface-alt transition-colors text-left"
+            >
+                <div className="flex items-center gap-1.5">
+                    <Users size={10} className="text-foreground-muted/70 shrink-0" />
+                    <span className="text-[11px] font-bold text-foreground">Team Lessons</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    {totalRemaining > 0 ? (
+                        <span className="bg-warning text-white rounded-full text-[9px] font-bold min-w-[16px] h-[16px] flex items-center justify-center px-1">
+                            {totalRemaining}
+                        </span>
+                    ) : (
+                        <CheckCircle size={10} className="text-success" />
+                    )}
+                    <ChevronDown size={12} className={`text-foreground-muted/60 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                </div>
+            </button>
+
+            {expanded && items.map((paletteItem) => (
+                <TeamGroupCard
+                    key={paletteItem.group.id}
+                    item={paletteItem}
+                    dragId={paletteItem.group.id}
+                    entityMeta={entityMeta}
+                />
+            ))}
+        </div>
+    );
+}
+
 // ─── Subject Group Accordion ──────────────────────────────────────────────────
 
 function SubjectGroupAccordion({
@@ -356,6 +512,11 @@ export default function PaletteSidebar({ teacherCode, dataset, entityMeta }: Pal
         [dataset, entityMeta],
     );
 
+    const teamGroupData = useMemo(
+        () => computeTeamGroupPaletteData(dataset, entityMeta),
+        [dataset, entityMeta],
+    );
+
     const activeData = activeTab === 'teacher' ? teacherData : globalData;
     const totalRemaining = activeData.reduce((s, g) => s + g.totalRemaining, 0);
     const totalPeriods   = activeData.reduce((s, g) => s + g.totalPeriods, 0);
@@ -445,6 +606,9 @@ export default function PaletteSidebar({ teacherCode, dataset, entityMeta }: Pal
 
             {/* Scrollable content */}
             <div className="flex-1 overflow-y-auto py-1 max-h-[calc(100vh-380px)]">
+                {/* Team Lessons section — always shown when groups exist */}
+                <TeamLessonsSection items={teamGroupData} entityMeta={entityMeta} />
+
                 {activeData.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
                         <CheckCircle size={32} className="text-success mb-2" />

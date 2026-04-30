@@ -66,12 +66,12 @@ export function findConflictsAtSlot(
     }
 
     const cExisting = dataset.classes[item.classCode]?.[day]?.[slot];
-    if (cExisting && !isSameLesson(cExisting, item)) {
+    if (cExisting && !isSameLesson(cExisting, item) && !isTeamCoLesson(cExisting, item)) {
         conflicts.push({ entity: 'class', key: item.classCode, day, slot, existingItem: cExisting });
     }
 
     const rExisting = dataset.rooms[item.room]?.[day]?.[slot];
-    if (rExisting && !isSameLesson(rExisting, item)) {
+    if (rExisting && !isSameLesson(rExisting, item) && !isTeamCoLesson(rExisting, item)) {
         conflicts.push({ entity: 'room', key: item.room, day, slot, existingItem: rExisting });
     }
 
@@ -88,6 +88,22 @@ export function isSameLesson(a: ScheduleItem, b: ScheduleItem): boolean {
         a.room === b.room &&
         a.subjectCode === b.subjectCode
     );
+}
+
+/**
+ * Returns true if two items are co-teachers of the same team lesson.
+ * Allows TEAM/MULTI_CLASS_TEAM teachers to co-exist at the same class/room slot.
+ */
+function isTeamCoLesson(existing: ScheduleItem, incoming: ScheduleItem): boolean {
+    const existingIsTeam = existing.teachingType === 'team' || existing.teachingType === 'multi_class_team';
+    const incomingIsTeam = incoming.teachingType === 'team' || incoming.teachingType === 'multi_class_team';
+    if (!existingIsTeam || !incomingIsTeam) return false;
+    return existing.subjectCode === incoming.subjectCode && existing.room === incoming.room;
+}
+
+export function isTeamItem(item: ScheduleItem): boolean {
+    return (item.teachingType === 'team' || item.teachingType === 'multi_class_team') &&
+        !!(item.teamTeachers && item.teamTeachers.length > 1);
 }
 
 /**
@@ -236,7 +252,7 @@ export function validateDatasetIntegrity(dataset: FullDataset): IntegrityViolati
                         message: `teachers[${teacherCode}][${day}][${slot}] refs class ${item.classCode}, but classes map has no item there`,
                         day, slot, keys: [teacherCode, item.classCode],
                     });
-                } else if (!isSameLesson(classItem, item)) {
+                } else if (!isSameLesson(classItem, item) && !isTeamCoLesson(classItem, item)) {
                     violations.push({
                         type: 'cross_map_mismatch',
                         message: `teachers[${teacherCode}][${day}][${slot}] and classes[${item.classCode}][${day}][${slot}] are different lessons`,
@@ -252,7 +268,7 @@ export function validateDatasetIntegrity(dataset: FullDataset): IntegrityViolati
                         message: `teachers[${teacherCode}][${day}][${slot}] refs room ${item.room}, but rooms map has no item there`,
                         day, slot, keys: [teacherCode, item.room],
                     });
-                } else if (!isSameLesson(roomItem, item)) {
+                } else if (!isSameLesson(roomItem, item) && !isTeamCoLesson(roomItem, item)) {
                     violations.push({
                         type: 'cross_map_mismatch',
                         message: `teachers[${teacherCode}][${day}][${slot}] and rooms[${item.room}][${day}][${slot}] are different lessons`,
@@ -271,7 +287,7 @@ export function validateDatasetIntegrity(dataset: FullDataset): IntegrityViolati
             for (const [slotStr, item] of Object.entries(daySlots)) {
                 const slot = Number(slotStr);
                 const teacherItem = dataset.teachers[item.teacher]?.[day]?.[slot];
-                if (!teacherItem || !isSameLesson(teacherItem, item)) {
+                if (!teacherItem || (!isSameLesson(teacherItem, item) && !isTeamCoLesson(teacherItem, item))) {
                     violations.push({
                         type: 'cross_map_mismatch',
                         message: `classes[${classCode}][${day}][${slot}] refs teacher ${item.teacher}, but teachers map doesn't match`,
@@ -289,7 +305,7 @@ export function validateDatasetIntegrity(dataset: FullDataset): IntegrityViolati
             for (const [slotStr, item] of Object.entries(daySlots)) {
                 const slot = Number(slotStr);
                 const teacherItem = dataset.teachers[item.teacher]?.[day]?.[slot];
-                if (!teacherItem || !isSameLesson(teacherItem, item)) {
+                if (!teacherItem || (!isSameLesson(teacherItem, item) && !isTeamCoLesson(teacherItem, item))) {
                     violations.push({
                         type: 'cross_map_mismatch',
                         message: `rooms[${roomCode}][${day}][${slot}] refs teacher ${item.teacher}, but teachers map doesn't match`,
@@ -396,6 +412,151 @@ export function swapItems(
     current = placeItemInDataset(current, itemA, dayB, slotB);
     current = placeItemInDataset(current, itemB, dayA, slotA);
     return current;
+}
+
+// ─── Team item placement ─────────────────────────────────────────────────────
+
+/**
+ * Find conflicts for a team box being placed.
+ * Checks each teacher, each class code, and the room.
+ */
+export function findConflictsForTeamItem(
+    dataset: FullDataset,
+    day: string,
+    slot: number,
+    item: ScheduleItem,
+): ConflictInfo[] {
+    const conflicts: ConflictInfo[] = [];
+    const seen = new Set<string>();
+
+    const allTeachers = item.teamTeachers ?? [{ code: item.teacher, name: item.teacherName }];
+    const allClasses = item.teamClassCodes ?? [item.classCode];
+
+    for (const t of allTeachers) {
+        const tExisting = dataset.teachers[t.code]?.[day]?.[slot];
+        if (tExisting && !isSameLesson(tExisting, { ...item, teacher: t.code })) {
+            const key = `teacher:${t.code}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                conflicts.push({ entity: 'teacher', key: t.code, day, slot, existingItem: tExisting });
+            }
+        }
+    }
+
+    for (const cc of allClasses) {
+        const cExisting = dataset.classes[cc]?.[day]?.[slot];
+        if (cExisting && !isTeamCoLesson(cExisting, item)) {
+            const key = `class:${cc}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                conflicts.push({ entity: 'class', key: cc, day, slot, existingItem: cExisting });
+            }
+        }
+    }
+
+    const rExisting = dataset.rooms[item.room]?.[day]?.[slot];
+    if (rExisting && !isTeamCoLesson(rExisting, item)) {
+        const key = `room:${item.room}`;
+        if (!seen.has(key)) {
+            seen.add(key);
+            conflicts.push({ entity: 'room', key: item.room, day, slot, existingItem: rExisting });
+        }
+    }
+
+    return conflicts;
+}
+
+/**
+ * Place a team item in all entity maps at (day, slot).
+ * Each teacher gets their own entry; class(es) and room get a representative entry.
+ */
+export function placeTeamItemInDataset(
+    dataset: FullDataset,
+    item: ScheduleItem,
+    day: string,
+    slot: number,
+): FullDataset {
+    const teachers = cloneEntityMap(dataset.teachers);
+    const classes = cloneEntityMap(dataset.classes);
+    const rooms = cloneEntityMap(dataset.rooms);
+
+    const allTeachers = item.teamTeachers ?? [{ code: item.teacher, name: item.teacherName }];
+    const allClasses = item.teamClassCodes ?? [item.classCode];
+    const repCode = allTeachers[0].code;
+    const repName = allTeachers[0].name;
+
+    for (const t of allTeachers) {
+        setSlot(teachers, t.code, day, slot, { ...item, teacher: t.code, teacherName: t.name });
+    }
+
+    const repItem = { ...item, teacher: repCode, teacherName: repName };
+    for (const cc of allClasses) {
+        setSlot(classes, cc, day, slot, { ...repItem, classCode: cc });
+    }
+
+    setSlot(rooms, item.room, day, slot, repItem);
+
+    return { teachers, classes, rooms };
+}
+
+/**
+ * Remove a team item from all entity maps at (day, slot).
+ */
+export function removeTeamItemFromDataset(
+    dataset: FullDataset,
+    item: ScheduleItem,
+    day: string,
+    slot: number,
+): FullDataset {
+    const teachers = cloneEntityMap(dataset.teachers);
+    const classes = cloneEntityMap(dataset.classes);
+    const rooms = cloneEntityMap(dataset.rooms);
+
+    const allTeachers = item.teamTeachers ?? [{ code: item.teacher, name: item.teacherName }];
+    const allClasses = item.teamClassCodes ?? [item.classCode];
+
+    for (const t of allTeachers) {
+        deleteSlot(teachers, t.code, day, slot);
+    }
+    for (const cc of allClasses) {
+        deleteSlot(classes, cc, day, slot);
+    }
+    deleteSlot(rooms, item.room, day, slot);
+
+    return { teachers, classes, rooms };
+}
+
+/**
+ * Move a team box from source to target. Ejects conflicting lessons and keeps eject warning.
+ */
+export function moveTeamItem(
+    dataset: FullDataset,
+    item: ScheduleItem,
+    targetDay: string,
+    targetSlot: number,
+    sourceDay?: string,
+    sourceSlot?: number,
+): MoveResult {
+    let current = dataset;
+    const ejected: ScheduleItem[] = [];
+
+    if (sourceDay && sourceSlot !== undefined) {
+        current = removeTeamItemFromDataset(current, item, sourceDay, sourceSlot);
+    }
+
+    const conflicts = findConflictsForTeamItem(current, targetDay, targetSlot, item);
+    const ejectedKeys = new Set<string>();
+
+    for (const conflict of conflicts) {
+        const key = `${conflict.existingItem.teacher}|${conflict.existingItem.classCode}|${conflict.existingItem.room}`;
+        if (ejectedKeys.has(key)) continue;
+        ejectedKeys.add(key);
+        current = removeItemFromDataset(current, conflict.existingItem, targetDay, targetSlot);
+        ejected.push(conflict.existingItem);
+    }
+
+    current = placeTeamItemInDataset(current, item, targetDay, targetSlot);
+    return { dataset: current, ejected };
 }
 
 /**

@@ -5,7 +5,7 @@
  * 'split' — students are divided into groups; each group studies with a different
  *           teacher in a different room at the same slot for the same subject.
  */
-export type TeachingType = 'standard' | 'team' | 'split';
+export type TeachingType = 'standard' | 'team' | 'split' | 'multi_class_team';
 
 export interface ScheduleItem {
     teacher: string;        // teacher code e.g. "0301"
@@ -20,6 +20,10 @@ export interface ScheduleItem {
     teachingType?: TeachingType;
     /** True for pre-placed activity slots (Homeroom, Lunch, Bridging, ลูกเสือ, etc.). */
     isPreplace?: boolean;
+    /** For TEAM/MULTI_CLASS_TEAM drag boxes: all co-teachers including primary. */
+    teamTeachers?: { code: string; name: string }[];
+    /** For MULTI_CLASS_TEAM drag boxes: all class codes taught together. */
+    teamClassCodes?: string[];
 }
 
 // ─── Entity Metadata (computed from input CSVs, stored in DB) ────────────────
@@ -49,6 +53,10 @@ export interface WorkloadAssignment {
     classCode: string;
     room: string;
     periodsPerWeek: number;
+    /** Backend-provided MULTI_CLASS_TEAM fields */
+    studentClasses?: string[];
+    isMultiClass?: boolean;
+    coTeacherIds?: string[];
 }
 
 export interface WorkloadEntry {
@@ -57,6 +65,18 @@ export interface WorkloadEntry {
     variant: string;
     assignments: WorkloadAssignment[];
     totalPeriods: number;
+}
+
+export interface TeacherGroup {
+    id: string;
+    type: 'team' | 'multi_class_team';
+    teachers: { code: string; name: string }[];
+    subjectCode: string;
+    subject: string;
+    variant: string;
+    classCodes: string[];
+    room: string;
+    periodsPerWeek: number;
 }
 
 export interface EntityMeta {
@@ -69,6 +89,7 @@ export interface EntityMeta {
     subjects: Record<string, SubjectInfo>;
     subject_room_map: Record<string, string>;
     teacher_workload: Record<string, WorkloadEntry[]>;
+    teacher_groups?: TeacherGroup[];
 }
 
 // ─── Schedule Maps ───────────────────────────────────────────────────────────

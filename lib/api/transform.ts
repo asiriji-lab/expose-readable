@@ -22,7 +22,7 @@
  * teacher rows contain the most complete data (class AND room in every cell).
  */
 
-import { ScheduleItem, ScheduleData, FullDataset, EntityMeta, WorkloadEntry, TeachingType, GroupedSlots, SlotGroup } from '@/app/(admin)/schedule/_types/schedule.types';
+import { ScheduleItem, ScheduleData, FullDataset, EntityMeta, WorkloadEntry, TeachingType, GroupedSlots, SlotGroup, TeacherGroup } from '@/app/(admin)/schedule/_types/schedule.types';
 
 // ---------------------------------------------------------------------------
 // Backend types
@@ -508,6 +508,40 @@ export function deriveEntityMetaFromSchedule(schedule: BackendSchedule): EntityM
     room_meta[rid] = { ...room_meta[rid], type: specialistRooms.has(rid) ? 'specialist' : 'homeroom' };
   }
 
+  // Build teacher_groups from workload overlaps (TEAM: multiple teachers, same subject+class+room+ppw)
+  const teacher_groups: TeacherGroup[] = [];
+  const teamBuckets = new Map<string, { teachers: Set<string>; subject: string; variant: string }>();
+
+  for (const [tid, entries] of Object.entries(teacher_workload)) {
+    for (const entry of entries) {
+      for (const a of entry.assignments) {
+        if (a.isMultiClass) continue;
+        const key = `${entry.subjectCode}|||${a.classCode}|||${a.room}|||${a.periodsPerWeek}`;
+        if (!teamBuckets.has(key)) {
+          teamBuckets.set(key, { teachers: new Set(), subject: entry.subject, variant: entry.variant });
+        }
+        teamBuckets.get(key)!.teachers.add(tid);
+      }
+    }
+  }
+
+  for (const [key, { teachers, subject, variant }] of teamBuckets.entries()) {
+    if (teachers.size <= 1) continue;
+    const [subjectCode, classCode, room, ppwStr] = key.split('|||');
+    const sortedTeachers = Array.from(teachers).sort();
+    teacher_groups.push({
+      id: `${subjectCode}|${classCode}|${room}|${sortedTeachers.join('|')}`,
+      type: 'team',
+      teachers: sortedTeachers.map(code => ({ code, name: teacher_meta[code]?.name ?? code })),
+      subjectCode,
+      subject,
+      variant,
+      classCodes: [classCode],
+      room,
+      periodsPerWeek: Number(ppwStr),
+    });
+  }
+
   return {
     teacher_codes,
     teacher_meta,
@@ -518,5 +552,6 @@ export function deriveEntityMetaFromSchedule(schedule: BackendSchedule): EntityM
     subjects,
     subject_room_map,
     teacher_workload,
+    teacher_groups,
   };
 }

@@ -12,11 +12,13 @@ import { BACKEND_BASE, BACKEND_JOBS } from '@/lib/api/backend';
 export async function GET() {
   // Attempt to identify the logged-in user.
   let backendUserId: string | null = null;
+  let isAuthenticated = false;
 
   try {
     const authUser = await getAuthUser();
 
     if (authUser?.email) {
+      isAuthenticated = true;
       const name = [authUser.first_name, authUser.last_name].filter(Boolean).join(' ')
                 || authUser.username || '';
       // Look up (or create) the backend user so we have their UUID.
@@ -31,13 +33,12 @@ export async function GET() {
       }
     }
   } catch {
-    // Auth or sync failure — fall back to unfiltered list below.
+    // Auth or sync failure handled below.
   }
 
-  // Use the DB-backed schedules endpoint when we have a user ID, otherwise
-  // fall back to the file-system job manager list.
   try {
     if (backendUserId) {
+      // Authenticated user with resolved backend ID — always filter by user.
       const dbRes = await fetch(
         `${BACKEND_BASE}/api/v1/schedules?user_id=${encodeURIComponent(backendUserId)}`,
       );
@@ -54,10 +55,16 @@ export async function GET() {
         }));
         return NextResponse.json({ success: true, count: jobs.length, jobs });
       }
-      // DB unavailable or other error — fall through to job-manager list.
+      // DB unavailable — return empty rather than leaking other users' jobs.
+      return NextResponse.json({ success: true, count: 0, jobs: [] });
     }
 
-    // Fallback: full job-manager list (no auth filtering).
+    // Authenticated but user sync failed — return empty to avoid data leak.
+    if (isAuthenticated) {
+      return NextResponse.json({ success: true, count: 0, jobs: [] });
+    }
+
+    // No session at all — fall back to unfiltered job-manager list (dev / no-auth mode).
     const upstream = await fetch(BACKEND_JOBS);
     const data = await upstream.json();
     if (!upstream.ok) {

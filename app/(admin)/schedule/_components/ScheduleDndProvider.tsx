@@ -123,24 +123,33 @@ export default function ScheduleDndProvider({
         const item = payload.item;
 
         if (viewMode === 'all') {
-            // Render a 3-band ghost that matches the ThreeBandCell source visually
             const teacherBg = variantPalette(item.variant).ghostClasses;
+            const isTeam = item.teamTeachers && item.teamTeachers.length > 1;
+            const teacherLabel = isTeam
+                ? item.teamTeachers!.map(t => t.name).join(' + ')
+                : item.classCode;
             return (
                 <div
                     className="rounded-lg shadow-2xl border border-primary/30 overflow-hidden pointer-events-none opacity-90"
                     style={{ width: '100px', height: `${cellHeight}px` }}
                 >
-                    {/* Green/Rose band — Teacher */}
+                    {/* Teacher / Team band */}
                     <div style={{ height: BAND_HEIGHT }} className={`w-full border-l-[3px] flex items-center px-1.5 ${teacherBg}`}>
                         <div className="flex items-center gap-1 w-full overflow-hidden">
                             <span className="font-semibold text-[11px] shrink-0 leading-tight">{item.subjectCode}</span>
-                            <span className="text-[9px] opacity-60 truncate">{item.classCode}</span>
-                            <span className="text-[9px] opacity-50 truncate shrink-0">{item.room}</span>
+                            <span className="text-[9px] opacity-60 truncate">{teacherLabel}</span>
+                            {!isTeam && <span className="text-[9px] opacity-50 truncate shrink-0">{item.room}</span>}
                         </div>
                     </div>
-                    {/* Pink band — Class (empty in ghost — only teacher moves) */}
-                    <div style={{ height: BAND_HEIGHT }} className="w-full bg-surface-alt/60" />
-                    {/* Amber band — Room (empty in ghost) */}
+                    {/* Class band */}
+                    <div style={{ height: BAND_HEIGHT }} className="w-full bg-surface-alt/60 flex items-center px-1.5">
+                        {isTeam && (
+                            <span className="text-[9px] opacity-60 truncate">
+                                {(item.teamClassCodes ?? [item.classCode]).join(', ')}
+                            </span>
+                        )}
+                    </div>
+                    {/* Room band */}
                     <div style={{ height: BAND_HEIGHT }} className="w-full bg-surface-alt/40" />
                 </div>
             );

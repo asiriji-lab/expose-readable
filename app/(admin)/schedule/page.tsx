@@ -16,12 +16,16 @@ import EjectionNotice from './_components/EjectionNotice';
 import { computeOverlayData } from './_utils/overlayUtils';
 import {
     moveItem,
+    moveTeamItem,
     hasConflict,
     removeItemFromDataset,
+    removeTeamItemFromDataset,
     autoEjectConflicts,
     findConflictsAtSlot,
+    findConflictsForTeamItem,
     checkSwapFeasibility,
     swapItems,
+    isTeamItem,
 } from './_utils/scheduleLogic';
 import {
     FullDataset,
@@ -394,11 +398,11 @@ function SchedulePageContent() {
     ) => {
         if (!dataset) return;
         const prev = dataset;
-        const { dataset: newDataset, ejected } = moveItem(
-            prev, item, targetDay, targetSlot,
-            source === 'GRID' ? sourceDay : undefined,
-            source === 'GRID' ? sourceSlot : undefined,
-        );
+        const srcDay = source === 'GRID' ? sourceDay : undefined;
+        const srcSlot = source === 'GRID' ? sourceSlot : undefined;
+        const { dataset: newDataset, ejected } = isTeamItem(item)
+            ? moveTeamItem(prev, item, targetDay, targetSlot, srcDay, srcSlot)
+            : moveItem(prev, item, targetDay, targetSlot, srcDay, srcSlot);
         setDataset(newDataset);
         setIsDirty(true);
         if (ejected.length > 0) {
@@ -427,12 +431,17 @@ function SchedulePageContent() {
         if (source === 'GRID' && sourceDay === targetDay && sourceSlot === targetSlot) return;
 
         // Build virtual dataset without the source item (for GRID→GRID)
+        const isTeam = isTeamItem(item);
         const virtualDataset =
             source === 'GRID' && sourceDay && sourceSlot !== undefined
-                ? removeItemFromDataset(dataset, item, sourceDay, sourceSlot)
+                ? (isTeam
+                    ? removeTeamItemFromDataset(dataset, item, sourceDay, sourceSlot)
+                    : removeItemFromDataset(dataset, item, sourceDay, sourceSlot))
                 : dataset;
 
-        const conflicts = findConflictsAtSlot(virtualDataset, targetDay, targetSlot, item);
+        const conflicts = isTeam
+            ? findConflictsForTeamItem(virtualDataset, targetDay, targetSlot, item)
+            : findConflictsAtSlot(virtualDataset, targetDay, targetSlot, item);
 
         if (conflicts.length === 0) {
             executeDrop(targetDay, targetSlot, item, source, sourceDay, sourceSlot);
@@ -500,13 +509,25 @@ function SchedulePageContent() {
     const handleSidebarDrop = (payload: DragPayload) => {
         const { source, item, day: sourceDay, slot: sourceSlot } = payload;
         if (source !== 'GRID' || !sourceDay || sourceSlot === undefined) return;
-        handleUnschedule(item, sourceDay, sourceSlot);
+        if (isTeamItem(item)) {
+            setDataset(prev => prev ? removeTeamItemFromDataset(prev, item, sourceDay, sourceSlot) : prev);
+            setIsDirty(true);
+        } else {
+            handleUnschedule(item, sourceDay, sourceSlot);
+        }
     };
 
     const checkOverlayConflict = useCallback(
         (targetDay: string, targetSlot: number, payload: DragPayload): boolean => {
             if (!dataset || viewMode !== 'all') return false;
             const { item, day: sourceDay, slot: sourceSlot, source } = payload;
+            if (isTeamItem(item)) {
+                const virtualDataset =
+                    source === 'GRID' && sourceDay && sourceSlot !== undefined
+                        ? removeTeamItemFromDataset(dataset, item, sourceDay, sourceSlot)
+                        : dataset;
+                return findConflictsForTeamItem(virtualDataset, targetDay, targetSlot, item).length > 0;
+            }
             return hasConflict(
                 dataset, targetDay, targetSlot, item,
                 source === 'GRID' ? sourceDay : undefined,
