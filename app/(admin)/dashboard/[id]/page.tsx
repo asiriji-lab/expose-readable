@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 import AdminHeader from '../../_components/AdminHeader';
-import DataCommandCenter from './_components/DataCommandCenter';
+import InputPanel from './_components/InputPanel';
 import ValidationSection from './_components/ValidationSection';
 import ErrorPanel from './_components/ErrorPanel';
 import GenerationStatus from './_components/GenerationStatus';
@@ -229,7 +229,7 @@ export default function SessionDetailPage() {
         <SessionInfoCard value={sessionInfo} onChange={setSessionInfo} />
 
         {/* The New Command Center: Merges Sheet LifeCycle + Uploads + Stats */}
-        <DataCommandCenter
+        <InputPanel
           currentData={sheetData}
           onDataLoaded={(data) => {
             loadData(data);

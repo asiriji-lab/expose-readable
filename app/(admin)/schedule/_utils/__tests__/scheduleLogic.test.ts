@@ -16,7 +16,6 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { generateFullScheduleDataset } from '../dummyData';
 import {
     isSameLesson,
     findConflictsAtSlot,
@@ -46,7 +45,7 @@ const makeItem = (overrides: Partial<ScheduleItem> = {}): ScheduleItem => ({
 });
 
 beforeEach(() => {
-    dataset = generateFullScheduleDataset();
+    dataset = { teachers: {}, classes: {}, rooms: {} };
 });
 
 // ─── 1. Initial data integrity ───────────────────────────────────────────────

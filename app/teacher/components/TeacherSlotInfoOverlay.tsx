@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowLeft } from 'lucide-react';
-import { ScheduleItem } from '@/app/(admin)/schedule/_utils/dummyData';
+import type { ScheduleItem } from '@/app/(admin)/schedule/_types/schedule.types';
 
 interface TeacherSlotInfoOverlayProps {
   isOpen: boolean;

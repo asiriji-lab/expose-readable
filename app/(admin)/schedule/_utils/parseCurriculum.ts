@@ -324,7 +324,6 @@ export function parseCurriculumRows(rows: any[][]): ParseResult {
 
 /**
  * Build a reverse lookup: teacher firstName → teacher code.
- * Pass in TEACHER_META from dummyData.
  */
 export function buildTeacherNameToCodeMap(
     teacherMeta: Record<string, { firstName: string }>,

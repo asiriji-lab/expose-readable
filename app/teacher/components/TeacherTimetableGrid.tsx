@@ -1,4 +1,4 @@
-import { ScheduleItem } from '@/app/(admin)/schedule/_utils/dummyData';
+import type { ScheduleItem } from '@/app/(admin)/schedule/_types/schedule.types';
 import UnifiedScheduleCell, { buildRowsForMode, ROW_HEIGHT } from '@/app/(admin)/schedule/_components/UnifiedScheduleCell';
 
 interface ScheduleData {

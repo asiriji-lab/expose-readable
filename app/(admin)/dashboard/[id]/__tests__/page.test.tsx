@@ -72,10 +72,8 @@ describe('SessionDetailPage - Admin Flow', () => {
     expect(validateBtn).toBeDefined();
   });
 
-  it('displays the DataCommandCenter in development environment', () => {
+  it('displays the InputPanel', () => {
     render(<SessionDetailPage />);
-    
-    // Look for Data Command Center root (using the dev-test-panel test id for compatibility)
-    expect(screen.getAllByTestId('dev-test-panel')[0]).toBeDefined();
+    expect(screen.getAllByTestId('input-panel')[0]).toBeDefined();
   });
 });
