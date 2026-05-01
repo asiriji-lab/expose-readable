@@ -37,6 +37,7 @@ from api.errors import register_error_handlers
 from config import Config
 from src.logger import init_api_logger
 from src.db import database
+from src.db import models as db_models
 from src.ga.job_queue import JobQueue
 
 
@@ -124,6 +125,15 @@ def create_app(config_class=Config):
         raise EnvironmentError(f"The following variables were not set: {missing_vars}")
     else:
         database.init_db(app)
+
+    # ── Startup reconciliation ────────────────────────────────────────────────
+    with app.app_context():
+        if database.is_available():
+            count = db_models.reconcile_interrupted_jobs()
+            if count:
+                app.logger.warning(
+                    "Startup: marked %d interrupted job(s) as failed (server restarted)", count
+                )
 
     # ── Job queue (ThreadPoolExecutor + cancel events) ────────────────────────
     app.job_queue = JobQueue(max_workers=app.config['MAX_CONCURRENT_JOBS'])

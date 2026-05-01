@@ -63,7 +63,10 @@ def _parse_uuid(value: Optional[str]) -> Optional[uuid.UUID]:
     if not value:
         return None
     try:
-        return uuid.UUID(str(value))
+        parsed = uuid.UUID(str(value))
+        if parsed.version != 4:
+            return None
+        return parsed
     except (ValueError, AttributeError):
         return None
 
@@ -348,6 +351,30 @@ def get_user_schedules(user_id: str) -> List[Dict]:
         .all()
     )
     return [s.to_dict() for s in scheds]
+
+
+_NON_TERMINAL = {'created', 'queued', 'loading_data', 'running_ga', 'exporting'}
+
+
+@_guard
+def reconcile_interrupted_jobs() -> int:
+    """
+    Mark all non-terminal jobs as failed.
+
+    Called once at startup to clean up jobs that were in-flight when the
+    server last stopped. Returns the count of rows updated.
+    """
+    rows = (
+        db.session.query(Schedule)
+        .filter(Schedule.status.in_(_NON_TERMINAL))
+        .all()
+    )
+    for sched in rows:
+        sched.status = 'failed'
+        sched.error = 'Job interrupted: server restarted'
+    if rows:
+        db.session.commit()
+    return len(rows)
 
 
 @_guard

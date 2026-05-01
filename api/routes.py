@@ -206,14 +206,22 @@ def submit_schedule():
 
     # ── Parse form parameters ─────────────────────────────────────────────────
     job_name      = request.form.get('job_name', '').strip()
-    academic_year = request.form.get('academic_year', '')
+    academic_year = request.form.get('academic_year', '').strip()
     org_id        = request.form.get('org_id', '').strip() or None
     user_id       = request.form.get('user_id', '').strip() or None
     sheet_url     = request.form.get('sheet_url', '').strip() or None
+
+    if not academic_year:
+        return jsonify({"success": False, "error": "'academic_year' is required"}), 400
+    if not academic_year.isdigit() or len(academic_year) != 4:
+        return jsonify({"success": False, "error": "'academic_year' must be a 4-digit year (e.g. 2025 or 2568)"}), 400
+
     try:
         semester = int(request.form.get('semester', 1))
+        if semester not in (1, 2):
+            return jsonify({"success": False, "error": "'semester' must be 1 or 2"}), 400
     except (ValueError, TypeError):
-        semester = 1
+        return jsonify({"success": False, "error": "'semester' must be 1 or 2"}), 400
     try:
         ga_params = json.loads(request.form.get('ga_params', '{}'))
     except (json.JSONDecodeError, TypeError):
@@ -850,6 +858,7 @@ def get_user(user_id):
 # =============================================================================
 
 @api_bp.route('/schedules', methods=['GET'])
+@jwt_required()
 def list_schedule_records():
     """
     List schedule records stored in the database.
@@ -889,11 +898,12 @@ def list_schedule_records():
     if not database.is_available():
         return jsonify({"success": False, "error": "Database not configured"}), 400
 
-    org_id  = request.args.get('org_id')  or None
-    user_id = request.args.get('user_id') or None
-    status  = request.args.get('status')  or None
+    # Always scope to the authenticated user — ignore caller-supplied user_id to prevent IDOR
+    caller_id = get_jwt_identity()
+    org_id    = request.args.get('org_id') or None
+    status    = request.args.get('status') or None
 
-    schedules = models.list_schedules(org_id=org_id, user_id=user_id, status=status) or []
+    schedules = models.list_schedules(org_id=org_id, user_id=caller_id, status=status) or []
     return jsonify({"success": True, "count": len(schedules), "schedules": schedules})
 
 
@@ -1143,6 +1153,9 @@ def update_schedule_record(schedule_id):
     schedule_data = body.get('data')
     entity_meta   = body.get('entity_meta')
     job_name      = (body.get('job_name') or '').strip() or None
+
+    if schedule_data is not None and not isinstance(schedule_data, dict):
+        return jsonify({"success": False, "error": "'data' must be a JSON object — frontend state is corrupted"}), 400
 
     sched = models.get_schedule(schedule_id)
     if not sched:
