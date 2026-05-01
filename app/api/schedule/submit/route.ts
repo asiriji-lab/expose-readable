@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { BACKEND_JOBS } from '@/lib/api/backend';
+import { BACKEND_JOBS, assertBackendConfigured } from '@/lib/api/backend';
 
 /**
  * POST /api/schedule/submit
@@ -9,6 +9,7 @@ import { BACKEND_JOBS } from '@/lib/api/backend';
  */
 export async function POST(req: NextRequest) {
   try {
+    assertBackendConfigured();
     const form = await req.formData();
 
     const upstream = await fetch(BACKEND_JOBS, {
