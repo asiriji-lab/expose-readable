@@ -27,8 +27,9 @@ from typing import Any, Dict, List, Optional, Tuple
 import openpyxl
 from openpyxl.styles import Alignment, Font
 
-WEEKDAYS  = ['MON', 'TUE', 'WED', 'THU', 'FRI']
-DAY_THAI  = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์']
+WEEKDAYS       = ['MON', 'TUE', 'WED', 'THU', 'FRI']
+WEEKDAYS_FULL  = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+DAY_THAI       = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์']
 _ROWS_PER_DAY   = 3
 _DAYS_PER_BLOCK = 5
 _ENTITY_ROWS    = 1 + _DAYS_PER_BLOCK * _ROWS_PER_DAY  # 16
@@ -61,10 +62,17 @@ def _normalize_schedule(schedule_json: Dict, entity_meta: Optional[Dict]) -> Dic
     teacher_meta = (entity_meta or {}).get('teacher_meta', {})
 
     # Collect all slot indices present in the data so we know the period range.
+    # Frontend FullDataset: entity_map[entityCode][dayFullName][slotInt] = item
+    # We must go 3 levels deep: entity → day → slot.
     all_slots: set = set()
     for entity_map in (teachers_raw, classes_raw, rooms_raw):
-        for day_data in entity_map.values():
-            all_slots.update(str(k) for k in day_data.keys())
+        for entity_schedule in entity_map.values():
+            if not isinstance(entity_schedule, dict):
+                continue
+            for day_data in entity_schedule.values():
+                if not isinstance(day_data, dict):
+                    continue
+                all_slots.update(str(k) for k in day_data.keys())
     period_labels = sorted(all_slots, key=lambda x: int(x) if x.isdigit() else 0)
 
     # Build / patch config.columns so _parse_periods works correctly.
@@ -88,14 +96,17 @@ def _normalize_schedule(schedule_json: Dict, entity_meta: Optional[Dict]) -> Dic
 
     def _build_rows(entity_schedule: Dict, view: str) -> List[Dict]:
         rows = []
-        for day in WEEKDAYS:
-            day_data = entity_schedule.get(day, {})
+        # Frontend stores days as full English names; try full name first, abbrev as fallback.
+        for day_abbr, day_full in zip(WEEKDAYS, WEEKDAYS_FULL):
+            day_data = entity_schedule.get(day_full) or entity_schedule.get(day_abbr) or {}
             columns: List[Dict] = []
             for lbl in period_labels:
-                # JSON keys are always strings; slot indices may have been ints.
-                item = day_data.get(lbl) or day_data.get(int(lbl) if lbl.isdigit() else lbl)
+                # Frontend stores slot keys as ints; try int first, then string.
+                item = day_data.get(int(lbl)) if lbl.isdigit() else None
+                if item is None:
+                    item = day_data.get(lbl)
                 columns.append({lbl: _to_cell(item, view) if item else None})
-            rows.append({'day': day, 'columns': columns})
+            rows.append({'day': day_abbr, 'columns': columns})
         return rows
 
     teachers = [
