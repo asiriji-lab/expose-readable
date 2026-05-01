@@ -59,6 +59,7 @@ function getPlacementInfo(
     subjectCode: string,
     classCode: string,
     dataset: FullDataset,
+    room?: string,
 ): PlacementInfo {
     const teacherSchedule = dataset.teachers[teacherCode];
     if (!teacherSchedule) return { count: 0, summary: '' };
@@ -70,10 +71,12 @@ function getPlacementInfo(
         const slots = teacherSchedule[day];
         if (!slots) continue;
         for (const [slotStr, item] of Object.entries(slots)) {
-            if (item.subjectCode === subjectCode && item.classCode === classCode) {
-                count++;
-                (daySlots[day] ??= []).push(Number(slotStr));
-            }
+            if (item.subjectCode !== subjectCode || item.classCode !== classCode) continue;
+            // When a room is specified, use it to disambiguate two assignments
+            // that share the same (teacher, subject, class) but use different rooms.
+            if (room && item.room && item.room !== room) continue;
+            count++;
+            (daySlots[day] ??= []).push(Number(slotStr));
         }
     }
 
@@ -103,10 +106,10 @@ export function computePaletteData(
 
     return workload.map(entry => {
         const classes: PaletteClassItem[] = entry.assignments.map(a => {
-            const info = dataset
-                ? getPlacementInfo(teacherCode, entry.subjectCode, a.classCode, dataset)
-                : { count: 0, summary: '' };
             const room = resolveDefaultRoom(entry.subjectCode, a.classCode, entityMeta);
+            const info = dataset
+                ? getPlacementInfo(teacherCode, entry.subjectCode, a.classCode, dataset, a.room || room)
+                : { count: 0, summary: '' };
             return {
                 teacherCode,
                 teacherName,
@@ -155,12 +158,13 @@ function countTeamGroupPlaced(group: TeacherGroup, dataset: FullDataset): number
         if (!slots) continue;
         for (const item of Object.values(slots)) {
             if (item.subjectCode !== group.subjectCode) continue;
-            if (group.type === 'team') {
-                if (group.classCodes.includes(item.classCode)) count++;
-            } else {
-                // MULTI_CLASS_TEAM: match by room since multiple classes share one slot
-                if (item.room === group.room) count++;
-            }
+            // Match by class membership for both team types.
+            // classCode in the dataset may be a comma-joined multi-class string
+            // (e.g. "5/1, 5/2") when multiple classes share one slot — split and
+            // check overlap against group.classCodes so two groups that share the
+            // same primary teacher and room are counted independently.
+            const itemClasses = item.classCode.split(',').map(c => c.trim());
+            if (group.classCodes.some(cc => itemClasses.includes(cc))) count++;
         }
     }
     return count;
@@ -204,10 +208,10 @@ export function computeGlobalPaletteData(
             }
 
             for (const a of entry.assignments) {
-                const info = dataset
-                    ? getPlacementInfo(teacherCode, entry.subjectCode, a.classCode, dataset)
-                    : { count: 0, summary: '' };
                 const room = resolveDefaultRoom(entry.subjectCode, a.classCode, entityMeta);
+                const info = dataset
+                    ? getPlacementInfo(teacherCode, entry.subjectCode, a.classCode, dataset, a.room || room)
+                    : { count: 0, summary: '' };
                 group.classes.push({
                     teacherCode,
                     teacherName,

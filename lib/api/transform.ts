@@ -302,13 +302,26 @@ export function reconcileFullDataset(dataset: FullDataset): FullDataset {
         const slot = Number(slotStr);
 
         if (item.classCode) {
-          classes[item.classCode] ??= {};
-          classes[item.classCode][day] ??= {};
-          const ex = classes[item.classCode][day][slot];
-          if (!ex) {
-            classes[item.classCode][day][slot] = { ...item };
-          } else if (!ex.teacher) {
-            classes[item.classCode][day][slot] = { ...ex, teacher: tid };
+          // classCode may be a comma-joined multi-class string (MULTI_CLASS_TEAM / TEAM
+          // with multiple student groups). Split and reconcile each real class individually
+          // so we never create a phantom composite entity like "5/1, 5/2, 5/3".
+          const classCodes = item.classCode.includes(',')
+            ? item.classCode.split(',').map(c => c.trim()).filter(Boolean)
+            : [item.classCode];
+
+          for (const cc of classCodes) {
+            classes[cc] ??= {};
+            classes[cc][day] ??= {};
+            const ex = classes[cc][day][slot];
+            if (!ex) {
+              // Only create if it's a single-class code (multi-class slots already
+              // exist from student rows; creating them here would duplicate data).
+              if (classCodes.length === 1) {
+                classes[cc][day][slot] = { ...item };
+              }
+            } else if (!ex.teacher) {
+              classes[cc][day][slot] = { ...ex, teacher: tid };
+            }
           }
         }
 

@@ -75,7 +75,8 @@ function StatusBand({ bandStatus, entityType, height, onClick, onHoverStart, onH
         return (
             <div
                 style={{ height }}
-                className={`w-full border-l-[3px] border-l-violet-400 bg-violet-50 flex items-center justify-center select-none relative ${dimClass}`}
+                className={`w-full border-l-[3px] border-l-violet-400 bg-violet-50 flex items-center justify-center select-none relative ${dimClass} ${onClick ? 'cursor-pointer hover:bg-violet-100 transition-colors duration-100' : ''}`}
+                onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
             >
                 <span className="absolute right-1 top-0 bottom-0 flex items-center pointer-events-none">
                     <svg className="w-2.5 h-2.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -180,6 +181,7 @@ function DraggablePreplaceBand({
     dragPayload,
     dim,
     displayText,
+    onClick,
 }: {
     item: ScheduleItem;
     height: number;
@@ -187,6 +189,7 @@ function DraggablePreplaceBand({
     dragPayload: DragPayload;
     dim?: boolean;
     displayText?: string | null;
+    onClick?: () => void;
 }) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: dragId,
@@ -201,9 +204,10 @@ function DraggablePreplaceBand({
             style={{ height }}
             className={[
                 'w-full border-l-[3px] border-l-violet-400 bg-violet-50 flex items-center justify-center select-none relative',
-                'cursor-grab active:cursor-grabbing',
+                'cursor-grab active:cursor-grabbing hover:bg-violet-100 transition-colors duration-100',
                 isDragging ? 'opacity-30' : dim ? 'opacity-50' : '',
             ].join(' ')}
+            onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
         >
             <span className="absolute right-1 top-0 bottom-0 flex items-center pointer-events-none">
                 <svg className="w-2.5 h-2.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -315,6 +319,7 @@ export default function ThreeBandCell({
                     dragPayload={dragPayload}
                     dim={!!activeEntity && activeEntity !== 'teacher'}
                     displayText={bandTexts?.[0]}
+                    onClick={() => onBandClick?.('teacher')}
                 />
             ) : (
                 <StatusBand

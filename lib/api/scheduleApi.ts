@@ -101,3 +101,20 @@ export async function downloadScheduleZip(jobId: string): Promise<void> {
   a.remove();
   window.URL.revokeObjectURL(url);
 }
+
+export async function exportScheduleExcel(scheduleId: string, filename?: string): Promise<void> {
+  const res = await fetch(`/api/schedule/export-excel?schedule_id=${encodeURIComponent(scheduleId)}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error ?? 'Failed to export Excel');
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename ?? `schedule_${scheduleId}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}

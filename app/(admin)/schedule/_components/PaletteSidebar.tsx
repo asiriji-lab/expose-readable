@@ -335,7 +335,7 @@ function TeamLessonsSection({
     items: TeamGroupPaletteItem[];
     entityMeta: EntityMeta | null;
 }) {
-    const [expanded, setExpanded] = useState(true);
+    const [expanded, setExpanded] = useState(false);
     if (items.length === 0) return null;
 
     const totalRemaining = items.reduce((s, i) => s + i.remaining, 0);
@@ -362,14 +362,17 @@ function TeamLessonsSection({
                 </div>
             </button>
 
-            {expanded && items.map((paletteItem) => (
-                <TeamGroupCard
-                    key={paletteItem.group.id}
-                    item={paletteItem}
-                    dragId={paletteItem.group.id}
-                    entityMeta={entityMeta}
-                />
-            ))}
+            {expanded && items.map((paletteItem, idx) => {
+                const uniqueId = `${paletteItem.group.id}-${paletteItem.group.classCodes.join(',')}`;
+                return (
+                    <TeamGroupCard
+                        key={uniqueId}
+                        item={paletteItem}
+                        dragId={uniqueId}
+                        entityMeta={entityMeta}
+                    />
+                );
+            })}
         </div>
     );
 }

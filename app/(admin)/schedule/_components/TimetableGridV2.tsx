@@ -62,11 +62,15 @@ function DroppableCell({ id, partiallyOccupied, children }: { id: string; partia
 
 // ─── Preplace cell ───────────────────────────────────────────────────────────
 
-function PreplaceCellWidget({ label, bandHeight }: { label: string; bandHeight: number }) {
+function PreplaceCellWidget({ label, bandHeight, onClick }: { label: string; bandHeight: number; onClick?: () => void }) {
     return (
         <div
             style={{ height: bandHeight * 3 }}
-            className="w-full flex flex-col overflow-hidden border-l-[3px] border-l-violet-400 bg-violet-50 dark:bg-violet-900/20 relative select-none divide-y divide-violet-50 dark:divide-violet-900/20"
+            className={[
+                'w-full flex flex-col overflow-hidden border-l-[3px] border-l-violet-400 bg-violet-50 dark:bg-violet-900/20 relative select-none divide-y divide-violet-50 dark:divide-violet-900/20',
+                onClick ? 'cursor-pointer hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors duration-100' : '',
+            ].join(' ')}
+            onClick={onClick}
         >
             <span className="absolute top-1 right-1 z-10 text-amber-400 pointer-events-none">
                 <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -207,9 +211,14 @@ export default function TimetableGridV2({
                                         : (cellData?.isPreplace ? cellData.subjectCode : null);
 
                                     if (preplaceLabel !== null) {
+                                        const preplaceOverlay = buildIndividualOverlay(cellData);
                                         return (
                                             <td key={slot} className={`p-0 relative ${si < SLOTS.length - 1 ? 'border-r border-border/30' : ''}`}>
-                                                <PreplaceCellWidget label={preplaceLabel} bandHeight={ROW_HEIGHT} />
+                                                <PreplaceCellWidget
+                                                    label={preplaceLabel}
+                                                    bandHeight={ROW_HEIGHT}
+                                                    onClick={() => onBandClick?.(day, slot, 'teacher', preplaceOverlay)}
+                                                />
                                             </td>
                                         );
                                     }

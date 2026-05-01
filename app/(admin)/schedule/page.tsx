@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Download, Trash2, Sparkles, MoreHorizontal, Save, RefreshCw, Sheet } from 'lucide-react';
+import { ChevronLeft, Download, Trash2, Sparkles, MoreHorizontal, Save, RefreshCw, Sheet, FileSpreadsheet } from 'lucide-react';
+import { exportScheduleExcel } from '@/lib/api/scheduleApi';
 import ViewModeToggle from './_components/ViewModeToggle';
 import TimetableGridV2 from './_components/TimetableGridV2';
 import TimetableGridSkeleton from './_components/TimetableGridSkeleton';
@@ -341,6 +342,25 @@ function SchedulePageContent() {
         } catch (e) {
             console.error('Export error:', e);
             alert('Failed to export schedule.');
+        }
+    };
+
+    const handleExportExcel = async () => {
+        const params = new URLSearchParams(window.location.search);
+        const scheduleId = params.get('schedule_id');
+        if (!scheduleId) {
+            alert('No schedule ID found.');
+            return;
+        }
+        if (isDirty) {
+            alert('Please save the schedule before exporting to Excel.');
+            return;
+        }
+        try {
+            await exportScheduleExcel(scheduleId, `schedule_${jobName}.xlsx`);
+        } catch (e: any) {
+            console.error('Export Excel error:', e);
+            alert(e?.message ?? 'Failed to export Excel.');
         }
     };
 
@@ -813,6 +833,9 @@ function SchedulePageContent() {
                                         <div className="my-1 border-t border-border" />
                                         <button onClick={() => { handleExportClick(); setActionsOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors">
                                             <Download className="w-4 h-4 text-foreground-muted" /> Export JSON
+                                        </button>
+                                        <button onClick={() => { handleExportExcel(); setActionsOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors">
+                                            <FileSpreadsheet className="w-4 h-4 text-foreground-muted" /> Export Excel
                                         </button>
                                         <div className="my-1 border-t border-border" />
                                         <button className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-purple-600 hover:bg-surface-alt transition-colors">
