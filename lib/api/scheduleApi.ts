@@ -1,4 +1,7 @@
 import type { JobDetail, ScheduleResult, SubmitJobResponse } from '../../types/api';
+import { HttpError } from '../apiFetch';
+
+export { HttpError };
 
 export async function submitScheduleJob(params: {
   curriculum: File | Blob;
@@ -40,11 +43,29 @@ export async function submitScheduleJob(params: {
   return res.json();
 }
 
-export async function getScheduleRecord(scheduleId: string): Promise<{ schedule: { status: string; sheet_url: string | null; job_name: string; error?: string; data?: any } }> {
+export interface ScheduleRecord {
+  schedule_id: string;
+  org_id: string | null;
+  user_id: string | null;
+  job_name: string | null;
+  academic_year: string | null;
+  semester: number | null;
+  status: string;
+  progress: number;
+  sheet_url: string | null;
+  ga_params: Record<string, unknown> | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  data?: unknown;
+  entity_meta?: unknown;
+}
+
+export async function getScheduleRecord(scheduleId: string): Promise<{ schedule: ScheduleRecord }> {
   const res = await fetch(`/api/schedule/record?schedule_id=${encodeURIComponent(scheduleId)}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error ?? 'Failed to get schedule record');
+    throw new HttpError(err.error ?? 'Failed to get schedule record', res.status);
   }
   return res.json();
 }
@@ -53,7 +74,7 @@ export async function getJobStatus(jobId: string): Promise<JobDetail> {
   const res = await fetch(`/api/schedule/status?job_id=${encodeURIComponent(jobId)}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error ?? 'Failed to get job status');
+    throw new HttpError(err.error ?? 'Failed to get job status', res.status);
   }
   return res.json();
 }

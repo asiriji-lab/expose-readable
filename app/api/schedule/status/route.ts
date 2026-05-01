@@ -19,7 +19,9 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const upstream = await fetch(`${SCHEDULER_BASE}/${job_id}`);
+    const upstream = await fetch(`${SCHEDULER_BASE}/${job_id}`, {
+      signal: AbortSignal.timeout(10_000),
+    });
     const data = await upstream.json();
 
     if (!upstream.ok) {

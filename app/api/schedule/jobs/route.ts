@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAuthUser } from '@/utils/auth/server';
+import { getAuthUser, getAuthToken } from '@/utils/auth/server';
 import { BACKEND_BASE, BACKEND_JOBS } from '@/lib/api/backend';
 
 /**
@@ -13,8 +13,10 @@ export async function GET() {
   // Attempt to identify the logged-in user.
   let backendUserId: string | null = null;
   let isAuthenticated = false;
+  let authToken: string | null = null;
 
   try {
+    authToken = await getAuthToken();
     const authUser = await getAuthUser();
 
     if (authUser?.email) {
@@ -39,8 +41,11 @@ export async function GET() {
   try {
     if (backendUserId) {
       // Authenticated user with resolved backend ID — always filter by user.
+      const headers: Record<string, string> = {};
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
       const dbRes = await fetch(
         `${BACKEND_BASE}/api/v1/schedules?user_id=${encodeURIComponent(backendUserId)}`,
+        { headers },
       );
       if (dbRes.ok) {
         const dbData = await dbRes.json();

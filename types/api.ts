@@ -1,5 +1,6 @@
 export type JobStatus =
   | 'created'
+  | 'queued'
   | 'loading_data'
   | 'running_ga'
   | 'exporting'

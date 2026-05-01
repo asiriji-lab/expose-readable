@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
     const upstream = await fetch(BACKEND_JOBS, {
       method: 'POST',
       body: form,
+      signal: AbortSignal.timeout(30_000),
     });
 
     const result = await upstream.json();
