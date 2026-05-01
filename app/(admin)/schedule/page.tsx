@@ -52,6 +52,21 @@ import {
     deriveEntityMetaFromSchedule,
     BackendSchedule,
 } from '@/lib/api/transform';
+import MergeConflictDialog from './_components/MergeConflictDialog';
+import { type MergeConflict, type SlotKey, diffDatasets, applyAutoMerge, applyResolutions } from './_utils/datasetDiff';
+
+function parseScheduleRecord(data: unknown): FullDataset | null {
+    const d = data as Record<string, unknown>;
+    const raw = (d?.schedule as Record<string, unknown>)?.data ?? d?.data ?? null;
+    if (!raw) return null;
+    const rawAny = raw as Record<string, unknown>;
+    if (Array.isArray(rawAny.teachers)) {
+        const { dataset } = transformToFullDataset(raw as BackendSchedule);
+        const { dataset: clean } = autoEjectConflicts(dataset);
+        return clean;
+    }
+    return reconcileFullDataset(raw as FullDataset);
+}
 
 function SchedulePageContent() {
     const router = useRouter();
@@ -65,6 +80,11 @@ function SchedulePageContent() {
     const [entityMeta, setEntityMeta] = useState<EntityMeta | null>(null);
     const [sheetUrl, setSheetUrl] = useState<string | null>(null);
     const [isSourcePanelOpen, setIsSourcePanelOpen] = useState(false);
+
+    const baseDatasetRef = useRef<FullDataset | null>(null);
+    const [pendingMergeConflicts, setPendingMergeConflicts] = useState<MergeConflict[]>([]);
+    const [pendingServerDataset, setPendingServerDataset] = useState<FullDataset | null>(null);
+    const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
 
     // ─── Dirty / save-guard ───────────────────────────────────────────────────
     const [isDirty, setIsDirty] = useState(false);
@@ -144,6 +164,7 @@ function SchedulePageContent() {
                             setGroupedSlots(gs ?? {});
                             if (cachedMeta) setEntityMeta(JSON.parse(cachedMeta) as EntityMeta);
                             if (cachedSheetUrl) setSheetUrl(cachedSheetUrl);
+                            baseDatasetRef.current = ds;
                             return;
                         } catch {
                             // Corrupted — clear and fall through to network fetch
@@ -164,6 +185,7 @@ function SchedulePageContent() {
                             setJobName(raw.config?.academic_year || 'ตารางสอน');
                             if (cachedMeta) setEntityMeta(JSON.parse(cachedMeta) as EntityMeta);
                             if (cachedSheetUrl) setSheetUrl(cachedSheetUrl);
+                            baseDatasetRef.current = clean;
                             return;
                         } catch {
                             // Corrupted (e.g. wrong format from old save bug) — clear and fall through
@@ -202,6 +224,7 @@ function SchedulePageContent() {
                             const { dataset: clean } = autoEjectConflicts(transformed);
                             setDataset(clean);
                             setGroupedSlots(gs);
+                            baseDatasetRef.current = clean;
                             console.log('[load] writing to schedule_cache (raw BackendSchedule)');
                             sessionStorage.setItem(`schedule_cache_${scheduleId}`, JSON.stringify(raw));
                         } else {
@@ -212,6 +235,7 @@ function SchedulePageContent() {
                             gs = {};
                             setDataset(fullDataset);
                             setGroupedSlots(gs);
+                            baseDatasetRef.current = fullDataset;
                             console.log('[load] writing to schedule_dataset_cache (FullDataset)');
                             sessionStorage.setItem(`schedule_dataset_cache_${scheduleId}`, JSON.stringify({ dataset: fullDataset, groupedSlots: gs }));
                         }
@@ -341,6 +365,10 @@ function SchedulePageContent() {
     };
 
     const handleSaveSchedule = async () => {
+        if (pendingMergeConflicts.length > 0) {
+            alert(`Resolve ${pendingMergeConflicts.length} sync conflict${pendingMergeConflicts.length !== 1 ? 's' : ''} before saving.`);
+            return;
+        }
         const params = new URLSearchParams(window.location.search);
         const scheduleId = params.get('schedule_id');
         if (!scheduleId || !dataset) return;
@@ -369,6 +397,7 @@ function SchedulePageContent() {
             // Remove stale raw cache so it doesn't shadow the dataset cache on next load
             sessionStorage.removeItem(`schedule_cache_${scheduleId}`);
             setIsDirty(false);
+            baseDatasetRef.current = structuredClone(dataset);
             alert('Schedule saved successfully.');
         } catch (e) {
             console.error('Save error:', e);
@@ -383,6 +412,50 @@ function SchedulePageContent() {
         if (scheduleId) {
             sessionStorage.setItem(`entity_meta_cache_${scheduleId}`, JSON.stringify(newMeta));
         }
+    };
+
+    const handleCheckForUpdates = async () => {
+        if (!baseDatasetRef.current || !dataset) return;
+        const params = new URLSearchParams(window.location.search);
+        const scheduleId = params.get('schedule_id');
+        if (!scheduleId) return;
+        setIsCheckingUpdates(true);
+        try {
+            const res = await fetch(`/api/schedule/record?schedule_id=${encodeURIComponent(scheduleId)}`, { cache: 'no-store' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data?.error ?? 'Fetch failed');
+            const serverDataset = parseScheduleRecord(data);
+            if (!serverDataset) { alert('Could not parse server data.'); return; }
+            const { conflicts, autoChanges, hasChanges } = diffDatasets(baseDatasetRef.current, dataset, serverDataset);
+            if (!hasChanges) { alert('Already up to date.'); return; }
+            let merged = dataset;
+            if (autoChanges.length > 0) {
+                merged = applyAutoMerge(merged, autoChanges);
+                setDataset(merged);
+                baseDatasetRef.current = merged; // advance base past auto-merged slots
+            }
+            if (conflicts.length > 0) {
+                setPendingMergeConflicts(conflicts);
+                setPendingServerDataset(serverDataset);
+            } else {
+                baseDatasetRef.current = serverDataset;
+                alert(`Synced ${autoChanges.length} change${autoChanges.length !== 1 ? 's' : ''}.`);
+            }
+        } catch (err: unknown) {
+            alert(`Failed to check for updates: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+            setIsCheckingUpdates(false);
+        }
+    };
+
+    const handleMergeComplete = (resolutions: Map<SlotKey, 'mine' | 'theirs'>) => {
+        if (!dataset || !pendingServerDataset) return;
+        const merged = applyResolutions(dataset, pendingMergeConflicts, resolutions);
+        setDataset(merged);
+        setIsDirty(true);
+        baseDatasetRef.current = pendingServerDataset;
+        setPendingMergeConflicts([]);
+        setPendingServerDataset(null);
     };
 
     // ─── Back with dirty guard ────────────────────────────────────────────────
@@ -663,6 +736,11 @@ function SchedulePageContent() {
                                     Unsaved
                                 </span>
                             )}
+                            {pendingMergeConflicts.length > 0 && (
+                                <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[10px] font-semibold shrink-0">
+                                    {pendingMergeConflicts.length} conflict{pendingMergeConflicts.length !== 1 ? 's' : ''}
+                                </span>
+                            )}
                             {loadError && (
                                 <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-semibold shrink-0" title={loadError}>
                                     Load error
@@ -686,14 +764,22 @@ function SchedulePageContent() {
                         <div className="h-5 w-px bg-border hidden sm:block" />
 
                         <button
-                            disabled
-                            title="Complete all lessons before publishing"
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-600"
+                            onClick={handleSaveSchedule}
+                            disabled={pendingMergeConflicts.length > 0}
+                            title={pendingMergeConflicts.length > 0 ? `Resolve ${pendingMergeConflicts.length} conflict${pendingMergeConflicts.length !== 1 ? 's' : ''} first` : 'Save schedule'}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            <span className="hidden sm:inline">Publish</span>
+                            <Save className="w-4 h-4" />
+                            <span className="hidden sm:inline">Save</span>
+                        </button>
+                        <button
+                            onClick={handleCheckForUpdates}
+                            disabled={isCheckingUpdates}
+                            title="Check for updates from server"
+                            className="flex items-center gap-1.5 px-3 py-1.5 border border-border text-foreground rounded-lg text-sm font-medium hover:bg-surface-alt transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${isCheckingUpdates ? 'animate-spin' : ''}`} />
+                            <span className="hidden sm:inline">{isCheckingUpdates ? 'Checking…' : 'Sync'}</span>
                         </button>
 
                         <div className="relative">
@@ -707,9 +793,17 @@ function SchedulePageContent() {
                                 <>
                                     <div className="fixed inset-0 z-30" onClick={() => setActionsOpen(false)} />
                                     <div className="absolute right-0 top-full mt-1 z-40 w-48 bg-surface border border-border rounded-xl shadow-lg py-1">
-                                        <button onClick={() => { handleSaveSchedule(); setActionsOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors">
-                                            <Save className="w-4 h-4 text-foreground-muted" /> Save Schedule
+                                        <button
+                                            disabled
+                                            title="Complete all lessons before publishing"
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            <svg className="w-4 h-4 text-foreground-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            Publish
                                         </button>
+                                        <div className="my-1 border-t border-border" />
                                         <button
                                             onClick={() => { setIsSourcePanelOpen(true); setActionsOpen(false); }}
                                             className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-foreground hover:bg-surface-alt transition-colors"
@@ -864,6 +958,15 @@ function SchedulePageContent() {
                     onConfirm={handleConfirmDrop}
                     onSwap={handleSwapDrop}
                     onCancel={handleCancelDrop}
+                />
+            )}
+
+            {/* Merge conflict dialog */}
+            {pendingMergeConflicts.length > 0 && (
+                <MergeConflictDialog
+                    conflicts={pendingMergeConflicts}
+                    onResolve={handleMergeComplete}
+                    onCancel={() => { setPendingMergeConflicts([]); setPendingServerDataset(null); }}
                 />
             )}
 
