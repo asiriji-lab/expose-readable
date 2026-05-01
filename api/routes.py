@@ -6,6 +6,7 @@ GA SCHEDULER FLASK API - Routes
 API endpoints for the scheduling system.
 """
 
+import io
 import os
 import uuid
 import json
@@ -1287,6 +1288,63 @@ def refresh_schedule_meta(schedule_id):
     models.update_entity_meta(schedule_id, entity_meta)
 
     return jsonify({"success": True, "entity_meta": entity_meta})
+
+
+@api_bp.route('/schedules/<schedule_id>/export-excel', methods=['GET'])
+def export_schedule_excel(schedule_id):
+    """
+    Export a completed schedule as an Excel workbook (.xlsx).
+
+    The schedule must be saved (status = completed, data present in database).
+    If the schedule has not been saved, a 400 error is returned asking the user
+    to save before exporting.
+    ---
+    tags:
+      - Schedules
+    parameters:
+      - name: schedule_id
+        in: path
+        type: string
+        required: true
+        description: Schedule UUID
+    produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+    responses:
+      200:
+        description: Excel file with Teacher, Student, and Room sheets
+      400:
+        description: Schedule not saved / database not configured
+      404:
+        description: Schedule not found
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    sched = models.get_schedule(schedule_id)
+    if not sched:
+        return jsonify({"success": False, "error": "Schedule not found"}), 404
+
+    schedule_data = sched.get('data')
+    if not schedule_data:
+        return jsonify({
+            "success": False,
+            "error": "Schedule has not been saved yet. Please save the schedule before exporting.",
+        }), 400
+
+    entity_meta = sched.get('entity_meta')
+
+    from src.ga.excel_exporter import build_schedule_excel
+    excel_bytes = build_schedule_excel(schedule_data, entity_meta)
+
+    job_name = (sched.get('job_name') or schedule_id).replace(' ', '_')
+    filename = f"schedule_{job_name}.xlsx"
+
+    return send_file(
+        io.BytesIO(excel_bytes),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename,
+    )
 
 
 @api_bp.route('/schedules/<schedule_id>', methods=['DELETE'])
