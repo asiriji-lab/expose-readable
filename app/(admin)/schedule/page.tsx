@@ -79,6 +79,7 @@ function SchedulePageContent() {
     const [dataset, setDataset] = useState<FullDataset | null>(null);
     const [groupedSlots, setGroupedSlots] = useState<GroupedSlots>({});
     const [entityMeta, setEntityMeta] = useState<EntityMeta | null>(null);
+    const [scheduleColumns, setScheduleColumns] = useState<Array<{ key: string; label: string; time?: string }>>([]);
     const [sheetUrl, setSheetUrl] = useState<string | null>(null);
     const [isSourcePanelOpen, setIsSourcePanelOpen] = useState(false);
 
@@ -159,10 +160,11 @@ function SchedulePageContent() {
                     // Post-save cache: already-transformed FullDataset — skip transform entirely
                     if (cachedDataset) {
                         try {
-                            const { dataset: ds, groupedSlots: gs } = JSON.parse(cachedDataset) as { dataset: FullDataset; groupedSlots: GroupedSlots };
+                            const { dataset: ds, groupedSlots: gs, columns: cols } = JSON.parse(cachedDataset) as { dataset: FullDataset; groupedSlots: GroupedSlots; columns?: Array<{ key: string; label: string; time?: string }> };
                             console.log('[load] HIT dataset cache — teachers type:', Array.isArray((ds as any).teachers) ? 'array(OLD)' : 'object(new)', 'keys:', Object.keys((ds as any).teachers ?? {}).slice(0, 3));
                             setDataset(ds);
                             setGroupedSlots(gs ?? {});
+                            setScheduleColumns(cols ?? []);
                             if (cachedMeta) setEntityMeta(JSON.parse(cachedMeta) as EntityMeta);
                             if (cachedSheetUrl) setSheetUrl(cachedSheetUrl);
                             baseDatasetRef.current = ds;
@@ -183,6 +185,7 @@ function SchedulePageContent() {
                             const { dataset: clean } = autoEjectConflicts(transformed);
                             setDataset(clean);
                             setGroupedSlots(gs);
+                            setScheduleColumns(raw.config?.columns ?? []);
                             setJobName(raw.config?.academic_year || 'ตารางสอน');
                             if (cachedMeta) setEntityMeta(JSON.parse(cachedMeta) as EntityMeta);
                             if (cachedSheetUrl) setSheetUrl(cachedSheetUrl);
@@ -225,6 +228,7 @@ function SchedulePageContent() {
                             const { dataset: clean } = autoEjectConflicts(transformed);
                             setDataset(clean);
                             setGroupedSlots(gs);
+                            setScheduleColumns(raw.config?.columns ?? []);
                             baseDatasetRef.current = clean;
                             console.log('[load] writing to schedule_cache (raw BackendSchedule)');
                             sessionStorage.setItem(`schedule_cache_${scheduleId}`, JSON.stringify(raw));
@@ -236,9 +240,10 @@ function SchedulePageContent() {
                             gs = {};
                             setDataset(fullDataset);
                             setGroupedSlots(gs);
+                            setScheduleColumns((rawAny as any).config?.columns ?? []);
                             baseDatasetRef.current = fullDataset;
                             console.log('[load] writing to schedule_dataset_cache (FullDataset)');
-                            sessionStorage.setItem(`schedule_dataset_cache_${scheduleId}`, JSON.stringify({ dataset: fullDataset, groupedSlots: gs }));
+                            sessionStorage.setItem(`schedule_dataset_cache_${scheduleId}`, JSON.stringify({ dataset: fullDataset, groupedSlots: gs, columns: (rawAny as any).config?.columns ?? [] }));
                         }
                         if (meta) {
                             setEntityMeta(meta);
@@ -395,7 +400,7 @@ function SchedulePageContent() {
 
         try {
             const exportData = {
-                config: { academic_year: '2026', semester: 1 },
+                config: { academic_year: '2026', semester: 1, columns: scheduleColumns },
                 teachers: dataset.teachers,
                 classes: dataset.classes,
                 rooms: dataset.rooms,
@@ -412,7 +417,7 @@ function SchedulePageContent() {
             // Write already-transformed dataset cache (different format from raw BackendSchedule cache)
             sessionStorage.setItem(
                 `schedule_dataset_cache_${scheduleId}`,
-                JSON.stringify({ dataset, groupedSlots }),
+                JSON.stringify({ dataset, groupedSlots, columns: scheduleColumns }),
             );
             // Remove stale raw cache so it doesn't shadow the dataset cache on next load
             sessionStorage.removeItem(`schedule_cache_${scheduleId}`);
