@@ -1333,8 +1333,16 @@ def export_schedule_excel(schedule_id):
 
     entity_meta = sched.get('entity_meta')
 
-    from src.ga.excel_exporter import build_schedule_excel
-    excel_bytes = build_schedule_excel(schedule_data, entity_meta)
+    try:
+        from src.ga.excel_exporter import build_schedule_excel
+        excel_bytes = build_schedule_excel(schedule_data, entity_meta)
+    except Exception as exc:
+        import traceback as _tb
+        current_app.logger.error(
+            '[export_schedule_excel] Build failed for %s: %s\n%s',
+            schedule_id, exc, _tb.format_exc(),
+        )
+        return jsonify({"success": False, "error": f"Excel generation failed: {exc}"}), 500
 
     job_name = (sched.get('job_name') or schedule_id).replace(' ', '_')
     filename = f"schedule_{job_name}.xlsx"

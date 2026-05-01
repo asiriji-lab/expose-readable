@@ -295,7 +295,7 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
                         continue
                     multi_class_seen.add(group_key)
                     teacher_groups.append({
-                        'id': '|'.join([sid, room, *sorted(co_ids)]),
+                        'id': '|'.join([sid, room, *sorted(co_ids), ','.join(student_classes)]),
                         'type': 'multi_class_team',
                         'teachers': [
                             {'code': t, 'name': teacher_meta.get(t, {}).get('name', t)}

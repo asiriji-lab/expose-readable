@@ -36,6 +36,94 @@ _SEPARATOR_ROWS = 1
 
 
 # ---------------------------------------------------------------------------
+# Format normaliser  (frontend FullDataset → backend list-of-entity-dicts)
+# ---------------------------------------------------------------------------
+
+def _normalize_schedule(schedule_json: Dict, entity_meta: Optional[Dict]) -> Dict:
+    """
+    The frontend saves in FullDataset format:
+        teachers / classes / rooms  →  dict keyed by entity code
+        each value                  →  { day: { slotIndex: ScheduleItem } }
+
+    The exporter expects:
+        teachers / students / rooms →  list of { id, name, rows: [...] }
+
+    Detect the frontend format (teachers is a dict, not a list) and convert.
+    Backend format is returned unchanged.
+    """
+    teachers_raw = schedule_json.get('teachers', [])
+    if isinstance(teachers_raw, list):
+        return schedule_json  # already backend format
+
+    # ── frontend format detected ──────────────────────────────────────────────
+    classes_raw = schedule_json.get('classes', {})
+    rooms_raw   = schedule_json.get('rooms', {})
+    teacher_meta = (entity_meta or {}).get('teacher_meta', {})
+
+    # Collect all slot indices present in the data so we know the period range.
+    all_slots: set = set()
+    for entity_map in (teachers_raw, classes_raw, rooms_raw):
+        for day_data in entity_map.values():
+            all_slots.update(str(k) for k in day_data.keys())
+    period_labels = sorted(all_slots, key=lambda x: int(x) if x.isdigit() else 0)
+
+    # Build / patch config.columns so _parse_periods works correctly.
+    config = dict(schedule_json.get('config') or {})
+    if not config.get('columns'):
+        columns: List[Dict] = [{'key': 'day', 'label': 'Day', 'type': 'text'}]
+        for lbl in period_labels:
+            columns.append({'key': lbl, 'label': lbl, 'time': ''})
+        config['columns'] = columns
+
+    def _to_cell(item: Dict, view: str) -> Optional[Dict]:
+        sid = item.get('subjectCode') or ''
+        if not sid:
+            return None
+        if view == 'teacher':
+            return {'subject_id': sid, 'class': item.get('classCode') or '', 'room': item.get('room') or ''}
+        if view == 'student':
+            return {'subject_id': sid, 'teacher': item.get('teacherName') or item.get('teacher') or '', 'room': item.get('room') or ''}
+        # room
+        return {'subject_id': sid, 'teacher': item.get('teacherName') or item.get('teacher') or '', 'class': item.get('classCode') or ''}
+
+    def _build_rows(entity_schedule: Dict, view: str) -> List[Dict]:
+        rows = []
+        for day in WEEKDAYS:
+            day_data = entity_schedule.get(day, {})
+            columns: List[Dict] = []
+            for lbl in period_labels:
+                # JSON keys are always strings; slot indices may have been ints.
+                item = day_data.get(lbl) or day_data.get(int(lbl) if lbl.isdigit() else lbl)
+                columns.append({lbl: _to_cell(item, view) if item else None})
+            rows.append({'day': day, 'columns': columns})
+        return rows
+
+    teachers = [
+        {
+            'id': code,
+            'name': (teacher_meta.get(code) or {}).get('name', code),
+            'rows': _build_rows(sched, 'teacher'),
+        }
+        for code, sched in teachers_raw.items()
+    ]
+    students = [
+        {'id': code, 'name': code, 'rows': _build_rows(sched, 'student')}
+        for code, sched in classes_raw.items()
+    ]
+    rooms = [
+        {'id': code, 'name': code, 'rows': _build_rows(sched, 'room')}
+        for code, sched in rooms_raw.items()
+    ]
+
+    return {
+        'config':   config,
+        'teachers': teachers,
+        'students': students,
+        'rooms':    rooms,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -44,6 +132,8 @@ def build_schedule_excel(
     entity_meta: Optional[Dict] = None,
 ) -> bytes:
     """Return Excel workbook bytes for the given schedule."""
+    schedule_json = _normalize_schedule(schedule_json, entity_meta)
+
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
 
