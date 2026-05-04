@@ -43,6 +43,7 @@ import {
 import OverlayInspectPopover from './_components/OverlayInspectPopover';
 import UpdateSourcePanel from './_components/UpdateSourcePanel';
 import BandHoverTooltip from './_components/BandHoverTooltip';
+import ClassCurriculumStrip from './_components/ClassCurriculumStrip';
 import {
     transformToFullDataset,
     reconcileFullDataset,
@@ -87,6 +88,7 @@ function SchedulePageContent() {
     const [pendingMergeConflicts, setPendingMergeConflicts] = useState<MergeConflict[]>([]);
     const [pendingServerDataset, setPendingServerDataset] = useState<FullDataset | null>(null);
     const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     // ─── Dirty / save-guard ───────────────────────────────────────────────────
     const [isDirty, setIsDirty] = useState(false);
@@ -390,6 +392,7 @@ function SchedulePageContent() {
     };
 
     const handleSaveSchedule = async () => {
+        if (isSaving) return;
         if (pendingMergeConflicts.length > 0) {
             alert(`Resolve ${pendingMergeConflicts.length} sync conflict${pendingMergeConflicts.length !== 1 ? 's' : ''} before saving.`);
             return;
@@ -398,6 +401,7 @@ function SchedulePageContent() {
         const scheduleId = params.get('schedule_id');
         if (!scheduleId || !dataset) return;
 
+        setIsSaving(true);
         try {
             const exportData = {
                 config: { academic_year: '2026', semester: 1, columns: scheduleColumns },
@@ -427,6 +431,8 @@ function SchedulePageContent() {
         } catch (e) {
             console.error('Save error:', e);
             alert('Failed to save schedule.');
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -790,12 +796,12 @@ function SchedulePageContent() {
 
                         <button
                             onClick={handleSaveSchedule}
-                            disabled={pendingMergeConflicts.length > 0}
+                            disabled={isSaving || pendingMergeConflicts.length > 0}
                             title={pendingMergeConflicts.length > 0 ? `Resolve ${pendingMergeConflicts.length} conflict${pendingMergeConflicts.length !== 1 ? 's' : ''} first` : 'Save schedule'}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <Save className="w-4 h-4" />
-                            <span className="hidden sm:inline">Save</span>
+                            <Save className={`w-4 h-4 ${isSaving ? 'animate-pulse' : ''}`} />
+                            <span className="hidden sm:inline">{isSaving ? 'Saving…' : 'Save'}</span>
                         </button>
                         <button
                             onClick={handleCheckForUpdates}
@@ -917,6 +923,13 @@ function SchedulePageContent() {
                                     onBandHover={handleBandHover}
                                     onBandHoverEnd={handleBandHoverEnd}
                                     activeEntity={viewMode === 'all' ? activeEntity : undefined}
+                                />
+                            )}
+                            {viewMode === 'all' && dataset && (
+                                <ClassCurriculumStrip
+                                    classCode={classCode}
+                                    dataset={dataset}
+                                    entityMeta={entityMeta}
                                 />
                             )}
                         </div>

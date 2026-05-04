@@ -135,6 +135,8 @@ function DraggableSessionBand({
     dragId,
     dragPayload,
     onClick,
+    onHoverStart,
+    onHoverEnd,
     dim,
     displayText,
 }: {
@@ -143,6 +145,8 @@ function DraggableSessionBand({
     dragId: string;
     dragPayload: DragPayload;
     onClick?: () => void;
+    onHoverStart?: (rect: DOMRect) => void;
+    onHoverEnd?: () => void;
     dim?: boolean;
     displayText?: string | null;
 }) {
@@ -164,6 +168,8 @@ function DraggableSessionBand({
                 isDragging ? 'opacity-30' : dim ? 'opacity-50' : '',
             ].join(' ')}
             onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
+            onMouseEnter={onHoverStart ? (e) => onHoverStart(e.currentTarget.getBoundingClientRect()) : undefined}
+            onMouseLeave={onHoverEnd}
         >
             <span className="text-[10px] text-emerald-800 font-semibold truncate px-1 pointer-events-none">
                 {displayText ?? bandLabel(item)}
@@ -308,6 +314,8 @@ export default function ThreeBandCell({
                     dragId={dragId}
                     dragPayload={dragPayload}
                     onClick={() => onBandClick?.('teacher')}
+                    onHoverStart={makeHoverStart('teacher', teacherBand)}
+                    onHoverEnd={handleHoverEnd}
                     dim={!!activeEntity && activeEntity !== 'teacher'}
                     displayText={bandTexts?.[0]}
                 />

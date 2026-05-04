@@ -9,6 +9,7 @@ import type {
     EntityScheduleMap,
     FullDataset,
 } from '../_types/schedule.types';
+import { reconcileFullDataset } from '@/lib/api/transform';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -377,7 +378,10 @@ export function autoEjectConflicts(dataset: FullDataset): {
         }
     }
 
-    return { dataset: current, ejected };
+    // Ejecting an item removes its room slot entirely via removeItemFromDataset, which can
+    // incorrectly clear a room slot still occupied by the winning (non-ejected) teacher.
+    // Re-running reconcile rebuilds any room/class entries deleted as collateral damage.
+    return { dataset: reconcileFullDataset(current), ejected };
 }
 
 /**

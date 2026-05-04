@@ -108,7 +108,7 @@ export function computePaletteData(
         const classes: PaletteClassItem[] = entry.assignments.map(a => {
             const room = resolveDefaultRoom(entry.subjectCode, a.classCode, entityMeta);
             const info = dataset
-                ? getPlacementInfo(teacherCode, entry.subjectCode, a.classCode, dataset, a.room || room)
+                ? getPlacementInfo(teacherCode, entry.subjectCode, a.classCode, dataset)
                 : { count: 0, summary: '' };
             return {
                 teacherCode,
@@ -181,6 +181,107 @@ export function computeTeamGroupPaletteData(
     });
 }
 
+// ─── Class Curriculum ────────────────────────────────────────────────────────
+
+export interface ClassSubjectRow {
+    subjectCode: string;
+    subject: string;
+    variant: string;
+    expected: number;
+    placed: number;
+    teachers: { code: string; name: string }[];
+    met: boolean;
+}
+
+export function computeClassCurriculum(
+    classCode: string,
+    dataset: FullDataset | null,
+    entityMeta: EntityMeta,
+): ClassSubjectRow[] {
+    const rows = new Map<string, ClassSubjectRow>();
+
+    // 1. Team/multi-class groups covering this class — count once per group
+    const teamCoveredKeys = new Set<string>(); // `${teacherCode}|||${subjectCode}`
+    for (const group of entityMeta.teacher_groups ?? []) {
+        if (!group.classCodes.includes(classCode)) continue;
+        const existing = rows.get(group.subjectCode);
+        if (existing) {
+            existing.expected += group.periodsPerWeek;
+            for (const t of group.teachers) {
+                if (!existing.teachers.some(e => e.code === t.code)) {
+                    existing.teachers.push({ code: t.code, name: t.name });
+                }
+            }
+        } else {
+            rows.set(group.subjectCode, {
+                subjectCode: group.subjectCode,
+                subject: group.subject,
+                variant: group.variant,
+                expected: group.periodsPerWeek,
+                placed: 0,
+                teachers: group.teachers.map(t => ({ code: t.code, name: t.name })),
+                met: false,
+            });
+        }
+        for (const t of group.teachers) {
+            teamCoveredKeys.add(`${t.code}|||${group.subjectCode}`);
+        }
+    }
+
+    // 2. Non-team assignments from teacher_workload
+    for (const teacherCode of entityMeta.teacher_codes) {
+        for (const entry of entityMeta.teacher_workload[teacherCode] ?? []) {
+            for (const a of entry.assignments) {
+                if (a.classCode !== classCode) continue;
+                if (teamCoveredKeys.has(`${teacherCode}|||${entry.subjectCode}`)) continue;
+                const teacherEntry = {
+                    code: teacherCode,
+                    name: entityMeta.teacher_meta[teacherCode]?.name ?? teacherCode,
+                };
+                const existing = rows.get(entry.subjectCode);
+                if (existing) {
+                    existing.expected += a.periodsPerWeek;
+                    if (!existing.teachers.some(t => t.code === teacherCode)) {
+                        existing.teachers.push(teacherEntry);
+                    }
+                } else {
+                    rows.set(entry.subjectCode, {
+                        subjectCode: entry.subjectCode,
+                        subject: entry.subject,
+                        variant: entry.variant,
+                        expected: a.periodsPerWeek,
+                        placed: 0,
+                        teachers: [teacherEntry],
+                        met: false,
+                    });
+                }
+            }
+        }
+    }
+
+    // 3. Count placed from class schedule
+    if (dataset) {
+        const classSched = dataset.classes[classCode];
+        if (classSched) {
+            for (const day of DAYS) {
+                const slots = classSched[day];
+                if (!slots) continue;
+                for (const item of Object.values(slots)) {
+                    const row = rows.get(item.subjectCode);
+                    if (row) row.placed++;
+                }
+            }
+        }
+    }
+
+    // 4. Finalize met + sort: unmet first, then alphabetical
+    for (const row of rows.values()) row.met = row.placed >= row.expected;
+    return Array.from(rows.values()).sort((a, b) => {
+        if (a.met !== b.met) return a.met ? 1 : -1;
+        return a.subjectCode.localeCompare(b.subjectCode);
+    });
+}
+
 export function computeGlobalPaletteData(
     dataset: FullDataset | null,
     entityMeta: EntityMeta | null,
@@ -210,7 +311,7 @@ export function computeGlobalPaletteData(
             for (const a of entry.assignments) {
                 const room = resolveDefaultRoom(entry.subjectCode, a.classCode, entityMeta);
                 const info = dataset
-                    ? getPlacementInfo(teacherCode, entry.subjectCode, a.classCode, dataset, a.room || room)
+                    ? getPlacementInfo(teacherCode, entry.subjectCode, a.classCode, dataset)
                     : { count: 0, summary: '' };
                 group.classes.push({
                     teacherCode,

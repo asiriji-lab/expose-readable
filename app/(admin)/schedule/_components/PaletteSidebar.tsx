@@ -34,7 +34,7 @@ function SidebarDropZone() {
         <div
             ref={setNodeRef}
             className={[
-                'mx-3 mb-3 p-2.5 border-2 border-dashed rounded-lg text-[10px] text-center transition-colors select-none',
+                'mx-3 mb-3 p-2.5 border-2 border-dashed rounded-lg text-xs text-center transition-colors select-none',
                 isOver
                     ? 'border-warning bg-warning-light text-warning font-semibold'
                     : 'border-border text-foreground-muted/50',
@@ -106,12 +106,12 @@ function ClassItemCard({
                 {/* Class + placed badge */}
                 <div className="flex items-center justify-between gap-1 mb-1">
                     <div className="min-w-0 flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-foreground">{item.classCode}</span>
+                        <span className="text-[11px] font-bold text-foreground">{item.classCode}</span>
                         {showTeacher && (
-                            <span className="text-[10px] text-foreground-muted/60 truncate">{item.teacherName}</span>
+                            <span className="text-[11px] text-foreground-muted/60 truncate">{item.teacherName}</span>
                         )}
                     </div>
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 bg-primary/10 text-primary">
+                    <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 bg-primary/10 text-primary">
                         {item.placed}/{item.periodsPerWeek}
                     </span>
                 </div>
@@ -121,7 +121,7 @@ function ClassItemCard({
                     value={selectedRoom}
                     onChange={e => setSelectedRoom(e.target.value)}
                     onPointerDown={e => e.stopPropagation()}
-                    className="w-full text-[9px] border border-border rounded px-1.5 py-0.5 bg-surface-alt text-foreground cursor-pointer mb-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full text-[11px] border border-border rounded px-1.5 py-0.5 bg-surface-alt text-foreground cursor-pointer mb-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                     {(entityMeta?.room_codes ?? []).map(r => (
                         <option key={r} value={r}>
@@ -201,19 +201,19 @@ function CompletedClassCard({
                 <div className="flex items-center justify-between gap-1 mb-0.5">
                     <div className="min-w-0 flex items-center gap-1.5">
                         <CheckCircle size={11} className="text-success shrink-0" />
-                        <span className="text-xs font-bold text-foreground">{item.classCode}</span>
+                        <span className="text-[11px] font-bold text-foreground">{item.classCode}</span>
                         {showTeacher && (
-                            <span className="text-[10px] text-foreground-muted/60 truncate">{item.teacherName}</span>
+                            <span className="text-[11px] text-foreground-muted/60 truncate">{item.teacherName}</span>
                         )}
                     </div>
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 bg-success-light text-success border border-success-border">
+                    <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 bg-success-light text-success border border-success-border">
                         {item.placed}/{item.periodsPerWeek}
                     </span>
                 </div>
 
                 {/* Placement summary */}
                 {item.placementSummary && (
-                    <p className="text-[9px] text-foreground-muted pl-4 truncate">{item.placementSummary}</p>
+                    <p className="text-[11px] text-foreground-muted pl-4 truncate">{item.placementSummary}</p>
                 )}
             </div>
         </div>
@@ -278,9 +278,9 @@ function TeamGroupCard({
             <div className="pl-3 pr-2 pt-2 pb-2">
                 {/* Subject + badge */}
                 <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className="text-xs font-bold text-foreground truncate">{group.subjectCode}</span>
+                    <span className="text-[11px] font-bold text-foreground truncate">{group.subjectCode}</span>
                     <span className={[
-                        'text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0',
+                        'text-[11px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0',
                         allDone ? 'bg-success-light text-success border border-success-border' : 'bg-primary/10 text-primary',
                     ].join(' ')}>
                         {placed}/{group.periodsPerWeek}
@@ -289,14 +289,14 @@ function TeamGroupCard({
 
                 {/* Teachers list */}
                 <div className="flex items-center gap-1 mb-1">
-                    <Users size={9} className="text-foreground-muted/60 shrink-0" />
-                    <span className="text-[9px] text-foreground-muted truncate">
+                    <Users size={10} className="text-foreground-muted/60 shrink-0" />
+                    <span className="text-[11px] text-foreground-muted truncate">
                         {group.teachers.map(t => t.name).join(' + ')}
                     </span>
                 </div>
 
                 {/* Classes */}
-                <div className="text-[9px] text-foreground-muted/60 mb-1 truncate">
+                <div className="text-[11px] text-foreground-muted/60 mb-1 truncate">
                     {group.classCodes.join(', ')}
                 </div>
 
@@ -305,7 +305,7 @@ function TeamGroupCard({
                     value={selectedRoom}
                     onChange={e => setSelectedRoom(e.target.value)}
                     onPointerDown={e => e.stopPropagation()}
-                    className="w-full text-[9px] border border-border rounded px-1.5 py-0.5 bg-surface-alt text-foreground cursor-pointer mb-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full text-[11px] border border-border rounded px-1.5 py-0.5 bg-surface-alt text-foreground cursor-pointer mb-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                     {(entityMeta?.room_codes ?? []).map(r => (
                         <option key={r} value={r}>
@@ -352,7 +352,7 @@ function TeamLessonsSection({
                 </div>
                 <div className="flex items-center gap-1.5">
                     {totalRemaining > 0 ? (
-                        <span className="bg-warning text-white rounded-full text-[9px] font-bold min-w-[16px] h-[16px] flex items-center justify-center px-1">
+                        <span className="bg-warning text-white rounded-full text-[11px] font-bold min-w-[18px] h-[18px] flex items-center justify-center px-1">
                             {totalRemaining}
                         </span>
                     ) : (
@@ -434,12 +434,12 @@ function SubjectGroupAccordion({
                         'text-[11px] font-bold truncate',
                         allDone ? 'text-foreground-muted' : 'text-foreground',
                     ].join(' ')}>{group.subjectCode}</span>
-                    <span className="text-[9px] text-foreground-muted/60 truncate hidden sm:block">{group.subject}</span>
+                    <span className="text-[11px] text-foreground-muted/60 truncate hidden sm:block">{group.subject}</span>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
                     {/* Progress: "2/3 classes" or completed count */}
                     <span className={[
-                        'text-[9px] font-medium',
+                        'text-[11px] font-medium',
                         allDone ? 'text-success' : 'text-foreground-muted',
                     ].join(' ')}>
                         {completedCount}/{totalClasses}
@@ -546,18 +546,18 @@ export default function PaletteSidebar({ teacherCode, dataset, entityMeta }: Pal
                         {activeTab === 'teacher' ? teacherDisplayName : 'All Teachers'}
                     </span>
                     {totalRemaining > 0 ? (
-                        <span className="bg-warning text-white rounded-full text-[9px] font-bold min-w-[18px] h-[18px] flex items-center justify-center leading-none flex-shrink-0 px-1">
+                        <span className="bg-warning text-white rounded-full text-sm font-bold min-w-[22px] h-5 flex items-center justify-center leading-none flex-shrink-0 px-1">
                             {totalRemaining}
                         </span>
                     ) : (
-                        <span className="bg-success text-white rounded-full text-[9px] font-bold px-1.5 h-[18px] flex items-center justify-center leading-none flex-shrink-0">
+                        <span className="bg-success text-white rounded-full text-sm font-bold px-1.5 h-5 flex items-center justify-center leading-none flex-shrink-0">
                             <CheckCircle size={10} />
                         </span>
                     )}
                 </div>
 
                 {/* Progress summary */}
-                <div className="text-[9px] text-foreground-muted mb-1.5">
+                <div className="text-sm text-foreground-muted mb-1.5">
                     {totalPlaced}/{totalPeriods} periods placed
                 </div>
                 <div className="h-1 bg-border rounded-full overflow-hidden mb-2">
@@ -577,7 +577,7 @@ export default function PaletteSidebar({ teacherCode, dataset, entityMeta }: Pal
                             key={tab}
                             onClick={() => setActiveTab(tab)}
                             className={[
-                                'flex-1 text-[10px] py-1 rounded-md font-medium transition-colors',
+                                'flex-1 text-xs py-1 rounded-md font-medium transition-colors',
                                 activeTab === tab
                                     ? 'bg-surface text-foreground shadow-sm'
                                     : 'text-foreground-muted hover:text-foreground',
@@ -595,7 +595,7 @@ export default function PaletteSidebar({ teacherCode, dataset, entityMeta }: Pal
                             key={opt.key}
                             onClick={() => setFilterMode(opt.key)}
                             className={[
-                                'flex-1 text-[9px] py-0.5 rounded font-medium transition-colors',
+                                'flex-1 text-sm py-0.5 rounded font-medium transition-colors',
                                 filterMode === opt.key
                                     ? 'bg-primary/10 text-primary'
                                     : 'text-foreground-muted hover:text-foreground hover:bg-surface-alt',
