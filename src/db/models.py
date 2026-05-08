@@ -168,6 +168,28 @@ def get_user(user_id: str) -> Optional[Dict]:
 
 
 @_guard
+def update_user_profile(
+    user_id: str,
+    username: Optional[str] = None,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    role: Optional[str] = None,
+    org_id: Optional[str] = None,
+) -> Optional[Dict]:
+    """Update non-null fields on an existing user. Only overwrites if provided."""
+    user = db.session.get(User, _parse_uuid(user_id))
+    if not user:
+        return None
+    if username   is not None: user.username   = username
+    if first_name is not None: user.first_name = first_name
+    if last_name  is not None: user.last_name  = last_name
+    if role       is not None: user.role       = role
+    if org_id     is not None: user.org_id     = _parse_uuid(org_id)
+    db.session.commit()
+    return user.to_dict()
+
+
+@_guard
 def set_user_org(user_id: str, org_id: str) -> Optional[Dict]:
     """Set org_id on an existing user. Returns updated user dict or None."""
     user = db.session.get(User, _parse_uuid(user_id))

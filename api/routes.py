@@ -1451,13 +1451,22 @@ def auth_clerk_register():
 
     existing = models.get_user_by_email(email)
     if existing:
-        if not existing.get('org_id'):
+        org_id_to_set = existing.get('org_id')
+        if not org_id_to_set:
             org = models.get_org_by_registration_key(admin_key)
             if not org:
                 return jsonify({"success": False, "error": "Invalid admin key"}), 403
-            existing = models.set_user_org(existing['user_id'], org['org_id']) or existing
-        token = create_access_token(identity=existing['user_id'], additional_claims={'org_id': existing.get('org_id'), 'role': existing.get('role')})
-        return jsonify({"success": True, "access_token": token, "user": existing})
+            org_id_to_set = org['org_id']
+        updated = models.update_user_profile(
+            user_id    = existing['user_id'],
+            username   = username   or existing.get('username'),
+            first_name = first_name or existing.get('first_name'),
+            last_name  = last_name  or existing.get('last_name'),
+            role       = 'school_admin',
+            org_id     = org_id_to_set,
+        ) or existing
+        token = create_access_token(identity=updated['user_id'], additional_claims={'org_id': updated.get('org_id'), 'role': updated.get('role')})
+        return jsonify({"success": True, "access_token": token, "user": updated})
 
     org = models.get_org_by_registration_key(admin_key)
     if not org:
