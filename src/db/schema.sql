@@ -18,10 +18,11 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- organizations
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS organizations (
-    org_id      UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-    name        VARCHAR(255) NOT NULL UNIQUE,
-    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+    org_id             UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+    name               VARCHAR(255) NOT NULL UNIQUE,
+    registration_key   VARCHAR(255) NOT NULL UNIQUE,
+    created_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
 -- ----------------------------------------------------------------------------
@@ -31,6 +32,10 @@ CREATE TABLE IF NOT EXISTS users (
     user_id       UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id        UUID         REFERENCES organizations(org_id) ON DELETE SET NULL,
     email         VARCHAR(255) NOT NULL UNIQUE,
+    username      VARCHAR(255) UNIQUE,
+    role          VARCHAR(50)  NOT NULL DEFAULT 'admin',
+    first_name    VARCHAR(255),
+    last_name     VARCHAR(255),
     name          VARCHAR(255),
     password_hash VARCHAR(255),
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),

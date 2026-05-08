@@ -76,17 +76,18 @@ def _parse_uuid(value: Optional[str]) -> Optional[uuid.UUID]:
 # ---------------------------------------------------------------------------
 
 @_guard
-def create_organization(name: str) -> Optional[Dict]:
+def create_organization(name: str, registration_key: str) -> Optional[Dict]:
     """
     Insert a new organization.
 
     Args:
-        name: Unique display name for the organization.
+        name:             Unique display name for the organization.
+        registration_key: Secret key admins submit to register under this org.
 
     Returns:
         The newly created row as a dict, or None on error.
     """
-    org = Organization(name=name)
+    org = Organization(name=name, registration_key=registration_key.upper())
     db.session.add(org)
     db.session.commit()
     return org.to_dict()
@@ -96,6 +97,13 @@ def create_organization(name: str) -> Optional[Dict]:
 def get_organization(org_id: str) -> Optional[Dict]:
     """Return a single organization by UUID, or None if not found."""
     org = db.session.get(Organization, _parse_uuid(org_id))
+    return org.to_dict() if org else None
+
+
+@_guard
+def get_org_by_registration_key(key: str) -> Optional[Dict]:
+    """Return org whose registration_key matches, or None. Key stored and compared uppercase."""
+    org = Organization.query.filter_by(registration_key=key.upper()).first()
     return org.to_dict() if org else None
 
 

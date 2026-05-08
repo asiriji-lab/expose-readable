@@ -24,7 +24,7 @@ every client-side UPDATE, so no database trigger is required.
 ================================================================================
 """
 
-import uuid
+from uuid6 import uuid7
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, String, Integer, Float, Text, DateTime, ForeignKey
@@ -47,16 +47,26 @@ class Organization(db.Model):
 
     __tablename__ = 'organizations'
 
-    org_id     = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name       = Column(String(255), nullable=False, unique=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
+    org_id           = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
+    name             = Column(String(255), nullable=False, unique=True)
+    registration_key = Column(String(255), nullable=False, unique=True)
+    created_at       = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    updated_at       = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
 
     # Relationships
     users     = relationship('User',     back_populates='organization', lazy='dynamic')
     schedules = relationship('Schedule', back_populates='organization', lazy='dynamic')
 
     def to_dict(self) -> dict:
+        return {
+            'org_id':     str(self.org_id),
+            'name':       self.name,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+    def to_dict_public(self) -> dict:
+        """Excludes registration_key — safe to return in API responses."""
         return {
             'org_id':     str(self.org_id),
             'name':       self.name,
@@ -74,7 +84,7 @@ class User(db.Model):
 
     __tablename__ = 'users'
 
-    user_id       = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id       = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     org_id        = Column(
         UUID(as_uuid=True),
         ForeignKey('organizations.org_id', ondelete='SET NULL'),

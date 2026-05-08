@@ -8,7 +8,8 @@ API endpoints for the scheduling system.
 
 import io
 import os
-import uuid
+from uuid import UUID
+from uuid6 import uuid7
 import json
 import shutil
 from datetime import datetime
@@ -229,7 +230,7 @@ def submit_schedule():
         ga_params = {}
 
     # ── Create job ────────────────────────────────────────────────────────────
-    job_id = str(uuid.uuid4())
+    job_id = str(uuid7())
     if not job_name:
         job_name = f'Schedule Job {job_id[:8]}'
 
@@ -593,7 +594,7 @@ def delete_job(job_id):
     db_record = None
     if database.is_available():
         try:
-            db_record = _db.session.get(ScheduleModel, uuid.UUID(job_id))
+            db_record = _db.session.get(ScheduleModel, UUID(job_id))
         except Exception as e:
             current_app.logger.error('[delete_job] DB lookup failed for %s: %s', job_id, e)
 
@@ -1382,7 +1383,7 @@ def delete_schedule_record(schedule_id):
     db_record = None
     if database.is_available():
         try:
-            db_record = _db.session.get(ScheduleModel, uuid.UUID(schedule_id))
+            db_record = _db.session.get(ScheduleModel, UUID(schedule_id))
         except Exception as e:
             current_app.logger.error('[delete_schedule] DB lookup failed for %s: %s', schedule_id, e)
 
@@ -1405,6 +1406,66 @@ def delete_schedule_record(schedule_id):
             return jsonify({"success": False, "error": f"Database delete failed: {e}"}), 500
 
     return jsonify({"success": True, "message": f"Schedule {schedule_id} deleted successfully"})
+
+
+@api_bp.route('/auth/clerk-check', methods=['POST'])
+def auth_clerk_check():
+    """Look up an existing user by email and return a JWT — used after Clerk Google OAuth."""
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    data  = request.get_json() or {}
+    email = (data.get('email') or '').strip()
+
+    if not email:
+        return jsonify({"success": False, "error": "'email' is required"}), 400
+
+    user = models.get_user_by_email(email)
+    if not user:
+        return jsonify({"success": False, "error": "User not found"}), 404
+
+    token = create_access_token(identity=user['user_id'])
+    return jsonify({"success": True, "access_token": token, "user": user})
+
+
+@api_bp.route('/auth/clerk-register', methods=['POST'])
+def auth_clerk_register():
+    """Create a new admin account via Clerk Google OAuth — requires valid admin key."""
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    data       = request.get_json() or {}
+    email      = (data.get('email')      or '').strip()
+    username   = (data.get('username')   or '').strip() or None
+    first_name = (data.get('first_name') or '').strip() or None
+    last_name  = (data.get('last_name')  or '').strip() or None
+    admin_key  = (data.get('admin_key')  or '').strip()
+
+    if not email:
+        return jsonify({"success": False, "error": "'email' is required"}), 400
+    if not admin_key:
+        return jsonify({"success": False, "error": "Admin key is required"}), 400
+
+    org = models.get_org_by_registration_key(admin_key)
+    if not org:
+        return jsonify({"success": False, "error": "Invalid admin key"}), 403
+
+    if models.get_user_by_email(email):
+        return jsonify({"success": False, "error": "Email already registered"}), 409
+
+    user = models.create_user(
+        email=email,
+        role='admin',
+        username=username,
+        first_name=first_name,
+        last_name=last_name,
+        org_id=org['org_id'],
+    )
+    if not user:
+        return jsonify({"success": False, "error": "Could not create account"}), 500
+
+    token = create_access_token(identity=user['user_id'])
+    return jsonify({"success": True, "access_token": token, "user": user}), 201
 
 
 @api_bp.route('/auth/register', methods=['POST'])
