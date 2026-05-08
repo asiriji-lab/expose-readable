@@ -19,7 +19,7 @@ async function testSignup() {
                 username: `admin_${timestamp}`,
                 first_name: 'Test',
                 last_name: 'Admin',
-                role: 'admin'
+                role: 'school_admin'
             }
         }
     });

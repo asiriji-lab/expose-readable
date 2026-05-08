@@ -1,22 +1,8 @@
-﻿export const dynamic = 'force-dynamic';
+// Registration via username/password is replaced by Google OAuth (Clerk).
+// New users: sign in with Google → /complete-profile to set username + admin key.
 
-import React from 'react';
-import Box from './components/box';
+import { redirect } from 'next/navigation';
 
-const App: React.FC = () => {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-surface">
-      {/* Owl Logo at Top */}
-      <div className="mb-2">
-        <img 
-          src="/owl-logo.svg" 
-          alt="ScheDool Owl" 
-          className="w-24 h-24"
-        />
-      </div>
-      <Box />
-    </div>
-  );
-};
-
-export default App;
+export default function RegisterPage() {
+    redirect('/login');
+}

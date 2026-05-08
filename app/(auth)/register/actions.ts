@@ -3,10 +3,10 @@
 import { setAuthCookies } from '@/utils/auth/server'
 import { BACKEND_BASE } from '@/lib/api/backend'
 
-function normalizeRole(value: unknown): 'admin' | 'teacher' | 'student' | null {
+function normalizeRole(value: unknown): 'school_admin' | 'teacher' | 'student' | null {
     if (typeof value !== 'string') return null;
     const role = value.trim().toLowerCase();
-    if (role === 'admin' || role === 'teacher' || role === 'student') {
+    if (role === 'school_admin' || role === 'teacher' || role === 'student') {
         return role;
     }
     return null;
@@ -15,7 +15,7 @@ function normalizeRole(value: unknown): 'admin' | 'teacher' | 'student' | null {
 interface RegisterParams {
     username: string
     password: string
-    role: 'admin' | 'teacher' | 'student'
+    role: 'school_admin' | 'teacher' | 'student'
     first_name: string
     last_name: string
     email: string

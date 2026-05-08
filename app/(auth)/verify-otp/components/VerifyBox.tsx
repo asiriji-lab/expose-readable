@@ -9,7 +9,7 @@ const VerifyBox: React.FC = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
     const email = searchParams.get('email') || '';
-    const role = searchParams.get('role') as 'admin' | 'teacher' | 'student' | null;
+    const role = searchParams.get('role') as 'school_admin' | 'teacher' | 'student' | null;
 
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [loading, setLoading] = useState(false);

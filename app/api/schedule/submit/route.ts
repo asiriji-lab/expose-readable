@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BACKEND_JOBS, assertBackendConfigured } from '@/lib/api/backend';
+import { getAuthToken } from '@/utils/auth/server';
 
 /**
  * POST /api/schedule/submit
@@ -12,9 +13,11 @@ export async function POST(req: NextRequest) {
     assertBackendConfigured();
     const form = await req.formData();
 
+    const token = await getAuthToken();
     const upstream = await fetch(BACKEND_JOBS, {
       method: 'POST',
       body: form,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
       signal: AbortSignal.timeout(30_000),
     });
 

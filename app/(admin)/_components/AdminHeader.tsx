@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
+import { useClerk } from '@clerk/nextjs';
 import { signOutAction } from '../_actions/auth';
 import { LogOut, CalendarDays, User } from 'lucide-react';
 
@@ -18,6 +19,7 @@ interface AdminHeaderProps {
 }
 
 export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
+    const { signOut } = useClerk();
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [user, setUser] = useState<{
         firstName: string;
@@ -36,7 +38,7 @@ export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
                 firstName: parsed.first_name || '',
                 lastName:  parsed.last_name  || '',
                 email:     parsed.email      || '',
-                role:      parsed.role       || 'admin',
+                role:      parsed.role       || 'school_admin',
             });
         } catch {
             // malformed cookie
@@ -55,13 +57,14 @@ export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
 
     const handleSignOut = async () => {
         await signOutAction();
+        await signOut({ redirectUrl: '/login' });
     };
 
     const currentRole     = roleLabel || (user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Admin');
     const normalizedRole  = currentRole.toLowerCase();
     const roleBadgeClass  = normalizedRole === 'student'
         ? 'bg-[var(--role-student-bg)] text-[var(--role-student)]'
-        : normalizedRole === 'admin'
+        : normalizedRole === 'school_admin'
             ? 'bg-[var(--role-admin-bg)] text-[var(--role-admin)]'
             : 'bg-[var(--role-teacher-bg)] text-[var(--role-teacher)]';
     const avatarText = user?.firstName ? user.firstName.charAt(0).toUpperCase() : null;

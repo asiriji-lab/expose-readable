@@ -49,6 +49,10 @@ export default function ScheduleList() {
   useEffect(() => {
     fetch('/api/schedule/jobs', { cache: 'no-store' })
       .then(async (res) => {
+        if (res.status === 401) {
+          window.location.href = '/login';
+          return;
+        }
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? 'Failed to load schedules');
         const jobs: BackendJob[] = data.jobs ?? [];

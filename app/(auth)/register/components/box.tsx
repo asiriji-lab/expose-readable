@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 
 const Box: React.FC = () => {
   const router = useRouter();
-  const [selectedRole, setSelectedRole] = useState<'admin' | 'teacher' | 'student'>('admin');
+  const [selectedRole, setSelectedRole] = useState<'school_admin' | 'teacher' | 'student'>('school_admin');
   const [showPassword, setShowPassword] = useState(false);
   const [showAdminKey, setShowAdminKey] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -82,17 +82,17 @@ const Box: React.FC = () => {
           {/* Admin Card */}
           <button
             type="button"
-            onClick={() => setSelectedRole('admin')}
-            className={`p-4 rounded-xl border-2 transition-all ${selectedRole === 'admin'
+            onClick={() => setSelectedRole('school_admin')}
+            className={`p-4 rounded-xl border-2 transition-all ${selectedRole === 'school_admin'
               ? 'border-primary bg-primary-light'
               : 'border-border bg-surface hover:border-border-strong'
               }`}
           >
-            <div className={`w-10 h-10 rounded-lg mx-auto mb-2 flex items-center justify-center ${selectedRole === 'admin' ? 'bg-primary' : 'bg-surface-alt'
+            <div className={`w-10 h-10 rounded-lg mx-auto mb-2 flex items-center justify-center ${selectedRole === 'school_admin' ? 'bg-primary' : 'bg-surface-alt'
               }`}>
-              <Shield className={selectedRole === 'admin' ? 'text-white' : 'text-foreground-muted'} size={20} />
+              <Shield className={selectedRole === 'school_admin' ? 'text-white' : 'text-foreground-muted'} size={20} />
             </div>
-            <p className={`text-sm font-medium ${selectedRole === 'admin' ? 'text-primary' : 'text-foreground-muted'
+            <p className={`text-sm font-medium ${selectedRole === 'school_admin' ? 'text-primary' : 'text-foreground-muted'
               }`}>
               Admin
             </p>
@@ -151,7 +151,7 @@ const Box: React.FC = () => {
         </div>
 
         {/* Password & Admin Key */}
-        {selectedRole === 'admin' ? (
+        {selectedRole === 'school_admin' ? (
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-foreground-muted mb-2">Password</label>

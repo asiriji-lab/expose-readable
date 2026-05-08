@@ -15,7 +15,6 @@ export async function submitScheduleJob(params: {
   jobName?: string;
   academicYear?: string;
   semester?: number;
-  userId?: string;
   sheetUrl?: string;
 }): Promise<SubmitJobResponse> {
   const form = new FormData();
@@ -32,7 +31,6 @@ export async function submitScheduleJob(params: {
   if (params.jobName) form.append('job_name', params.jobName);
   if (params.academicYear) form.append('academic_year', params.academicYear);
   if (params.semester !== undefined) form.append('semester', String(params.semester));
-  if (params.userId) form.append('user_id', params.userId);
   if (params.sheetUrl) form.append('sheet_url', params.sheetUrl);
 
   const res = await fetch('/api/schedule/submit', { method: 'POST', body: form });

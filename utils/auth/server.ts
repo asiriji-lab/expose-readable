@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 
 export interface AuthUser {
     user_id: string
-    role: 'admin' | 'teacher' | 'student'
+    role: 'school_admin' | 'teacher' | 'student'
     username: string
     email: string
     first_name: string

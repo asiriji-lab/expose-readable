@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser, getAuthToken } from '@/utils/auth/server';
-import { BACKEND_BASE, BACKEND_JOBS } from '@/lib/api/backend';
+import { BACKEND_BASE } from '@/lib/api/backend';
 
 /**
  * GET /api/schedule/jobs
  *
- * Returns scheduling jobs.  When a user session is present and the DB is
- * configured, filters by the matching backend user so each user only sees
- * their own jobs.  Falls back to the full job-manager list otherwise.
+ * Returns the authenticated user's scheduling jobs.
+ * Returns 401 if no valid session exists.
  */
 export async function GET() {
   // Attempt to identify the logged-in user.
@@ -69,16 +68,8 @@ export async function GET() {
       return NextResponse.json({ success: true, count: 0, jobs: [] });
     }
 
-    // No session at all — fall back to unfiltered job-manager list (dev / no-auth mode).
-    const upstream = await fetch(BACKEND_JOBS);
-    const data = await upstream.json();
-    if (!upstream.ok) {
-      return NextResponse.json(
-        { error: data?.error ?? 'Scheduler error' },
-        { status: upstream.status },
-      );
-    }
-    return NextResponse.json(data);
+    // No session — reject request.
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   } catch (err: unknown) {
     console.error('[/api/schedule/jobs]', err);
     return NextResponse.json(

@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 
 const Box: React.FC = () => {
   const router = useRouter();
-  const [selectedRole, setSelectedRole] = useState<'admin' | 'teacher' | 'student' | null>(null);
+  const [selectedRole, setSelectedRole] = useState<'school_admin' | 'teacher' | 'student' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [accountExists, setAccountExists] = useState<boolean | null>(null);
@@ -91,7 +91,7 @@ const Box: React.FC = () => {
           <div className="grid grid-cols-3 gap-3">
             {/* Admin */}
             <div
-              className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all ${selectedRole === 'admin' ? 'border-primary bg-primary-light' : 'border-border opacity-50'}`}>
+              className={`flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all ${selectedRole === 'school_admin' ? 'border-primary bg-primary-light' : 'border-border opacity-50'}`}>
               <Shield className="w-7 h-7 mb-2" />
               <div className="font-semibold text-sm">Admin</div>
             </div>
