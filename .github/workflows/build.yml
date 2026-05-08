@@ -1,30 +1,32 @@
 name: build_backend_docker
+
 on:
   schedule:
-    - cron:
-        "00 05 * * *" # build at 05:00 UTC every day
+    - cron: "00 05 * * *" # build at 05:00 UTC every day
 
   push:
-    paths-ignore: # don't rebuild if only documentation has changed
+    paths-ignore:
       - "**.md"
 
   pull_request:
-  workflow_dispatch: # allow manually triggering builds
+  workflow_dispatch:
 
 concurrency:
-  # only run one build at a time
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   build_and_publish:
     runs-on: ubuntu-latest
-    steps: 
-      - uses: actions/checkout@v3
-      - name: Build Backend Docker Container
-        env:
-          SCHEDOOL_ACTION_TOKEN: ${{ secrets.SCHEDOOL_ACTION_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        run: docker login --username winsdominoes --password ${{ secrets.SCHEDOOL_ACTION_TOKEN }} ghcr.io
+
+      - name: Build and push backend image
         run: |
-          docker login --username winsdominoes --password ${{ secrets.SCHEDOOL_ACTION_TOKEN }} ghcr.io
-          docker buildx build -t ghcr.io/schedool/backend:latest .
-          docker push ghcr.io/schedool/backend:latest
+          docker buildx build \
+            -t ghcr.io/schedool/backend:latest \
+            --push \
+            .
