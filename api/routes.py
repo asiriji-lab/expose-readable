@@ -1448,6 +1448,11 @@ def auth_clerk_register():
 
     existing = models.get_user_by_email(email)
     if existing:
+        if not existing.get('org_id'):
+            org = models.get_org_by_registration_key(admin_key)
+            if not org:
+                return jsonify({"success": False, "error": "Invalid admin key"}), 403
+            existing = models.set_user_org(existing['user_id'], org['org_id']) or existing
         token = create_access_token(identity=existing['user_id'])
         return jsonify({"success": True, "access_token": token, "user": existing})
 
