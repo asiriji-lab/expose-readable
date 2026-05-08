@@ -9,7 +9,22 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# BACKEND_URL is injected at runtime via environment variable, not baked into the image
+
+# NEXT_PUBLIC_* vars are baked into the client JS bundle at build time.
+# Pass them via --build-arg in CI; they are NOT available at runtime.
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ARG NEXT_PUBLIC_CLERK_SIGN_IN_URL
+ARG NEXT_PUBLIC_CLERK_SIGN_UP_URL
+ARG NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL
+ARG NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_CLERK_SIGN_IN_URL=$NEXT_PUBLIC_CLERK_SIGN_IN_URL
+ENV NEXT_PUBLIC_CLERK_SIGN_UP_URL=$NEXT_PUBLIC_CLERK_SIGN_UP_URL
+ENV NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=$NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL
+ENV NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL=$NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL
+
+# Runtime-only vars (CLERK_SECRET_KEY, BACKEND_URL, GOOGLE_*) — inject at
+# container start via docker-compose env_file, not baked into the image.
 RUN npm run build
 
 FROM node:20-alpine AS runner
