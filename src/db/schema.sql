@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS users (
     org_id        UUID         REFERENCES organizations(org_id) ON DELETE SET NULL,
     email         VARCHAR(255) NOT NULL UNIQUE,
     username      VARCHAR(255) UNIQUE,
-    role          VARCHAR(50)  NOT NULL DEFAULT 'admin',
+    role          VARCHAR(50)  NOT NULL,
     first_name    VARCHAR(255),
     last_name     VARCHAR(255),
     name          VARCHAR(255),

@@ -15,7 +15,7 @@ import shutil
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app, send_file
 from flask_jwt_extended import (
-    create_access_token, jwt_required, get_jwt_identity,
+    create_access_token, jwt_required, get_jwt_identity, get_jwt,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -91,6 +91,7 @@ def _run_job_background(app, job_id, job_folder, params, academic_year, semester
 # =============================================================================
 
 @api_bp.route('/jobs', methods=['POST'])
+@jwt_required()
 def submit_schedule():
     """
     Submit a complete scheduling job in one request.
@@ -209,9 +210,11 @@ def submit_schedule():
     # ── Parse form parameters ─────────────────────────────────────────────────
     job_name      = request.form.get('job_name', '').strip()
     academic_year = request.form.get('academic_year', '').strip()
-    org_id        = request.form.get('org_id', '').strip() or None
-    user_id       = request.form.get('user_id', '').strip() or None
     sheet_url     = request.form.get('sheet_url', '').strip() or None
+
+    claims  = get_jwt()
+    user_id = get_jwt_identity()
+    org_id  = claims.get('org_id')
 
     if not academic_year:
         return jsonify({"success": False, "error": "'academic_year' is required"}), 400
@@ -782,7 +785,7 @@ def create_user():
 
     if not email:
         return jsonify({"success": False, "error": "'email' is required"}), 400
-    if role not in ('admin', 'teacher', 'student'):
+    if role not in ('school_admin', 'teacher', 'student'):
         role = 'student'
 
     user = models.create_user(
@@ -1104,7 +1107,7 @@ def sync_user():
 
     if not email:
         return jsonify({"success": False, "error": "'email' is required"}), 400
-    if role not in ('admin', 'teacher', 'student'):
+    if role not in ('school_admin', 'teacher', 'student'):
         role = 'student'
 
     existing = models.get_user_by_email(email)
@@ -1424,7 +1427,7 @@ def auth_clerk_check():
     if not user:
         return jsonify({"success": False, "error": "User not found"}), 404
 
-    token = create_access_token(identity=user['user_id'])
+    token = create_access_token(identity=user['user_id'], additional_claims={'org_id': user.get('org_id'), 'role': user.get('role')})
     return jsonify({"success": True, "access_token": token, "user": user})
 
 
@@ -1453,7 +1456,7 @@ def auth_clerk_register():
             if not org:
                 return jsonify({"success": False, "error": "Invalid admin key"}), 403
             existing = models.set_user_org(existing['user_id'], org['org_id']) or existing
-        token = create_access_token(identity=existing['user_id'])
+        token = create_access_token(identity=existing['user_id'], additional_claims={'org_id': existing.get('org_id'), 'role': existing.get('role')})
         return jsonify({"success": True, "access_token": token, "user": existing})
 
     org = models.get_org_by_registration_key(admin_key)
@@ -1462,7 +1465,7 @@ def auth_clerk_register():
 
     user = models.create_user(
         email=email,
-        role='admin',
+        role='school_admin',
         username=username,
         first_name=first_name,
         last_name=last_name,
@@ -1471,7 +1474,7 @@ def auth_clerk_register():
     if not user:
         return jsonify({"success": False, "error": "Could not create account"}), 500
 
-    token = create_access_token(identity=user['user_id'])
+    token = create_access_token(identity=user['user_id'], additional_claims={'org_id': user.get('org_id'), 'role': user.get('role')})
     return jsonify({"success": True, "access_token": token, "user": user}), 201
 
 
@@ -1530,7 +1533,7 @@ def auth_register():
         return jsonify({"success": False, "error": "'password' is required"}), 400
     if len(password) < 8:
         return jsonify({"success": False, "error": "Password must be at least 8 characters"}), 400
-    if role not in ('admin', 'teacher', 'student'):
+    if role not in ('school_admin', 'teacher', 'student'):
         return jsonify({"success": False, "error": "'role' must be 'admin', 'teacher', or 'student'"}), 400
 
     # Check for existing account
@@ -1551,7 +1554,7 @@ def auth_register():
     if not user:
         return jsonify({"success": False, "error": "Could not create account"}), 500
 
-    token = create_access_token(identity=user['user_id'])
+    token = create_access_token(identity=user['user_id'], additional_claims={'org_id': user.get('org_id'), 'role': user.get('role')})
     return jsonify({"success": True, "access_token": token, "user": user}), 201
 
 
@@ -1604,7 +1607,7 @@ def auth_login():
     if not check_password_hash(user_orm.password_hash, password):
         return jsonify({"success": False, "error": "Invalid email or password"}), 401
 
-    token = create_access_token(identity=str(user_orm.user_id))
+    token = create_access_token(identity=str(user_orm.user_id), additional_claims={'org_id': str(user_orm.org_id) if user_orm.org_id else None, 'role': user_orm.role})
     return jsonify({"success": True, "access_token": token, "user": user_orm.to_dict()})
 
 

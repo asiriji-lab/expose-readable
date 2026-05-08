@@ -168,9 +168,20 @@ def get_user(user_id: str) -> Optional[Dict]:
 
 
 @_guard
+def set_user_org(user_id: str, org_id: str) -> Optional[Dict]:
+    """Set org_id on an existing user. Returns updated user dict or None."""
+    user = db.session.get(User, _parse_uuid(user_id))
+    if not user:
+        return None
+    user.org_id = _parse_uuid(org_id)
+    db.session.commit()
+    return user.to_dict()
+
+
+@_guard
 def get_user_by_email(email: str) -> Optional[Dict]:
     """Return a single user by e-mail address, or None if not found."""
-    user = User.query.filter_by(email=email).first()
+    user = User.query.filter(User.email.ilike(email)).first()
     return user.to_dict() if user else None
 
 
