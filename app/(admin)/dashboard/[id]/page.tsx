@@ -144,14 +144,6 @@ export default function SessionDetailPage() {
     setJobId(null);
     setDownloadUrl(null);
     try {
-      let backendUserId: string | undefined;
-      try {
-        const syncRes = await fetch('/api/user/sync', { method: 'POST' });
-        if (syncRes.ok) {
-          const syncData = await syncRes.json();
-          backendUserId = syncData.user_id ?? undefined;
-        }
-      } catch { /* ignore */ }
 
       const toFile = (rows: Array<string[]> | undefined, name: string) => {
         if (!rows || rows.length === 0) return undefined;
@@ -187,7 +179,6 @@ export default function SessionDetailPage() {
         jobName: sessionInfo.name,
         academicYear: String(sessionInfo.year),
         semester: sessionInfo.semester,
-        userId: backendUserId,
         sheetUrl: connectedSheetUrlRef.current ?? undefined,
       };
 
