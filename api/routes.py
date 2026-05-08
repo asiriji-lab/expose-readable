@@ -858,6 +858,74 @@ def get_user(user_id):
     return jsonify({"success": True, "user": user})
 
 
+@api_bp.route('/users/<user_id>/org', methods=['POST'])
+@jwt_required()
+def set_user_org_and_reissue(user_id):
+    """
+    Assign (or change) a user's organization and return a fresh JWT.
+    ---
+    tags:
+      - Users
+    summary: Join an organization and receive updated JWT
+    consumes:
+      - application/json
+    parameters:
+      - name: user_id
+        in: path
+        type: string
+        required: true
+        description: Backend user UUID
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [org_id]
+          properties:
+            org_id: {type: string, example: "<org UUID>"}
+    responses:
+      200:
+        description: Org assigned; fresh JWT returned
+        schema:
+          type: object
+          properties:
+            success:      {type: boolean}
+            access_token: {type: string}
+            user:         {type: object}
+      400:
+        description: Missing org_id or DB unavailable
+      403:
+        description: Caller is not the target user
+      404:
+        description: User or organization not found
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    caller_id = get_jwt_identity()
+    if caller_id != user_id:
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
+    data   = request.get_json() or {}
+    org_id = (data.get('org_id') or '').strip()
+    if not org_id:
+        return jsonify({"success": False, "error": "'org_id' is required"}), 400
+
+    org = models.get_organization(org_id)
+    if not org:
+        return jsonify({"success": False, "error": "Organization not found"}), 404
+
+    updated = models.set_user_org(user_id, org_id)
+    if not updated:
+        return jsonify({"success": False, "error": "User not found"}), 404
+
+    token = create_access_token(
+        identity=updated['user_id'],
+        additional_claims={'org_id': updated.get('org_id'), 'role': updated.get('role')},
+    )
+    return jsonify({"success": True, "access_token": token, "user": updated})
+
+
 # =============================================================================
 # SCHEDULE METADATA ENDPOINTS
 # =============================================================================
