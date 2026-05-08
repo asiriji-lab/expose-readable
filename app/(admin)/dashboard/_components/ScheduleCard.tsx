@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, CheckCircle, Loader2, Calendar, XCircle, MoreVertical, ExternalLink, Download, Trash2 } from 'lucide-react';
+import { Clock, CheckCircle, Loader2, Calendar, XCircle, MoreVertical, ExternalLink, Download, Trash2, User } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { type LucideIcon } from 'lucide-react';
 
@@ -20,6 +20,7 @@ export interface Session {
   lastEdited: string;
   updatedAt: string;   // ISO string, used for sorting
   status: SessionStatus;
+  createdByMe?: boolean;
 }
 
 type BadgeVariant = 'neutral' | 'success' | 'info' | 'purple' | 'danger';
@@ -35,9 +36,10 @@ const STATUS_BADGE: Record<SessionStatus, { label: string; variant: BadgeVariant
 interface ScheduleCardProps {
   schedule: Session;
   onDelete: (id: string) => void;
+  showOwner?: boolean;
 }
 
-export default function ScheduleCard({ schedule, onDelete }: ScheduleCardProps) {
+export default function ScheduleCard({ schedule, onDelete, showOwner = false }: ScheduleCardProps) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -133,6 +135,22 @@ export default function ScheduleCard({ schedule, onDelete }: ScheduleCardProps) 
       <td className="px-6 py-4 whitespace-nowrap">
         <div className="text-sm text-foreground-muted">{schedule.lastEdited}</div>
       </td>
+
+      {/* Owner (org view only) */}
+      {showOwner && (
+        <td className="px-6 py-4 whitespace-nowrap">
+          {schedule.createdByMe ? (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
+              <User size={12} />
+              You
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-xs text-foreground-muted">
+              <User size={12} />
+            </span>
+          )}
+        </td>
+      )}
 
       {/* Status */}
       <td className="px-6 py-4 whitespace-nowrap">

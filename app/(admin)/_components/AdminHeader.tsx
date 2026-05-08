@@ -79,7 +79,6 @@ export default function AdminHeader({ roleLabel }: AdminHeaderProps) {
                             <CalendarDays size={20} className="text-white" />
                         </div>
                         <h1 className="text-xl font-bold text-foreground">ScheDool</h1>
-                        <span className="text-foreground-muted text-sm md:text-base hidden sm:inline">Bodindecha School</span>
                     </div>
 
                     {/* Right: Role Badge and User Icon */}

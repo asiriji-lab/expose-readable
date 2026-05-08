@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthUser } from '@/utils/auth/server';
-import { BACKEND_BASE, BACKEND_JOBS } from '@/lib/api/backend';
+import { getAuthToken } from '@/utils/auth/server';
+import { BACKEND_JOBS } from '@/lib/api/backend';
 
 /**
  * POST /api/schedule/generate
@@ -122,31 +122,16 @@ export async function POST(req: NextRequest) {
     if (session?.semester != null) form.append('semester', String(session.semester));
     if (session?.year != null) form.append('academic_year', String(session.year));
 
-    // Sync the authenticated user to the backend and pass user_id so the job is
-    // associated with their account.  Failures are non-fatal.
-    try {
-      const authUser = await getAuthUser();
-      if (authUser?.email) {
-        const name = [authUser.first_name, authUser.last_name].filter(Boolean).join(' ')
-                  || authUser.username || '';
-        const syncRes = await fetch(`${BACKEND_BASE}/api/v1/users/sync`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ email: authUser.email, name }),
-        });
-        if (syncRes.ok) {
-          const syncData = await syncRes.json();
-          const backendUserId = syncData.user?.user_id;
-          if (backendUserId) form.append('user_id', backendUserId);
-        }
-      }
-    } catch {
-      // Non-fatal — job will still be created, just without user association.
-    }
+    // Forward the caller's JWT so the backend can extract user_id and org_id
+    // from the token claims — same as the /api/schedule/submit path.
+    const authToken = await getAuthToken().catch(() => null);
+    const upstreamHeaders: Record<string, string> = {};
+    if (authToken) upstreamHeaders['Authorization'] = `Bearer ${authToken}`;
 
     const upstream = await fetch(SCHEDULER_URL, {
-      method: 'POST',
-      body: form,
+      method:  'POST',
+      headers: upstreamHeaders,
+      body:    form,
     });
 
     const result = await upstream.json();
