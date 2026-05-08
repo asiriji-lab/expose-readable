@@ -1415,7 +1415,7 @@ def auth_clerk_check():
         return jsonify({"success": False, "error": "Database not configured"}), 400
 
     data  = request.get_json() or {}
-    email = (data.get('email') or '').strip()
+    email = (data.get('email') or '').strip().lower()
 
     if not email:
         return jsonify({"success": False, "error": "'email' is required"}), 400
@@ -1435,7 +1435,7 @@ def auth_clerk_register():
         return jsonify({"success": False, "error": "Database not configured"}), 400
 
     data       = request.get_json() or {}
-    email      = (data.get('email')      or '').strip()
+    email      = (data.get('email')      or '').strip().lower()
     username   = (data.get('username')   or '').strip() or None
     first_name = (data.get('first_name') or '').strip() or None
     last_name  = (data.get('last_name')  or '').strip() or None
@@ -1446,12 +1446,14 @@ def auth_clerk_register():
     if not admin_key:
         return jsonify({"success": False, "error": "Admin key is required"}), 400
 
+    existing = models.get_user_by_email(email)
+    if existing:
+        token = create_access_token(identity=existing['user_id'])
+        return jsonify({"success": True, "access_token": token, "user": existing})
+
     org = models.get_org_by_registration_key(admin_key)
     if not org:
         return jsonify({"success": False, "error": "Invalid admin key"}), 403
-
-    if models.get_user_by_email(email):
-        return jsonify({"success": False, "error": "Email already registered"}), 409
 
     user = models.create_user(
         email=email,
