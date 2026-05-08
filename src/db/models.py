@@ -63,10 +63,7 @@ def _parse_uuid(value: Optional[str]) -> Optional[uuid.UUID]:
     if not value:
         return None
     try:
-        parsed = uuid.UUID(str(value))
-        if parsed.version != 4:
-            return None
-        return parsed
+        return uuid.UUID(str(value))
     except (ValueError, AttributeError):
         return None
 
