@@ -33,7 +33,7 @@ from src.ga.feasibility_checker import FeasibilityChecker
 # CONFIGURATION
 # =============================================================================
 
-INPUT_DIR   = "input_dataset"
+INPUT_DIR   = "input_dataset_test"
 OUTPUT_DIR  = "output"
 CLEANED_DIR = "cleaned_input"
 
@@ -273,7 +273,11 @@ def main():
     print("STEP 2 — DATA CLEANING")
     print("=" * 80)
 
-    cleaned_data = clean_input_data(raw_data)
+    try:
+        cleaned_data = clean_input_data(raw_data)
+    except Exception as e:
+        print(f"\n❌ Data cleaning failed: {e}")
+        return
     export_cleaned_data(cleaned_data)
 
     # =========================================================================
@@ -283,9 +287,13 @@ def main():
     print("STEP 3 — PRESCHEDULE PROCESSING")
     print("=" * 80)
 
-    schedule_manager = ScheduleManager()
-    processor = PrescheduleProcessor(schedule_manager)
-    preschedule_results = processor.run_all_tasks(cleaned_data)
+    try:
+        schedule_manager = ScheduleManager()
+        processor = PrescheduleProcessor(schedule_manager)
+        preschedule_results = processor.run_all_tasks(cleaned_data)
+    except Exception as e:
+        print(f"\n❌ Preschedule processing failed: {e}")
+        return
 
     export_preschedule_results(schedule_manager)
 
@@ -307,6 +315,11 @@ def main():
 
     checker = FeasibilityChecker(schedule_manager)
     feasibility_report = checker.check()
+
+    if not feasibility_report.is_feasible:
+        print("\n❌ Feasibility check failed — correct the errors above before running the GA.")
+        print(f"   {len(feasibility_report.errors())} error(s) found.")
+        return
 
     # =========================================================================
     # STEP 4 — Genetic Algorithm

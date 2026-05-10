@@ -26,6 +26,8 @@ import uuid
 from functools import wraps
 from typing import Dict, List, Optional
 
+from sqlalchemy.orm.attributes import flag_modified
+
 from .database import db, is_available
 from .orm_models import Organization, User, Schedule
 
@@ -71,17 +73,18 @@ def _parse_uuid(value: Optional[str]) -> Optional[uuid.UUID]:
 # ---------------------------------------------------------------------------
 
 @_guard
-def create_organization(name: str) -> Optional[Dict]:
+def create_organization(name: str, registration_key: str) -> Optional[Dict]:
     """
     Insert a new organization.
 
     Args:
-        name: Unique display name for the organization.
+        name:             Unique display name for the organization.
+        registration_key: Secret key admins submit to register under this org.
 
     Returns:
         The newly created row as a dict, or None on error.
     """
-    org = Organization(name=name)
+    org = Organization(name=name, registration_key=registration_key.upper())
     db.session.add(org)
     db.session.commit()
     return org.to_dict()
@@ -91,6 +94,13 @@ def create_organization(name: str) -> Optional[Dict]:
 def get_organization(org_id: str) -> Optional[Dict]:
     """Return a single organization by UUID, or None if not found."""
     org = db.session.get(Organization, _parse_uuid(org_id))
+    return org.to_dict() if org else None
+
+
+@_guard
+def get_org_by_registration_key(key: str) -> Optional[Dict]:
+    """Return org whose registration_key matches, or None. Key stored and compared uppercase."""
+    org = Organization.query.filter_by(registration_key=key.upper()).first()
     return org.to_dict() if org else None
 
 
@@ -108,6 +118,10 @@ def list_organizations() -> List[Dict]:
 @_guard
 def create_user(
     email: str,
+    role: str,
+    username: Optional[str] = None,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
     name: Optional[str] = None,
     username: Optional[str] = None,
     role: str = 'student',
@@ -121,11 +135,11 @@ def create_user(
 
     Args:
         email:         Unique e-mail address.
-        name:          Display name (optional).
-        username:      Unique username for login (optional).
-        role:          Account role: 'admin', 'teacher', or 'student'.
-        first_name:    First name (optional).
-        last_name:     Last name (optional).
+        role:          Account role — 'admin', 'teacher', or 'student'.
+        username:      Unique username (optional).
+        first_name:    Given name (optional).
+        last_name:     Family name (optional).
+        name:          Legacy display name (optional).
         org_id:        UUID of the user's organization (optional).
         password_hash: Pre-hashed password string for auth (optional).
 
@@ -134,6 +148,10 @@ def create_user(
     """
     user = User(
         email=email,
+        role=role,
+        username=username or None,
+        first_name=first_name or None,
+        last_name=last_name or None,
         name=name or None,
         username=username or None,
         role=role,
@@ -155,9 +173,42 @@ def get_user(user_id: str) -> Optional[Dict]:
 
 
 @_guard
+def update_user_profile(
+    user_id: str,
+    username: Optional[str] = None,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    role: Optional[str] = None,
+    org_id: Optional[str] = None,
+) -> Optional[Dict]:
+    """Update non-null fields on an existing user. Only overwrites if provided."""
+    user = db.session.get(User, _parse_uuid(user_id))
+    if not user:
+        return None
+    if username   is not None: user.username   = username
+    if first_name is not None: user.first_name = first_name
+    if last_name  is not None: user.last_name  = last_name
+    if role       is not None: user.role       = role
+    if org_id     is not None: user.org_id     = _parse_uuid(org_id)
+    db.session.commit()
+    return user.to_dict()
+
+
+@_guard
+def set_user_org(user_id: str, org_id: str) -> Optional[Dict]:
+    """Set org_id on an existing user. Returns updated user dict or None."""
+    user = db.session.get(User, _parse_uuid(user_id))
+    if not user:
+        return None
+    user.org_id = _parse_uuid(org_id)
+    db.session.commit()
+    return user.to_dict()
+
+
+@_guard
 def get_user_by_email(email: str) -> Optional[Dict]:
     """Return a single user by e-mail address, or None if not found."""
-    user = User.query.filter_by(email=email).first()
+    user = User.query.filter(User.email.ilike(email)).first()
     return user.to_dict() if user else None
 
 
@@ -220,6 +271,7 @@ def create_schedule(
     ga_params: Dict,
     org_id: Optional[str] = None,
     user_id: Optional[str] = None,
+    sheet_url: Optional[str] = None,
 ) -> Optional[Dict]:
     """
     Insert a schedule row at the moment the API job is created.
@@ -244,6 +296,7 @@ def create_schedule(
         ga_params=ga_params,
         org_id=_parse_uuid(org_id),
         user_id=_parse_uuid(user_id),
+        sheet_url=sheet_url or None,
     )
     db.session.add(sched)
     db.session.commit()
@@ -270,13 +323,15 @@ def update_schedule_status(
 
 
 @_guard
-def complete_schedule(schedule_id: str, data: Dict) -> None:
+def complete_schedule(schedule_id: str, data: Dict,
+                      entity_meta: Optional[Dict] = None) -> None:
     """
     Mark the schedule as completed and store the full schedule JSON output.
 
     Args:
         schedule_id: The job UUID.
         data:        The schedule output dict (content of schedule.json).
+        entity_meta: Entity metadata computed from input CSVs (optional).
     """
     sched = db.session.get(Schedule, uuid.UUID(schedule_id))
     if not sched:
@@ -284,6 +339,10 @@ def complete_schedule(schedule_id: str, data: Dict) -> None:
     sched.status = 'completed'
     sched.progress = 100.0
     sched.data = data
+    flag_modified(sched, 'data')
+    if entity_meta is not None:
+        sched.entity_meta = entity_meta
+        flag_modified(sched, 'entity_meta')
     db.session.commit()
 
 
@@ -355,6 +414,91 @@ def get_user_schedules(user_id: str) -> List[Dict]:
         .all()
     )
     return [s.to_dict() for s in scheds]
+
+
+_NON_TERMINAL = {'created', 'queued', 'loading_data', 'running_ga', 'exporting'}
+
+
+@_guard
+def reconcile_interrupted_jobs() -> int:
+    """
+    Mark all non-terminal jobs as failed.
+
+    Called once at startup to clean up jobs that were in-flight when the
+    server last stopped. Returns the count of rows updated.
+    """
+    rows = (
+        db.session.query(Schedule)
+        .filter(Schedule.status.in_(_NON_TERMINAL))
+        .all()
+    )
+    for sched in rows:
+        sched.status = 'failed'
+        sched.error = 'Job interrupted: server restarted'
+    if rows:
+        db.session.commit()
+    return len(rows)
+
+
+@_guard
+def update_schedule_job_name(schedule_id: str, job_name: str) -> None:
+    """Update the job_name of a schedule record."""
+    sched = db.session.get(Schedule, uuid.UUID(schedule_id))
+    if not sched:
+        return
+    sched.job_name = job_name
+    db.session.commit()
+
+
+@_guard
+def update_entity_meta(schedule_id: str, entity_meta: Dict) -> None:
+    """
+    Update only the entity_meta column without touching data or status.
+
+    Used when the frontend computes and pushes entity_meta separately from
+    a full schedule save (e.g. first load after generation, or PUT with only
+    entity_meta in the body).
+    """
+    sched = db.session.get(Schedule, uuid.UUID(schedule_id))
+    if not sched:
+        return
+    sched.entity_meta = entity_meta
+    flag_modified(sched, 'entity_meta')
+    db.session.commit()
+
+
+def save_manual_edit(schedule_id: str, data: Dict, entity_meta: Optional[Dict] = None) -> None:
+    """
+    Persist manually-edited schedule data from the frontend.
+
+    Unlike complete_schedule(), this function raises on any error so the
+    caller (PUT route) can return a proper 500 instead of silently returning
+    success while the DB write was rolled back.
+    """
+    sched = db.session.get(Schedule, uuid.UUID(schedule_id))
+    if not sched:
+        raise ValueError(f"Schedule {schedule_id} not found")
+    sched.data = data
+    flag_modified(sched, 'data')
+    if entity_meta is not None:
+        sched.entity_meta = entity_meta
+        flag_modified(sched, 'entity_meta')
+    db.session.commit()
+
+
+@_guard
+def delete_schedule(schedule_id: str) -> bool:
+    """
+    Delete a schedule record from the database.
+
+    Returns True if deleted, False if not found.
+    """
+    sched = db.session.get(Schedule, uuid.UUID(schedule_id))
+    if not sched:
+        return False
+    db.session.delete(sched)
+    db.session.commit()
+    return True
 
 
 @_guard

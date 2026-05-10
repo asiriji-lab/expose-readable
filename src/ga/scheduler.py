@@ -23,6 +23,7 @@ from typing import Dict, Optional, Callable
 
 from src.logger import create_job_logger
 from src.data_cleaning.data_cleaning import clean_input_data
+from src.data_cleaning.entity_meta import compute_entity_meta
 from src.preschedule.scheduleManager import ScheduleManager
 from src.preschedule.prescheduleProcessor import PrescheduleProcessor
 from .island_ga import IslandGeneticAlgorithm
@@ -32,6 +33,7 @@ from .exporter import ScheduleExporter
 from .json_exporter import ScheduleJsonExporter
 from .job_manager import JobManager
 from .feasibility_checker import FeasibilityChecker
+from .job_queue import JobCancelledError
 
 
 # Canonical filenames expected in the uploads folder (matching input_dataset/)
@@ -53,13 +55,14 @@ _ISLAND_GA_DEFAULTS = dict(
     migration_interval=50,
     migration_rate=0.1,
     topology='ring',
-    mutation_rate=0.015,
+    mutation_rate=0.03,       # raised from 0.015 — 0.015 was too conservative for high-conflict starts
     crossover_rate=0.9,
-    tournament_size=9,
+    tournament_size=5,        # lowered from 9 — reduces selection pressure, preserves diversity
     max_generations=5000,
     elite_size=10,
-    stagnation_limit=50,
+    stagnation_limit=150,     # raised from 50 — was == migration_interval, caused restart every epoch
     catastrophic_after=3,
+    block_crossover_rate=0.5,
     min_improvement=500,
     window_size=1000,
 )
@@ -100,7 +103,8 @@ def run_scheduler_job(job_id: str,
                       job_manager: Optional[JobManager] = None,
                       progress_callback: Optional[Callable] = None,
                       academic_year: str = "",
-                      semester: int = 1) -> Dict:
+                      semester: int = 1,
+                      cancel_event=None) -> Dict:
     """
     Run a complete scheduling job, mirroring the main.py pipeline.
 
@@ -149,6 +153,7 @@ def run_scheduler_job(job_id: str,
             academic_year=academic_year,
             semester=semester,
             job_logger=job_logger,
+            cancel_event=cancel_event,
         )
     except Exception as exc:
         job_logger.exception("Unhandled exception during job execution: %s", exc)
@@ -167,7 +172,8 @@ def run_scheduler_job(job_id: str,
 
 def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
                               params, job_manager, progress_callback,
-                              academic_year, semester, job_logger=None):
+                              academic_year, semester, job_logger=None,
+                              cancel_event=None):
     log = job_logger or logging.getLogger(__name__)
 
     # ── Step 1: Load raw CSVs ─────────────────────────────────────────────────
@@ -182,6 +188,7 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
         log.info("  Loaded %d input file(s): %s", len(raw_data), list(raw_data.keys()))
 
         cleaned_data = clean_input_data(raw_data)
+        entity_meta = compute_entity_meta(cleaned_data)
 
         curriculum_df = cleaned_data.get('curriculum')
         room_df       = cleaned_data.get('room')
@@ -211,12 +218,25 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
     feasibility_report = checker.check()
     log.info("  Feasibility: is_feasible=%s", feasibility_report.is_feasible)
 
+    if not feasibility_report.is_feasible:
+        stored_result = {
+            'job_id':      job_id,
+            'success':     False,
+            'error':       'Input data failed feasibility check — correct the errors above before running the scheduler.',
+            'feasibility': feasibility_report.to_dict(),
+        }
+        if job_manager:
+            job_manager.update_job_status(job_id, 'failed', result=stored_result)
+        return stored_result
+
     # ── Step 4: GA ────────────────────────────────────────────────────────────
     log.info("[STEP 4/5] Starting Genetic Algorithm …")
     if job_manager:
         job_manager.update_job_progress(job_id, 'running_ga', 0, data_stats)
 
     def ga_progress(generation, max_gen, stats):
+        if cancel_event and cancel_event.is_set():
+            raise JobCancelledError(f"Job {job_id} cancelled at generation {generation}")
         progress = (generation / max_gen) * 100
         if job_manager:
             job_manager.update_job_progress(job_id, 'running_ga', progress, {
@@ -246,6 +266,7 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
             elite_size=ga_kwargs['elite_size'],
             stagnation_limit=ga_kwargs['stagnation_limit'],
             catastrophic_after=ga_kwargs['catastrophic_after'],
+            block_crossover_rate=ga_kwargs['block_crossover_rate'],
             min_improvement=ga_kwargs['min_improvement'],
             window_size=ga_kwargs['window_size'],
             progress_callback=ga_progress,
@@ -260,6 +281,8 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
             crossover_rate=params.get('crossover_rate', 0.80),
             elite_size=params.get('elite_size', 10),
             tournament_size=params.get('tournament_size', 7),
+            stagnation_limit=params.get('stagnation_limit', 150),
+            block_crossover_rate=params.get('block_crossover_rate', 0.5),
             min_improvement=params.get('min_improvement', 500),
             window_size=params.get('window_size', 1000),
             progress_callback=ga_progress,
@@ -325,10 +348,15 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
         'json_path':      json_path,
         'log_path':       log_path,
         'success':        True,
+        'entity_meta':    entity_meta,
     }
 
-    if job_manager:
-        job_manager.update_job_status(job_id, 'completed', result=stored_result)
+    # NOTE: job_manager status is updated here (inside scheduler) for progress
+    # tracking only.  The authoritative DB write happens in _run_job_background
+    # AFTER this function returns, so the DB is always written before the
+    # job_manager signals 'completed' to pollers.
+    # We intentionally do NOT set 'completed' here — that is done in
+    # _run_job_background after models.complete_schedule() succeeds.
     log.info("  Export complete — outputs saved to %s", outputs_folder)
 
     return {**stored_result, 'schedule_json': schedule_json}

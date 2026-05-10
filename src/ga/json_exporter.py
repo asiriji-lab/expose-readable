@@ -15,11 +15,13 @@ from collections import defaultdict
 from .models import Lesson, Chromosome
 
 
-# Cell values that represent blocked/non-lesson slots (should appear as null).
-_SPECIAL_KEYWORDS = [
-    'UNAVAILABLE', 'Homeroom', 'Morning Break', 'Afternoon Break',
-    'Lunch', 'ลูกเสือ', 'ชุมนุม', 'เสรี', 'Bridging', 'preplace',
-    'scout', 'elective', 'constraint',
+# Truly blocked slots — teacher constraints, not visible lessons.
+_BLOCKED_KEYWORDS = ['UNAVAILABLE']
+
+# Pre-placed activity slots (from preschedule phase) — exported with slot_type "preplace".
+_PREPLACE_KEYWORDS = [
+    'Homeroom', 'Morning Break', 'Afternoon Break',
+    'Lunch', 'ลูกเสือ', 'ชุมนุม', 'เสรี', 'Bridging',
 ]
 
 
@@ -75,10 +77,12 @@ class ScheduleJsonExporter:
         return meta
 
     def _build_subject_meta(self) -> Dict[str, str]:
-        """subject_id → subject_name"""
+        """subject_id → subject_name (curriculum + elective)"""
         meta: Dict[str, str] = {}
-        df = self.manager.get_sheet_data('curriculum')
-        if df is not None:
+        for sheet in ('curriculum', 'elective'):
+            df = self.manager.get_sheet_data(sheet)
+            if df is None:
+                continue
             for _, row in df.iterrows():
                 sid   = str(row.get('subject_id',   '')).strip()
                 sname = str(row.get('subject_name', '')).strip()
@@ -92,14 +96,14 @@ class ScheduleJsonExporter:
         df = self.manager.get_sheet_data('room')
         if df is not None:
             for _, row in df.iterrows():
-                rid  = str(row.get('room_id', '')).strip()
-                note = str(row.get('note',    '')).strip()
-                tag  = str(row.get('tag',     '')).strip()
+                rid       = str(row.get('room_id',   '')).strip()
+                room_name = str(row.get('room_name', '')).strip()
+                tags      = str(row.get('tags',      '')).strip()
                 if not rid or rid == 'nan':
                     continue
                 meta[rid] = {
-                    'name': note if note and note != 'nan' else rid,
-                    'tag':  tag  if tag  and tag  != 'nan' else None,
+                    'name': room_name if room_name and room_name != 'nan' else rid,
+                    'tag':  tags if tags and tags != 'nan' else None,
                 }
         return meta
 
@@ -130,14 +134,19 @@ class ScheduleJsonExporter:
         return total
 
     def _is_special(self, value: Any) -> bool:
-        """Return True if the cell value is a blocked/special slot, not a real lesson."""
+        """Return True if the cell value is a truly blocked slot (UNAVAILABLE)."""
         if value is None:
             return True
         s = str(value).strip()
         if not s or s in ('nan', 'None'):
             return True
         lower = s.lower()
-        return any(kw.lower() in lower for kw in _SPECIAL_KEYWORDS)
+        return any(kw.lower() in lower for kw in _BLOCKED_KEYWORDS)
+
+    def _is_preplace_activity(self, subject_id: str) -> bool:
+        """Return True if subject_id matches a pre-placed activity keyword."""
+        lower = subject_id.lower()
+        return any(kw.lower() in lower for kw in _PREPLACE_KEYWORDS)
 
     # =========================================================================
     # MANAGER GRID CELL PARSERS
@@ -146,7 +155,8 @@ class ScheduleJsonExporter:
     def _parse_teacher_cell(self, cell_value) -> Optional[Dict]:
         """
         Teacher grid stores: "{class_id} ({subject_id}) at {room_id}"
-        Returns {"subject_id", "subject_name", "class", "room"} or None for blocked slots.
+        Returns a cell dict or None for blocked slots.
+        Preplace cells return slot_type "preplace" with null class/room.
         """
         if self._is_special(cell_value):
             return None
@@ -156,29 +166,62 @@ class ScheduleJsonExporter:
             class_id   = m.group(1).strip()
             subject_id = m.group(2).strip()
             room_id    = m.group(3).strip()
+            if self._is_preplace_activity(subject_id):
+                return {
+                    "subject_id":   subject_id,
+                    "subject_name": subject_id,
+                    "class":        None,
+                    "room":         None,
+                    "slot_type":    "preplace",
+                }
+            if class_id in ('NoStudentListed', ''):
+                return {
+                    "subject_id":   subject_id,
+                    "subject_name": self._subject_name(subject_id),
+                    "class":        None,
+                    "room":         room_id,
+                    "slot_type":    "elective",
+                }
             return {
                 "subject_id":   subject_id,
                 "subject_name": self._subject_name(subject_id),
                 "class":        class_id,
                 "room":         room_id,
             }
-        # Fallback: treat entire string as subject
+        if self._is_preplace_activity(s):
+            return {
+                "subject_id":   s,
+                "subject_name": s,
+                "class":        None,
+                "room":         None,
+                "slot_type":    "preplace",
+            }
         return {"subject_id": s, "subject_name": s, "class": None, "room": None}
 
     def _parse_student_cell(self, cell_value) -> Optional[Dict]:
         """
         Student grid stores: "{subject_id}"
-        Returns {"subject_id", "subject_name", "teacher", "room"} or None for blocked slots.
+        Returns a cell dict or None for blocked slots.
+        Preplace cells return slot_type "preplace".
         """
         if self._is_special(cell_value):
             return None
         s = str(cell_value).strip()
+        if self._is_preplace_activity(s):
+            return {
+                "subject_id":   s,
+                "subject_name": s,
+                "teacher":      None,
+                "room":         None,
+                "slot_type":    "preplace",
+            }
         return {"subject_id": s, "subject_name": self._subject_name(s), "teacher": None, "room": None}
 
     def _parse_room_cell(self, cell_value) -> Optional[Dict]:
         """
         Room grid stores: "{class_id} ({subject_id}) with {teacher_id}"
-        Returns {"subject_id", "subject_name", "teacher", "class"} or None for blocked slots.
+        Returns a cell dict or None for blocked slots.
+        Preplace cells return slot_type "preplace".
         """
         if self._is_special(cell_value):
             return None
@@ -188,11 +231,35 @@ class ScheduleJsonExporter:
             class_id   = m.group(1).strip()
             subject_id = m.group(2).strip()
             teacher_id = m.group(3).strip()
+            if self._is_preplace_activity(subject_id):
+                return {
+                    "subject_id":   subject_id,
+                    "subject_name": subject_id,
+                    "teacher":      None,
+                    "class":        None,
+                    "slot_type":    "preplace",
+                }
+            if class_id in ('NoStudentListed', ''):
+                return {
+                    "subject_id":   subject_id,
+                    "subject_name": self._subject_name(subject_id),
+                    "teacher":      self._teacher_name(teacher_id),
+                    "class":        None,
+                    "slot_type":    "elective",
+                }
             return {
                 "subject_id":   subject_id,
                 "subject_name": self._subject_name(subject_id),
                 "teacher":      self._teacher_name(teacher_id),
                 "class":        class_id,
+            }
+        if self._is_preplace_activity(s):
+            return {
+                "subject_id":   s,
+                "subject_name": s,
+                "teacher":      None,
+                "class":        None,
+                "slot_type":    "preplace",
             }
         return {"subject_id": s, "subject_name": s, "teacher": None, "class": None}
 
@@ -299,6 +366,24 @@ class ScheduleJsonExporter:
         student_ga: Dict[str, Dict] = defaultdict(dict)
         room_ga:    Dict[str, Dict] = defaultdict(dict)
 
+        # Tracks lessons that were overwritten at a slot by a later-processed lesson.
+        # These lessons are fully placed in the chromosome but invisible in the grid.
+        conflict_slots: List[Dict] = []
+
+        def _conflict_entry(lesson_id, lesson, ts, label,
+                            entity_type: str, entity_id: str) -> Dict:
+            return {
+                "lesson_id":       lesson_id,
+                "subject_id":      lesson.subject_id,
+                "subject_name":    lesson.subject_name,
+                "student_classes": lesson.student_classes,
+                "teacher_ids":     lesson.teacher_ids,
+                "entity_type":     entity_type,
+                "entity_id":       entity_id,
+                "day":             ts.day,
+                "period":          label,
+            }
+
         for lesson_id, slots in self.chromosome.genes.items():
             lesson = lesson_lookup.get(lesson_id)
             if not lesson:
@@ -309,34 +394,98 @@ class ScheduleJsonExporter:
                 key      = (ts.day, label)
                 room_str = room if room and room != "NO_ROOM" else None
 
-                # Teacher rows cell
-                class_str = lesson.student_classes[0] if lesson.student_classes else None
+                # Join all classes and all teacher names so multi-class / team
+                # lessons are fully represented in every entity view.
+                class_str = ', '.join(lesson.student_classes) if lesson.student_classes else None
+                t_names   = [self._teacher_name(tid) for tid in lesson.teacher_ids]
+                t_name    = ', '.join(t_names) if t_names else None
+
                 for tid in lesson.teacher_ids:
+                    if key in teacher_ga[tid]:
+                        conflict_slots.append(_conflict_entry(lesson_id, lesson, ts, label, "teacher", tid))
+                    else:
+                        teacher_ga[tid][key] = {
+                            "subject_id":   lesson.subject_id,
+                            "subject_name": lesson.subject_name,
+                            "class":        class_str,
+                            "room":         room_str,
+                        }
+
+                for cid in lesson.student_classes:
+                    if key in student_ga[cid]:
+                        conflict_slots.append(_conflict_entry(lesson_id, lesson, ts, label, "student", cid))
+                    else:
+                        student_ga[cid][key] = {
+                            "subject_id":   lesson.subject_id,
+                            "subject_name": lesson.subject_name,
+                            "teacher":      t_name,
+                            "room":         room_str,
+                        }
+
+                if room_str:
+                    if key in room_ga[room_str]:
+                        conflict_slots.append(_conflict_entry(lesson_id, lesson, ts, label, "room", room_str))
+                    else:
+                        room_ga[room_str][key] = {
+                            "subject_id":   lesson.subject_id,
+                            "subject_name": lesson.subject_name,
+                            "teacher":      t_name,
+                            "class":        class_str,
+                        }
+
+        # ── Inject locked lessons (fixed-period curriculum rows from preschedule) ──
+        # Locked lessons always overwrite GA lessons at the same slot — preschedule
+        # takes priority over GA assignments.
+        for locked in getattr(self.manager, 'locked_lessons', []):
+            t_names   = [self._teacher_name(tid) for tid in locked.get('teacher_ids', [])]
+            t_name    = ', '.join(t_names) if t_names else None
+            classes   = locked.get('student_classes', [])
+            class_str = ', '.join(classes) if classes else None
+            room_str  = locked.get('room')
+
+            for (day, label) in locked.get('slots', []):
+                key = (day, label)
+
+                for tid in locked.get('teacher_ids', []):
                     teacher_ga[tid][key] = {
-                        "subject_id":   lesson.subject_id,
-                        "subject_name": lesson.subject_name,
+                        "subject_id":   locked['subject_id'],
+                        "subject_name": locked['subject_name'],
                         "class":        class_str,
                         "room":         room_str,
                     }
 
-                # Student/class rows cell
-                t_name = self._teacher_name(lesson.teacher_ids[0]) if lesson.teacher_ids else None
-                for cid in lesson.student_classes:
+                for cid in classes:
                     student_ga[cid][key] = {
-                        "subject_id":   lesson.subject_id,
-                        "subject_name": lesson.subject_name,
+                        "subject_id":   locked['subject_id'],
+                        "subject_name": locked['subject_name'],
                         "teacher":      t_name,
                         "room":         room_str,
                     }
 
-                # Room rows cell
                 if room_str:
                     room_ga[room_str][key] = {
-                        "subject_id":   lesson.subject_id,
-                        "subject_name": lesson.subject_name,
+                        "subject_id":   locked['subject_id'],
+                        "subject_name": locked['subject_name'],
                         "teacher":      t_name,
                         "class":        class_str,
                     }
+
+        # Post-pass: annotate teacher cells with teaching_type when multiple
+        # teachers share the same (day, slot, class, subject).
+        # Same room → 'team'; different rooms → 'split'.
+        slot_teacher_map: Dict[Tuple, list] = defaultdict(list)
+        for tid, cells in teacher_ga.items():
+            for key, cell in cells.items():
+                bucket_key = (key[0], key[1], cell.get("class"), cell.get("subject_id"))
+                slot_teacher_map[bucket_key].append((tid, key))
+
+        for bucket_key, entries in slot_teacher_map.items():
+            if len(entries) <= 1:
+                continue
+            rooms = {teacher_ga[tid][key].get("room") for tid, key in entries}
+            teaching_type = "team" if len(rooms) == 1 else "split"
+            for tid, key in entries:
+                teacher_ga[tid][key]["teaching_type"] = teaching_type
 
         # ── Teachers ──────────────────────────────────────────────────────────
         all_teacher_ids = sorted(
@@ -396,4 +545,5 @@ class ScheduleJsonExporter:
             "students":        students,
             "rooms":           rooms,
             "unfilled_slots":  self._build_unfilled_slots(lessons),
+            "conflict_slots":  conflict_slots,
         }

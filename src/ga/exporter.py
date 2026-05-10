@@ -92,12 +92,14 @@ class ScheduleExporter:
         os.makedirs(os.path.join(self.output_dir, "students"), exist_ok=True)
         os.makedirs(os.path.join(self.output_dir, "rooms"), exist_ok=True)
 
+        _SKIP_IDS = {'', 'nan', 'None', 'none'}
+
         # Export teacher timetables
         all_teachers = set(assignments_by_teacher.keys())
         all_teachers.update(self.manager.teacher_grids.keys())
-            
+
         for teacher_id in all_teachers:
-            if not teacher_id or pd.isna(teacher_id):
+            if not teacher_id or str(teacher_id).strip() in _SKIP_IDS:
                 continue
             safe_teacher_id = str(teacher_id).replace('/', '-').replace('\\', '-')
             self._export_grid(
@@ -113,7 +115,7 @@ class ScheduleExporter:
         all_students.update(self.manager.student_grids.keys())
             
         for class_id in all_students:
-            if not class_id or pd.isna(class_id):
+            if not class_id or str(class_id).strip() in _SKIP_IDS:
                 continue
             safe_class_id = str(class_id).replace('/', '-').replace('\\', '-')
             self._export_grid(
@@ -129,7 +131,7 @@ class ScheduleExporter:
         all_rooms.update(self.manager.room_grids.keys())
         
         for room_id in all_rooms:
-            if not room_id or pd.isna(room_id):
+            if not room_id or str(room_id).strip() in _SKIP_IDS:
                 continue
             safe_room_id = str(room_id).replace('/', '-').replace('\\', '-')
             self._export_grid(
@@ -207,4 +209,4 @@ class ScheduleExporter:
                 df.at[slot.day, target_col] = val
         
         filepath = os.path.join(self.output_dir, filename)
-        df.to_csv(filepath)
+        df.to_csv(filepath, encoding='utf-8-sig')

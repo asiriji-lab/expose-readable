@@ -273,6 +273,7 @@ class IslandGeneticAlgorithm:
             island_bests = []
             if self._executor is None:
                 for i, island in enumerate(self.islands):
+                    island.reset_epoch_stats()
                     island.evolve_n_generations(self.migration_interval)
                     island_bests.append(island.best_chromosome.fitness)
             else:
@@ -324,6 +325,51 @@ class IslandGeneticAlgorithm:
                   f"Global best: {self.best_chromosome.fitness:.0f}  "
                   f"Island bests: {[f'{f:.0f}' for f in island_bests]}  "
                   f"GStag: {self._global_stagnation}  WinImprove: {win_str}/{self.min_improvement:.0f}")
+            # ── Violation breakdown ───────────────────────────────────────
+            v = self.best_chromosome.violations or {}
+            vparts = [f"{k}={n}" for k, n in sorted(v.items()) if n > 0]
+            print(f"  [Debug] Violations : {', '.join(vparts) if vparts else 'none'}")
+
+            # ── Unassigned lessons ────────────────────────────────────────
+            best_island_obj = self.islands[self.best_island_idx]
+            n_miss_lessons, n_miss_periods = best_island_obj.unassigned_summary(self.best_chromosome)
+            if n_miss_lessons:
+                # List which lessons are missing periods for root-cause diagnosis
+                missing_details = []
+                for lesson in best_island_obj.lessons:
+                    assigned = len(self.best_chromosome.genes.get(lesson.lesson_id, []))
+                    expected = best_island_obj._expected_periods[lesson.lesson_id]
+                    if assigned < expected:
+                        missing_details.append(
+                            f"{lesson.lesson_id}({lesson.subject_id}"
+                            f"/{','.join(lesson.student_classes)}"
+                            f" {assigned}/{expected})"
+                        )
+                print(f"  [Debug] Unassigned : {n_miss_lessons} lessons, "
+                      f"{n_miss_periods} periods missing → "
+                      f"{', '.join(missing_details[:6])}"
+                      f"{'...' if len(missing_details) > 6 else ''}")
+            else:
+                print(f"  [Debug] Unassigned : none — all lessons fully placed")
+
+            # ── Mutation stats across all islands this epoch ──────────────
+            agg: Dict[str, int] = defaultdict(int)
+            total_restarts = 0
+            for island in self.islands:
+                for k, n in island._mutation_stats.items():
+                    agg[k] += n
+                total_restarts += island._restart_count
+
+            sb_att = agg.get('swap_blocker_attempt', 0)
+            sb_hit = agg.get('swap_blocker_hit', 0)
+            sb_str = f"swap={sb_hit}/{sb_att}" if sb_att else "swap=0"
+            print(f"  [Debug] Mutations  : "
+                  f"targeted={agg['targeted_block']} "
+                  f"{sb_str} "
+                  f"explore={agg['explore']} "
+                  f"full={agg['full_slot']} "
+                  f"room={agg.get('room', 0)} "
+                  f"| restarts={total_restarts}")
 
             if self.best_chromosome.fitness == 0:
                 print(f"\n  Perfect solution found at epoch {epoch + 1}!")

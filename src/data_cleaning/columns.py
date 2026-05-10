@@ -39,6 +39,8 @@ prepalce_column = {
 room_column = {
     'ห้องทั้งหมด': 'room_id',
     'room_id': 'room_id',       # already-English header in some datasets
+    'ชื่อห้อง': 'room_name',
+    'ชั้นเรียนประจำ': 'class_id',
     'หมายเหตุ': 'note',
     'ประเภท': 'tag'
 }
@@ -47,7 +49,6 @@ student_column = {
     'นักเรียน': 'class_id',
     'ชั้น': 'grade',
     'ห้อง': 'section',
-    'ห้องประจำ': 'default_room',
     'หลักสูตร': 'curriculum'
 }
 

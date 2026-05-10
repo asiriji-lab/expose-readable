@@ -40,6 +40,8 @@ from api.errors import register_error_handlers
 from config import Config
 from src.logger import init_api_logger
 from src.db import database
+from src.db import models as db_models
+from src.ga.job_queue import JobQueue
 
 
 SWAGGER_CONFIG = {
@@ -127,6 +129,18 @@ def create_app(config_class=Config):
     else:
         database.init_db(app)
 
+    # ── Startup reconciliation ────────────────────────────────────────────────
+    with app.app_context():
+        if database.is_available():
+            count = db_models.reconcile_interrupted_jobs()
+            if count:
+                app.logger.warning(
+                    "Startup: marked %d interrupted job(s) as failed (server restarted)", count
+                )
+
+    # ── Job queue (ThreadPoolExecutor + cancel events) ────────────────────────
+    app.job_queue = JobQueue(max_workers=app.config['MAX_CONCURRENT_JOBS'])
+
     # ── Blueprints & error handlers ───────────────────────────────────────────
     app.register_blueprint(api_bp)
     register_error_handlers(app)
@@ -145,11 +159,13 @@ def create_app(config_class=Config):
             "endpoints": {
                 "GET /": "API documentation",
                 "GET /health": "Health check",
-                "POST /api/v1/schedule": "Submit scheduling job (files + params in one request)",
-                "GET /api/v1/schedule/<job_id>": "Get job status and results",
-                "GET /api/v1/schedule/<job_id>/download": "Download results as ZIP",
-                "DELETE /api/v1/schedule/<job_id>": "Delete job",
+                "POST /api/v1/jobs": "Submit scheduling job (files + params in one request)",
                 "GET /api/v1/jobs": "List all jobs",
+                "GET /api/v1/jobs/<job_id>": "Get job status",
+                "GET /api/v1/jobs/<job_id>/result": "Get job result JSON",
+                "GET /api/v1/jobs/<job_id>/download": "Download results as ZIP",
+                "POST /api/v1/jobs/<job_id>/sync-status": "Sync job status to DB",
+                "DELETE /api/v1/jobs/<job_id>": "Delete job",
                 "GET /api/v1/schedules": "List schedule records (filters: org_id, user_id, status)",
                 "GET /api/v1/schedules/<schedule_id>": "Get a single schedule record",
                 "POST /api/v1/organizations": "Create an organization",

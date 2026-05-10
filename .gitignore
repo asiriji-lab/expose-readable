@@ -42,17 +42,16 @@ __pycache__
 .claude
 
 # schedool solver output
-/output
-cleaned_input/*
-cleaned_input/curriculum_cleaned.csv
-cleaned_input/elective_cleaned.csv
-cleaned_input/period_cleaned.csv
-cleaned_input/preplace_cleaned.csv
-cleaned_input/room_cleaned.csv
-cleaned_input/scout_cleaned.csv
-cleaned_input/student_cleaned.csv
-cleaned_input/teacher_cleaned.csv
+output/
+cleaned_output/
+cleaned_input/
+input_dataset/
+input_dataset_old/
+input_dataset_test/
 /data
 data/*
-schedool/
 logs/
+
+.vscode
+.claude
+/examples

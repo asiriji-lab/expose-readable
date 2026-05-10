@@ -1,0 +1,103 @@
+{
+  "ba25ca4b-4330-4862-9ee9-0b40f8215f46": {
+    "job_id": "ba25ca4b-4330-4862-9ee9-0b40f8215f46",
+    "job_name": "Schedule Job ba25ca4b",
+    "status": "failed",
+    "params": {
+      "academic_year": "2568",
+      "semester": 1
+    },
+    "files": {
+      "curriculum": [
+        "/backend/data/jobs/ba25ca4b-4330-4862-9ee9-0b40f8215f46/uploads/curriculum.csv"
+      ],
+      "elective": [
+        "/backend/data/jobs/ba25ca4b-4330-4862-9ee9-0b40f8215f46/uploads/elective.csv"
+      ],
+      "teacher": [
+        "/backend/data/jobs/ba25ca4b-4330-4862-9ee9-0b40f8215f46/uploads/teacher.csv"
+      ],
+      "period": [
+        "/backend/data/jobs/ba25ca4b-4330-4862-9ee9-0b40f8215f46/uploads/period.csv"
+      ],
+      "preplace": [
+        "/backend/data/jobs/ba25ca4b-4330-4862-9ee9-0b40f8215f46/uploads/preplace.csv"
+      ],
+      "room": [
+        "/backend/data/jobs/ba25ca4b-4330-4862-9ee9-0b40f8215f46/uploads/room.csv"
+      ],
+      "student": [
+        "/backend/data/jobs/ba25ca4b-4330-4862-9ee9-0b40f8215f46/uploads/student.csv"
+      ],
+      "scout": [
+        "/backend/data/jobs/ba25ca4b-4330-4862-9ee9-0b40f8215f46/uploads/scout.csv"
+      ],
+      "output_log": [
+        "/backend/data/jobs/ba25ca4b-4330-4862-9ee9-0b40f8215f46/outputs/logs/ga_2026-04-09_05-22-41.log"
+      ]
+    },
+    "progress": 0,
+    "progress_details": null,
+    "result": {
+      "error": "'grade'"
+    },
+    "error": null,
+    "created_at": "2026-04-09T05:22:40.974499",
+    "updated_at": "2026-04-09T05:22:42.714209"
+  },
+  "3dfe1093-8e71-4eb2-a394-9a055c58cc2b": {
+    "job_id": "3dfe1093-8e71-4eb2-a394-9a055c58cc2b",
+    "job_name": "Schedule Job 3dfe1093",
+    "status": "running_ga",
+    "params": {
+      "academic_year": "2568",
+      "semester": 1
+    },
+    "files": {
+      "curriculum": [
+        "/backend/data/jobs/3dfe1093-8e71-4eb2-a394-9a055c58cc2b/uploads/curriculum.csv"
+      ],
+      "elective": [
+        "/backend/data/jobs/3dfe1093-8e71-4eb2-a394-9a055c58cc2b/uploads/elective.csv"
+      ],
+      "teacher": [
+        "/backend/data/jobs/3dfe1093-8e71-4eb2-a394-9a055c58cc2b/uploads/teacher.csv"
+      ],
+      "period": [
+        "/backend/data/jobs/3dfe1093-8e71-4eb2-a394-9a055c58cc2b/uploads/period.csv"
+      ],
+      "preplace": [
+        "/backend/data/jobs/3dfe1093-8e71-4eb2-a394-9a055c58cc2b/uploads/preplace.csv"
+      ],
+      "room": [
+        "/backend/data/jobs/3dfe1093-8e71-4eb2-a394-9a055c58cc2b/uploads/room.csv"
+      ],
+      "student": [
+        "/backend/data/jobs/3dfe1093-8e71-4eb2-a394-9a055c58cc2b/uploads/student.csv"
+      ],
+      "scout": [
+        "/backend/data/jobs/3dfe1093-8e71-4eb2-a394-9a055c58cc2b/uploads/scout.csv"
+      ]
+    },
+    "progress": 7.000000000000001,
+    "progress_details": {
+      "generation": 350,
+      "max_generations": 5000,
+      "best_fitness": 5350,
+      "violations": {
+        "period_count": 57,
+        "teacher_conflict": 2,
+        "student_conflict": 10,
+        "room_conflict": 1,
+        "block_violation": 37,
+        "sub_group": 0,
+        "invalid_room": 0,
+        "seperate_slot": 0
+      }
+    },
+    "result": null,
+    "error": null,
+    "created_at": "2026-04-09T05:53:42.101703",
+    "updated_at": "2026-04-09T06:14:19.014265"
+  }
+}

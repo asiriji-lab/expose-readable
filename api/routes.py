@@ -6,22 +6,28 @@ GA SCHEDULER FLASK API - Routes
 API endpoints for the scheduling system.
 """
 
+import io
 import os
-import uuid
+from uuid import UUID
+from uuid6 import uuid7
 import json
 import shutil
-import threading
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app, send_file
 from flask_jwt_extended import (
-    create_access_token, jwt_required, get_jwt_identity,
+    create_access_token, jwt_required, get_jwt_identity, get_jwt,
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from src.ga.scheduler import run_scheduler_job
 from src.ga.job_manager import JobManager
+from src.ga.job_queue import JobCancelledError
 from src.utils.file_helpers import allowed_file, get_job_folder, create_zip_archive
 from src.db import database, models
+from src.db.database import db as _db
+from src.db.orm_models import Schedule as ScheduleModel
+from src.data_cleaning.data_cleaning import clean_input_data
+from src.data_cleaning.entity_meta import compute_entity_meta
 
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
@@ -31,10 +37,12 @@ api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 # BACKGROUND JOB RUNNER
 # =============================================================================
 
-def _run_job_background(app, job_id, job_folder, params, academic_year, semester):
-    """Run a scheduling job inside a background thread with its own app context."""
+def _run_job_background(app, job_id, job_folder, params, academic_year, semester,
+                        job_queue, *, cancel_event=None):
+    """Run a scheduling job inside a thread-pool thread with its own app context."""
     with app.app_context():
         job_manager = JobManager(app.config['JOBS_FOLDER'])
+        job_manager.update_job_status(job_id, 'created')
         try:
             result = run_scheduler_job(
                 job_id=job_id,
@@ -43,26 +51,47 @@ def _run_job_background(app, job_id, job_folder, params, academic_year, semester
                 job_manager=job_manager,
                 academic_year=academic_year,
                 semester=semester,
+                cancel_event=cancel_event,
             )
-            # Persist completed schedule to the database when available
+            # Write to DB first so data is always present before job_manager
+            # signals 'completed' to pollers (get_job_status / get_job_result).
             if database.is_available():
                 schedule_json = result.get('schedule_json')
+                entity_meta   = result.get('entity_meta')
                 if result.get('success') and schedule_json:
-                    models.complete_schedule(job_id, schedule_json)
+                    models.complete_schedule(job_id, schedule_json, entity_meta)
                 else:
                     err = result.get('error', 'Unknown error')
                     models.fail_schedule(job_id, err)
+
+            # Now mark the job as completed in the file-based job manager.
+            stored_result = {k: v for k, v in result.items() if k != 'schedule_json'}
+            if result.get('success'):
+                job_manager.update_job_status(job_id, 'completed', result=stored_result)
+            else:
+                job_manager.update_job_status(
+                    job_id, 'failed',
+                    result=stored_result,
+                    error=result.get('error', 'Unknown error'),
+                )
+        except JobCancelledError:
+            if database.is_available():
+                models.update_schedule_status(job_id, 'cancelled')
+            job_manager.update_job_status(job_id, 'cancelled')
         except Exception as e:
-            job_manager.update_job_status(job_id, 'failed', error=str(e))
             if database.is_available():
                 models.fail_schedule(job_id, str(e))
+            job_manager.update_job_status(job_id, 'failed', error=str(e))
+        finally:
+            job_queue.cleanup(job_id)
 
 
 # =============================================================================
 # SINGLE SUBMIT ENDPOINT
 # =============================================================================
 
-@api_bp.route('/schedule', methods=['POST'])
+@api_bp.route('/jobs', methods=['POST'])
+@jwt_required()
 def submit_schedule():
     """
     Submit a complete scheduling job in one request.
@@ -144,7 +173,8 @@ def submit_schedule():
           Keys: n_islands, island_population_size, max_generations,
           migration_interval, migration_rate, topology, mutation_rate,
           crossover_rate, tournament_size, elite_size, stagnation_limit,
-          catastrophic_after. Set n_islands=1 to use the standard GA instead.
+          catastrophic_after, block_crossover_rate, min_improvement,
+          window_size. Set n_islands=1 to use the standard GA instead.
       - name: org_id
         in: formData
         type: string
@@ -179,20 +209,31 @@ def submit_schedule():
 
     # ── Parse form parameters ─────────────────────────────────────────────────
     job_name      = request.form.get('job_name', '').strip()
-    academic_year = request.form.get('academic_year', '')
-    org_id        = request.form.get('org_id', '').strip() or None
-    user_id       = request.form.get('user_id', '').strip() or None
+    academic_year = request.form.get('academic_year', '').strip()
+    sheet_url     = request.form.get('sheet_url', '').strip() or None
+
+    claims  = get_jwt()
+    user_id = get_jwt_identity()
+    org_id  = claims.get('org_id')
+
+    if not academic_year:
+        return jsonify({"success": False, "error": "'academic_year' is required"}), 400
+    if not academic_year.isdigit() or len(academic_year) != 4:
+        return jsonify({"success": False, "error": "'academic_year' must be a 4-digit year (e.g. 2025 or 2568)"}), 400
+
     try:
         semester = int(request.form.get('semester', 1))
+        if semester not in (1, 2):
+            return jsonify({"success": False, "error": "'semester' must be 1 or 2"}), 400
     except (ValueError, TypeError):
-        semester = 1
+        return jsonify({"success": False, "error": "'semester' must be 1 or 2"}), 400
     try:
         ga_params = json.loads(request.form.get('ga_params', '{}'))
     except (json.JSONDecodeError, TypeError):
         ga_params = {}
 
     # ── Create job ────────────────────────────────────────────────────────────
-    job_id = str(uuid.uuid4())
+    job_id = str(uuid7())
     if not job_name:
         job_name = f'Schedule Job {job_id[:8]}'
 
@@ -217,6 +258,7 @@ def submit_schedule():
             ga_params=ga_params,
             org_id=org_id,
             user_id=user_id,
+            sheet_url=sheet_url,
         )
 
     # ── Save all uploaded files with canonical names ───────────────────────────
@@ -245,23 +287,23 @@ def submit_schedule():
                             "error": f"Could not read '{key}.csv': {exc}"}), 400
         job_manager.add_file_to_job(job_id, key, dest)
 
-    # ── Launch background thread ──────────────────────────────────────────────
+    # ── Submit to thread pool ─────────────────────────────────────────────────
     app = current_app._get_current_object()
-    thread = threading.Thread(
-        target=_run_job_background,
-        args=(app, job_id, job_folder, params, academic_year, semester),
-        daemon=True,
+    current_app.job_queue.submit(
+        job_id,
+        _run_job_background,
+        app, job_id, job_folder, params, academic_year, semester,
+        current_app.job_queue,
     )
-    thread.start()
 
     return jsonify({
         "success":      True,
         "job_id":       job_id,
         "job_name":     job_name,
-        "message":      "Job queued and running. Poll the status endpoint for updates.",
-        "status_url":   f"/api/v1/schedule/{job_id}",
-        "result_url":   f"/api/v1/schedule/{job_id}/result",
-        "download_url": f"/api/v1/schedule/{job_id}/download",
+        "message":      "Job queued. Poll the status endpoint for updates.",
+        "status_url":   f"/api/v1/jobs/{job_id}",
+        "result_url":   f"/api/v1/jobs/{job_id}/result",
+        "download_url": f"/api/v1/jobs/{job_id}/download",
     }), 202
 
 
@@ -323,7 +365,7 @@ def get_latest_job():
     return jsonify({"success": True, "job": latest})
 
 
-@api_bp.route('/schedule/<job_id>', methods=['GET'])
+@api_bp.route('/jobs/<job_id>', methods=['GET'])
 def get_job_status(job_id):
     """
     Get the status and progress of a scheduling job.
@@ -376,7 +418,7 @@ def get_job_status(job_id):
     })
 
 
-@api_bp.route('/schedule/<job_id>/result', methods=['GET'])
+@api_bp.route('/jobs/<job_id>/result', methods=['GET'])
 def get_job_result(job_id):
     """
     Get the result JSON of a completed scheduling job.
@@ -407,34 +449,100 @@ def get_job_result(job_id):
     job_manager = JobManager(current_app.config['JOBS_FOLDER'])
     job = job_manager.get_job(job_id)
 
+    # ── Primary path: job manager knows this job ──────────────────────────────
+    if job:
+        if job['status'] != 'completed':
+            return jsonify({
+                "success": False,
+                "error": f"Result not available. Current status: {job['status']}"
+            }), 400
+
+        result   = job.get('result') or {}
+        schedule = None
+        json_path = result.get('json_path')
+        if json_path and os.path.exists(json_path):
+            with open(json_path, 'r', encoding='utf-8') as f:
+                schedule = json.load(f)
+
+        # File missing but DB has the data (e.g. container rebuilt, disk cleaned)
+        if schedule is None and database.is_available():
+            db_record = models.get_schedule(job_id)
+            if db_record:
+                schedule = db_record.get('data')
+
+        return jsonify({
+            "success":  True,
+            "job_id":   job['job_id'],
+            "result":   result,
+            "schedule": schedule,
+        })
+
+    # ── Fallback: job manager state lost (rebuild / restart) — try DB ─────────
+    if database.is_available():
+        db_record = models.get_schedule(job_id)
+        if db_record and db_record.get('data'):
+            return jsonify({
+                "success":  True,
+                "job_id":   job_id,
+                "result":   {},
+                "schedule": db_record['data'],
+            })
+
+    return jsonify({"success": False, "error": "Job not found"}), 404
+
+
+@api_bp.route('/jobs/<job_id>/sync-status', methods=['POST'])
+def sync_job_status(job_id):
+    """
+    Sync a job's in-memory/filesystem status to the database.
+    Call this after frontend detects completion to ensure the DB reflects the
+    current state from the JobManager.
+    ---
+    tags:
+      - Scheduling
+    parameters:
+      - name: job_id
+        in: path
+        type: string
+        required: true
+    responses:
+      200:
+        description: Status synced
+      404:
+        description: Job not found
+    """
+    job_manager = JobManager(current_app.config['JOBS_FOLDER'])
+    job = job_manager.get_job(job_id)
+
     if not job:
-        return jsonify({
-            "success": False,
-            "error": "Job not found"
-        }), 404
+        return jsonify({"success": False, "error": "Job not found"}), 404
 
-    if job['status'] != 'completed':
-        return jsonify({
-            "success": False,
-            "error": f"Result not available. Current status: {job['status']}"
-        }), 400
+    if database.is_available():
+        status = job.get('status', 'created')
+        progress = job.get('progress', 0)
+        error = job.get('error')
 
-    result = job.get('result') or {}
-    schedule = None
-    json_path = result.get('json_path')
-    if json_path and os.path.exists(json_path):
-        with open(json_path, 'r', encoding='utf-8') as f:
-            schedule = json.load(f)
+        if status == 'completed':
+            result = job.get('result') or {}
+            json_path   = result.get('json_path')
+            entity_meta = result.get('entity_meta')
+            if json_path and os.path.exists(json_path):
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    schedule_data = json.load(f)
+                models.complete_schedule(job_id, schedule_data, entity_meta)
+            else:
+                models.update_schedule_status(job_id, status, progress=100.0)
+                if entity_meta is not None:
+                    models.update_entity_meta(job_id, entity_meta)
+        elif status == 'failed':
+            models.fail_schedule(job_id, error or 'Unknown error')
+        else:
+            models.update_schedule_status(job_id, status, progress=progress, error=error)
 
-    return jsonify({
-        "success":  True,
-        "job_id":   job['job_id'],
-        "result":   result,
-        "schedule": schedule,
-    })
+    return jsonify({"success": True, "status": job.get('status')})
 
 
-@api_bp.route('/schedule/<job_id>/download', methods=['GET'])
+@api_bp.route('/jobs/<job_id>/download', methods=['GET'])
 def download_results(job_id):
     """
     Download completed schedules as a ZIP archive.
@@ -486,7 +594,7 @@ def download_results(job_id):
     )
 
 
-@api_bp.route('/schedule/<job_id>', methods=['DELETE'])
+@api_bp.route('/jobs/<job_id>', methods=['DELETE'])
 def delete_job(job_id):
     """
     Delete a scheduling job and all its files.
@@ -507,25 +615,47 @@ def delete_job(job_id):
             success: {type: boolean}
             message: {type: string}
       404:
-        description: Job not found
+        description: Job not found in file system or database
     """
     job_manager = JobManager(current_app.config['JOBS_FOLDER'])
     job = job_manager.get_job(job_id)
-    
-    if not job:
-        return jsonify({
-            "success": False,
-            "error": "Job not found"
-        }), 404
-    
-    # Delete job folder
-    job_folder = get_job_folder(current_app.config['JOBS_FOLDER'], job_id)
-    if os.path.exists(job_folder):
-        shutil.rmtree(job_folder)
-    
-    # Delete job record
-    job_manager.delete_job(job_id)
-    
+
+    # Check DB directly (not via models._guard which silently returns None on error).
+    db_record = None
+    if database.is_available():
+        try:
+            db_record = _db.session.get(ScheduleModel, UUID(job_id))
+        except Exception as e:
+            current_app.logger.error('[delete_job] DB lookup failed for %s: %s', job_id, e)
+
+    if not job and db_record is None:
+        return jsonify({"success": False, "error": "Job not found"}), 404
+
+    # Signal cancellation before touching files so the running thread exits cleanly.
+    cancel_state = current_app.job_queue.cancel(job_id)
+    if cancel_state == 'cancelled_queued' and job:
+        # Future was queued but never started — mark cancelled now (thread won't run).
+        job_manager.update_job_status(job_id, 'cancelled')
+        if database.is_available():
+            models.update_schedule_status(job_id, 'cancelled')
+
+    # Delete file-system job folder and record if they exist.
+    if job:
+        job_folder = get_job_folder(current_app.config['JOBS_FOLDER'], job_id)
+        if os.path.exists(job_folder):
+            shutil.rmtree(job_folder)
+        job_manager.delete_job(job_id)
+
+    # Delete DB record directly so errors are visible rather than swallowed.
+    if db_record is not None:
+        try:
+            _db.session.delete(db_record)
+            _db.session.commit()
+        except Exception as e:
+            _db.session.rollback()
+            current_app.logger.error('[delete_job] DB delete failed for %s: %s', job_id, e)
+            return jsonify({"success": False, "error": f"Database delete failed: {e}"}), 500
+
     return jsonify({
         "success": True,
         "message": f"Job {job_id} deleted successfully"
@@ -734,15 +864,29 @@ def create_user():
     if not database.is_available():
         return jsonify({"success": False, "error": "Database not configured"}), 400
 
-    data   = request.get_json() or {}
-    email  = (data.get('email') or '').strip()
-    name   = (data.get('name') or '').strip() or None
-    org_id = (data.get('org_id') or '').strip() or None
+    data       = request.get_json() or {}
+    email      = (data.get('email')      or '').strip()
+    role       = (data.get('role')       or '').strip().lower() or 'student'
+    username   = (data.get('username')   or '').strip() or None
+    first_name = (data.get('first_name') or '').strip() or None
+    last_name  = (data.get('last_name')  or '').strip() or None
+    name       = (data.get('name')       or '').strip() or None
+    org_id     = (data.get('org_id')     or '').strip() or None
 
     if not email:
         return jsonify({"success": False, "error": "'email' is required"}), 400
+    if role not in ('school_admin', 'teacher', 'student'):
+        role = 'student'
 
-    user = models.create_user(email=email, name=name, org_id=org_id)
+    user = models.create_user(
+        email=email,
+        role=role,
+        username=username,
+        first_name=first_name,
+        last_name=last_name,
+        name=name,
+        org_id=org_id,
+    )
     if user is None:
         return jsonify({"success": False,
                         "error": "Could not create user (email may already exist)"}), 409
@@ -804,11 +948,80 @@ def get_user(user_id):
     return jsonify({"success": True, "user": user})
 
 
+@api_bp.route('/users/<user_id>/org', methods=['POST'])
+@jwt_required()
+def set_user_org_and_reissue(user_id):
+    """
+    Assign (or change) a user's organization and return a fresh JWT.
+    ---
+    tags:
+      - Users
+    summary: Join an organization and receive updated JWT
+    consumes:
+      - application/json
+    parameters:
+      - name: user_id
+        in: path
+        type: string
+        required: true
+        description: Backend user UUID
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [org_id]
+          properties:
+            org_id: {type: string, example: "<org UUID>"}
+    responses:
+      200:
+        description: Org assigned; fresh JWT returned
+        schema:
+          type: object
+          properties:
+            success:      {type: boolean}
+            access_token: {type: string}
+            user:         {type: object}
+      400:
+        description: Missing org_id or DB unavailable
+      403:
+        description: Caller is not the target user
+      404:
+        description: User or organization not found
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    caller_id = get_jwt_identity()
+    if caller_id != user_id:
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
+    data   = request.get_json() or {}
+    org_id = (data.get('org_id') or '').strip()
+    if not org_id:
+        return jsonify({"success": False, "error": "'org_id' is required"}), 400
+
+    org = models.get_organization(org_id)
+    if not org:
+        return jsonify({"success": False, "error": "Organization not found"}), 404
+
+    updated = models.set_user_org(user_id, org_id)
+    if not updated:
+        return jsonify({"success": False, "error": "User not found"}), 404
+
+    token = create_access_token(
+        identity=updated['user_id'],
+        additional_claims={'org_id': updated.get('org_id'), 'role': updated.get('role')},
+    )
+    return jsonify({"success": True, "access_token": token, "user": updated})
+
+
 # =============================================================================
 # SCHEDULE METADATA ENDPOINTS
 # =============================================================================
 
 @api_bp.route('/schedules', methods=['GET'])
+@jwt_required()
 def list_schedule_records():
     """
     List schedule records stored in the database.
@@ -848,11 +1061,12 @@ def list_schedule_records():
     if not database.is_available():
         return jsonify({"success": False, "error": "Database not configured"}), 400
 
-    org_id  = request.args.get('org_id')  or None
-    user_id = request.args.get('user_id') or None
-    status  = request.args.get('status')  or None
+    # Always scope to the authenticated user — ignore caller-supplied user_id to prevent IDOR
+    caller_id = get_jwt_identity()
+    org_id    = request.args.get('org_id') or None
+    status    = request.args.get('status') or None
 
-    schedules = models.list_schedules(org_id=org_id, user_id=user_id, status=status) or []
+    schedules = models.list_schedules(org_id=org_id, user_id=caller_id, status=status) or []
     return jsonify({"success": True, "count": len(schedules), "schedules": schedules})
 
 
@@ -1013,6 +1227,424 @@ def list_user_schedules(user_id):
 # AUTHENTICATION ENDPOINTS
 # =============================================================================
 
+@api_bp.route('/users/sync', methods=['POST'])
+def sync_user():
+    """
+    Create or retrieve a user by email — idempotent upsert.
+    ---
+    tags:
+      - Users
+    summary: Sync user (upsert by email)
+    consumes:
+      - application/json
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required: [email]
+          properties:
+            email: {type: string}
+            name:  {type: string}
+    responses:
+      200:
+        description: Existing user returned
+      201:
+        description: New user created
+      400:
+        description: Missing email or DB unavailable
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    data  = request.get_json() or {}
+    email = (data.get('email') or '').strip()
+    role  = (data.get('role')  or '').strip().lower() or 'student'
+    name  = (data.get('name')  or '').strip() or None
+
+    if not email:
+        return jsonify({"success": False, "error": "'email' is required"}), 400
+    if role not in ('school_admin', 'teacher', 'student'):
+        role = 'student'
+
+    existing = models.get_user_by_email(email)
+    if existing:
+        return jsonify({"success": True, "user": existing, "created": False})
+
+    user = models.create_user(email=email, role=role, name=name)
+    if not user:
+        return jsonify({"success": False, "error": "Could not create user"}), 500
+
+    return jsonify({"success": True, "user": user, "created": True}), 201
+
+
+@api_bp.route('/schedules/<schedule_id>', methods=['PUT'])
+def update_schedule_record(schedule_id):
+    """
+    Update a schedule record with new schedule data (from manual edits).
+    ---
+    tags:
+      - Schedules
+    consumes:
+      - application/json
+    parameters:
+      - name: schedule_id
+        in: path
+        type: string
+        required: true
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          properties:
+            data:     {type: object, description: "Updated schedule JSON"}
+            job_name: {type: string}
+    responses:
+      200:
+        description: Schedule updated
+      400:
+        description: DB unavailable or missing body
+      404:
+        description: Schedule not found
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    body = request.get_json() or {}
+    schedule_data = body.get('data')
+    entity_meta   = body.get('entity_meta')
+    job_name      = (body.get('job_name') or '').strip() or None
+
+    if schedule_data is not None and not isinstance(schedule_data, dict):
+        return jsonify({"success": False, "error": "'data' must be a JSON object — frontend state is corrupted"}), 400
+
+    sched = models.get_schedule(schedule_id)
+    if not sched:
+        return jsonify({"success": False, "error": "Schedule not found"}), 404
+
+    try:
+        if schedule_data is not None:
+            # entity_meta is passed through so both are saved atomically.
+            # Use save_manual_edit (no @_guard) so DB errors surface as 500.
+            models.save_manual_edit(schedule_id, schedule_data, entity_meta)
+        elif entity_meta is not None:
+            # Frontend sent only entity_meta (e.g. first-load derivation) — persist it.
+            models.update_entity_meta(schedule_id, entity_meta)
+    except Exception as exc:
+        current_app.logger.error("[PUT /schedules/%s] save failed: %s", schedule_id, exc)
+        _db.session.rollback()
+        return jsonify({"success": False, "error": str(exc)}), 500
+
+    if job_name:
+        models.update_schedule_job_name(schedule_id, job_name)
+
+    return jsonify({"success": True, "message": "Schedule updated"})
+
+
+@api_bp.route('/schedules/<schedule_id>/refresh-meta', methods=['POST'])
+def refresh_schedule_meta(schedule_id):
+    """
+    Re-compute entity_meta from freshly supplied CSV files (typically fetched
+    from Google Sheets by the frontend).
+
+    Accepts the same multipart/form-data file keys as POST /api/v1/schedule.
+    Only 'curriculum' is required; the other seven are optional but recommended.
+    ---
+    tags:
+      - Schedules
+    consumes:
+      - multipart/form-data
+    parameters:
+      - name: schedule_id
+        in: path
+        type: string
+        required: true
+        description: Schedule UUID (same as the API job_id)
+      - name: curriculum
+        in: formData
+        type: file
+        required: true
+      - name: room
+        in: formData
+        type: file
+        required: false
+      - name: teacher
+        in: formData
+        type: file
+        required: false
+      - name: student
+        in: formData
+        type: file
+        required: false
+      - name: period
+        in: formData
+        type: file
+        required: false
+      - name: preplace
+        in: formData
+        type: file
+        required: false
+      - name: elective
+        in: formData
+        type: file
+        required: false
+      - name: scout
+        in: formData
+        type: file
+        required: false
+    responses:
+      200:
+        description: entity_meta recomputed and persisted; returns the new value
+        schema:
+          type: object
+          properties:
+            success:     {type: boolean}
+            entity_meta: {type: object}
+      400:
+        description: No CSV files provided or curriculum missing
+      404:
+        description: Schedule not found
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    sched = models.get_schedule(schedule_id)
+    if not sched:
+        return jsonify({"success": False, "error": "Schedule not found"}), 404
+
+    _FILE_KEYS = ['curriculum', 'elective', 'teacher', 'period',
+                  'preplace', 'room', 'student', 'scout']
+
+    try:
+        import pandas as pd
+        raw_data = {}
+        for key in _FILE_KEYS:
+            fobj = request.files.get(key)
+            if not fobj or fobj.filename == '':
+                continue
+            try:
+                raw_data[key] = pd.read_csv(fobj, encoding='utf-8-sig')
+            except Exception as exc:
+                return jsonify({"success": False,
+                                "error": f"Could not read '{key}.csv': {exc}"}), 400
+    except Exception as exc:
+        return jsonify({"success": False, "error": f"Failed to process files: {exc}"}), 500
+
+    if not raw_data:
+        return jsonify({"success": False, "error": "No CSV files provided"}), 400
+
+    if 'curriculum' not in raw_data:
+        return jsonify({"success": False, "error": "'curriculum' CSV is required"}), 400
+
+    try:
+        cleaned_data = clean_input_data(raw_data)
+        entity_meta  = compute_entity_meta(cleaned_data)
+    except Exception as exc:
+        import traceback as _tb
+        tb_str = _tb.format_exc()
+        current_app.logger.error('[refresh_schedule_meta] Compute failed for %s: %s\n%s', schedule_id, exc, tb_str)
+        return jsonify({"success": False, "error": f"Metadata computation failed: {exc}", "traceback": tb_str}), 500
+
+    models.update_entity_meta(schedule_id, entity_meta)
+
+    return jsonify({"success": True, "entity_meta": entity_meta})
+
+
+@api_bp.route('/schedules/<schedule_id>/export-excel', methods=['GET'])
+def export_schedule_excel(schedule_id):
+    """
+    Export a completed schedule as an Excel workbook (.xlsx).
+
+    The schedule must be saved (status = completed, data present in database).
+    If the schedule has not been saved, a 400 error is returned asking the user
+    to save before exporting.
+    ---
+    tags:
+      - Schedules
+    parameters:
+      - name: schedule_id
+        in: path
+        type: string
+        required: true
+        description: Schedule UUID
+    produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+    responses:
+      200:
+        description: Excel file with Teacher, Student, and Room sheets
+      400:
+        description: Schedule not saved / database not configured
+      404:
+        description: Schedule not found
+    """
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    sched = models.get_schedule(schedule_id)
+    if not sched:
+        return jsonify({"success": False, "error": "Schedule not found"}), 404
+
+    schedule_data = sched.get('data')
+    if not schedule_data:
+        return jsonify({
+            "success": False,
+            "error": "Schedule has not been saved yet. Please save the schedule before exporting.",
+        }), 400
+
+    entity_meta = sched.get('entity_meta')
+
+    try:
+        from src.ga.excel_exporter import build_schedule_excel
+        excel_bytes = build_schedule_excel(schedule_data, entity_meta)
+    except Exception as exc:
+        import traceback as _tb
+        current_app.logger.error(
+            '[export_schedule_excel] Build failed for %s: %s\n%s',
+            schedule_id, exc, _tb.format_exc(),
+        )
+        return jsonify({"success": False, "error": f"Excel generation failed: {exc}"}), 500
+
+    job_name = (sched.get('job_name') or schedule_id).replace(' ', '_')
+    filename = f"schedule_{job_name}.xlsx"
+
+    return send_file(
+        io.BytesIO(excel_bytes),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@api_bp.route('/schedules/<schedule_id>', methods=['DELETE'])
+def delete_schedule_record(schedule_id):
+    """
+    Delete a schedule record from the database and clean up its file-system job folder.
+    ---
+    tags:
+      - Schedules
+    parameters:
+      - name: schedule_id
+        in: path
+        type: string
+        required: true
+        description: Schedule UUID
+    responses:
+      200:
+        description: Schedule deleted
+      404:
+        description: Schedule not found in file system or database
+      400:
+        description: Database not configured
+    """
+    job_manager = JobManager(current_app.config['JOBS_FOLDER'])
+    job = job_manager.get_job(schedule_id)
+
+    db_record = None
+    if database.is_available():
+        try:
+            db_record = _db.session.get(ScheduleModel, UUID(schedule_id))
+        except Exception as e:
+            current_app.logger.error('[delete_schedule] DB lookup failed for %s: %s', schedule_id, e)
+
+    if not job and db_record is None:
+        return jsonify({"success": False, "error": "Schedule not found"}), 404
+
+    if job:
+        job_folder = get_job_folder(current_app.config['JOBS_FOLDER'], schedule_id)
+        if os.path.exists(job_folder):
+            shutil.rmtree(job_folder)
+        job_manager.delete_job(schedule_id)
+
+    if db_record is not None:
+        try:
+            _db.session.delete(db_record)
+            _db.session.commit()
+        except Exception as e:
+            _db.session.rollback()
+            current_app.logger.error('[delete_schedule] DB delete failed for %s: %s', schedule_id, e)
+            return jsonify({"success": False, "error": f"Database delete failed: {e}"}), 500
+
+    return jsonify({"success": True, "message": f"Schedule {schedule_id} deleted successfully"})
+
+
+@api_bp.route('/auth/clerk-check', methods=['POST'])
+def auth_clerk_check():
+    """Look up an existing user by email and return a JWT — used after Clerk Google OAuth."""
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    data  = request.get_json() or {}
+    email = (data.get('email') or '').strip().lower()
+
+    if not email:
+        return jsonify({"success": False, "error": "'email' is required"}), 400
+
+    user = models.get_user_by_email(email)
+    if not user:
+        return jsonify({"success": False, "error": "User not found"}), 404
+
+    token = create_access_token(identity=user['user_id'], additional_claims={'org_id': user.get('org_id'), 'role': user.get('role')})
+    return jsonify({"success": True, "access_token": token, "user": user})
+
+
+@api_bp.route('/auth/clerk-register', methods=['POST'])
+def auth_clerk_register():
+    """Create a new admin account via Clerk Google OAuth — requires valid admin key."""
+    if not database.is_available():
+        return jsonify({"success": False, "error": "Database not configured"}), 400
+
+    data       = request.get_json() or {}
+    email      = (data.get('email')      or '').strip().lower()
+    username   = (data.get('username')   or '').strip() or None
+    first_name = (data.get('first_name') or '').strip() or None
+    last_name  = (data.get('last_name')  or '').strip() or None
+    admin_key  = (data.get('admin_key')  or '').strip()
+
+    if not email:
+        return jsonify({"success": False, "error": "'email' is required"}), 400
+    if not admin_key:
+        return jsonify({"success": False, "error": "Admin key is required"}), 400
+
+    existing = models.get_user_by_email(email)
+    if existing:
+        org_id_to_set = existing.get('org_id')
+        if not org_id_to_set:
+            org = models.get_org_by_registration_key(admin_key)
+            if not org:
+                return jsonify({"success": False, "error": "Invalid admin key"}), 403
+            org_id_to_set = org['org_id']
+        updated = models.update_user_profile(
+            user_id    = existing['user_id'],
+            username   = username   or existing.get('username'),
+            first_name = first_name or existing.get('first_name'),
+            last_name  = last_name  or existing.get('last_name'),
+            role       = 'school_admin',
+            org_id     = org_id_to_set,
+        ) or existing
+        token = create_access_token(identity=updated['user_id'], additional_claims={'org_id': updated.get('org_id'), 'role': updated.get('role')})
+        return jsonify({"success": True, "access_token": token, "user": updated})
+
+    org = models.get_org_by_registration_key(admin_key)
+    if not org:
+        return jsonify({"success": False, "error": "Invalid admin key"}), 403
+
+    user = models.create_user(
+        email=email,
+        role='school_admin',
+        username=username,
+        first_name=first_name,
+        last_name=last_name,
+        org_id=org['org_id'],
+    )
+    if not user:
+        return jsonify({"success": False, "error": "Could not create account"}), 500
+
+    token = create_access_token(identity=user['user_id'], additional_claims={'org_id': user.get('org_id'), 'role': user.get('role')})
+    return jsonify({"success": True, "access_token": token, "user": user}), 201
+
+
 @api_bp.route('/auth/register', methods=['POST'])
 def auth_register():
     """
@@ -1084,8 +1716,8 @@ def auth_register():
         return jsonify({"success": False, "error": "Username already taken"}), 409
 
     hashed = generate_password_hash(password)
-    name   = ' '.join(filter(None, [first_name, last_name])) or None
-    user   = models.create_user(
+    name = ' '.join(filter(None, [first_name, last_name])) or None
+    user = models.create_user(
         email=email, password_hash=hashed, username=username,
         role=role, first_name=first_name, last_name=last_name,
         name=name, org_id=org_id,

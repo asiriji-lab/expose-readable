@@ -136,10 +136,10 @@ def clean_curriculum(
 
         # C. Clean 'student_class' column
         raw_section_str = row_dict.get('student_class')
-        if pd.isna(raw_section_str) or raw_section_str == '':
+        if pd.isna(raw_section_str) or str(raw_section_str).strip() == '':
             cleaned_sections = current_grade_sections
         else:
-            cleaned_sections = parse_student_class_string(raw_section_str)
+            cleaned_sections = parse_student_class_string(str(raw_section_str).strip())
             valid_sections = [s for s in cleaned_sections if s in current_grade_sections]
             cleaned_sections = valid_sections
 
@@ -178,6 +178,17 @@ def clean_elective(
         return df_elective
         
     print("\n--- Starting Elective Data Cleaning and Resolution ---")
+
+    # Drop section marker rows (e.g. "เสรีม.ต้น", "เสรีม.ปลาย") — they have no subject_name
+    before = len(df_elective)
+    df_elective = df_elective[
+        df_elective['subject_name'].apply(
+            lambda x: not (pd.isna(x) or str(x).strip() in ('', 'nan', 'None'))
+        )
+    ].copy()
+    dropped = before - len(df_elective)
+    if dropped:
+        print(f"  - Dropped {dropped} marker row(s) (no subject_name).")
 
     # Pre-process Lookups
     teacher_lookup = create_teacher_lookup(df_teacher)
@@ -245,7 +256,11 @@ def clean_teacher(df_teacher: pd.DataFrame) -> pd.DataFrame:
     
     # clean empty missing or invalid (marker) rows
     df_cleaned.dropna(subset=['teacher_id'], inplace=True)
-    
+
+    # Ensure teacher_id and teacher_name are always trimmed strings
+    df_cleaned['teacher_id']   = df_cleaned['teacher_id'].astype(str).str.strip()
+    df_cleaned['teacher_name'] = df_cleaned['teacher_name'].astype(str).str.strip()
+
     print(f"✅ Teacher marker and invalid rows removed.")
     print("--- Teacher Data Cleaning Complete ---")
     return df_cleaned
@@ -258,8 +273,9 @@ def clean_student(df_student: pd.DataFrame) -> pd.DataFrame:
         
     print("\n--- Starting Student Data Cleaning ---")
     
-    # Simply ensure grade is string format (assume CSV already has "ม.1" format)
-    df_student['grade'] = df_student['grade'].astype(str).str.strip()
+    # Simply ensure grade is string format (assume CSV already has "ม.1" format).
+    # fillna('') first because some pandas versions leave NaN as float in astype(str).
+    df_student['grade'] = df_student['grade'].fillna('').astype(str).str.strip()
     
     # Ensure section is numeric
     df_student['section'] = pd.to_numeric(df_student['section'], errors='coerce').fillna(-1).astype(int)
