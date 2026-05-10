@@ -27,6 +27,7 @@ from src.preschedule.scheduleManager import ScheduleManager
 from src.preschedule.prescheduleProcessor import PrescheduleProcessor
 from .island_ga import IslandGeneticAlgorithm
 from .genetic_algorithm import GeneticAlgorithm
+from .data_loader import build_ga_context
 from .exporter import ScheduleExporter
 from .json_exporter import ScheduleJsonExporter
 from .job_manager import JobManager
@@ -205,7 +206,8 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
 
     # ── Step 3: Feasibility check ─────────────────────────────────────────────
     log.info("[STEP 3/5] Running feasibility check …")
-    checker = FeasibilityChecker(schedule_manager)
+    ga_context = build_ga_context(schedule_manager)
+    checker = FeasibilityChecker(schedule_manager, context=ga_context)
     feasibility_report = checker.check()
     log.info("  Feasibility: is_feasible=%s", feasibility_report.is_feasible)
 
@@ -247,6 +249,7 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
             min_improvement=ga_kwargs['min_improvement'],
             window_size=ga_kwargs['window_size'],
             progress_callback=ga_progress,
+            context=ga_context,
         )
     else:
         ga = GeneticAlgorithm(
@@ -260,10 +263,15 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
             min_improvement=params.get('min_improvement', 500),
             window_size=params.get('window_size', 1000),
             progress_callback=ga_progress,
+            context=ga_context,
         )
 
-    best_solution = ga.evolve()
-    ga_result     = ga.get_result_summary()
+    try:
+        best_solution = ga.evolve()
+        ga_result     = ga.get_result_summary()
+    finally:
+        if hasattr(ga, 'close'):
+            ga.close()
     log.info("  GA complete — best_fitness=%s  violations=%s",
              ga_result.get('best_fitness'), ga_result.get('violations'))
 

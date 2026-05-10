@@ -27,7 +27,7 @@ every client-side UPDATE, so no database trigger is required.
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, String, Integer, Float, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, Float, Text, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
@@ -91,6 +91,10 @@ class User(db.Model):
     created_at    = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
     updated_at    = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
 
+    __table_args__ = (
+        Index('ix_users_org_id', 'org_id'),
+    )
+
     # Relationships
     organization = relationship('Organization', back_populates='users')
     schedules    = relationship('Schedule',     back_populates='user', lazy='dynamic')
@@ -153,6 +157,11 @@ class Schedule(db.Model):
     error         = Column(Text, nullable=True)
     created_at    = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
     updated_at    = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
+
+    __table_args__ = (
+        Index('ix_schedules_org_id_status',  'org_id',  'status'),
+        Index('ix_schedules_user_id_status', 'user_id', 'status'),
+    )
 
     # Relationships
     organization = relationship('Organization', back_populates='schedules')

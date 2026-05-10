@@ -138,7 +138,7 @@ DATABASE_URL=postgresql://schedool:schedool@localhost:5432/schedool
 
 The application reads `.env` automatically via `python-dotenv` if a `.env` file is present in the project root.
 
-When `DATABASE_URL` is empty or the database is unreachable at startup, the app logs a warning and continues running in file-only mode (jobs are still tracked via `data/jobs/jobs.json`).
+When `DATABASE_URL` is empty or the database is unreachable at startup, the app logs a warning and continues running in degraded mode (jobs are still tracked in the in-memory job store, but status updates are not persisted across restarts).
 
 ---
 
@@ -216,7 +216,7 @@ POST /api/v1/schedule
         └── job fails   ──▶  fail_schedule()       → status='failed', error=<message>
 ```
 
-Job status is mirrored in both the JSON file (`data/jobs/jobs.json`) and the `schedules` table so the API continues to work even when the database is unavailable.
+Job status is held in an **in-memory store** (fast, no disk I/O) and mirrored to the `schedules` table at key transitions so the API continues to work even when the database is unavailable. There is no longer a `jobs.json` file.
 
 ---
 
@@ -224,6 +224,7 @@ Job status is mirrored in both the JSON file (`data/jobs/jobs.json`) and the `sc
 
 - **ORM:** The database layer now uses **SQLAlchemy / Flask-SQLAlchemy** instead of raw psycopg2. Model definitions live in `src/db/orm_models.py`; CRUD helpers are in `src/db/models.py`.
 - **Schema bootstrap:** `db.create_all()` is called on every startup (inside `database.init_db(app)`). This is idempotent for existing tables; new tables are created automatically. `src/db/schema.sql` is kept as a reference but is no longer executed at startup.
+- **Indexes:** Three composite indexes are defined in `orm_models.py` and created automatically by `db.create_all()`: `ix_users_org_id` on `users(org_id)`, `ix_schedules_org_id_status` on `schedules(org_id, status)`, and `ix_schedules_user_id_status` on `schedules(user_id, status)`. For an existing database that was created before these indexes were added, run `CREATE INDEX CONCURRENTLY` once manually (the statements are in `src/db/schema.sql`).
 - **Schema migrations:** For adding columns to existing tables use **Alembic** (`flask-migrate`). See [ORM.md — Migrations](ORM.md#migrations).
 - All CRUD functions in `src/db/models.py` are decorated with `@_guard`, which silently returns `None` / `[]` if the DB is not available. This keeps all callers free of try/except boilerplate.
 - For production, change the PostgreSQL password via the `POSTGRES_PASSWORD` environment variable in `docker-compose.yml`.

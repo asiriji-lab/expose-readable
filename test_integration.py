@@ -24,7 +24,7 @@ try:
     
     # Test GA imports
     print("   ✓ Importing integrated GA...")
-    from src.ga.integrated_genetic_algorithm import GeneticAlgorithm
+    from src.ga.genetic_algorithm import GeneticAlgorithm
     from src.ga.models import Lesson, TimeSlot, Chromosome
     
     # Test types

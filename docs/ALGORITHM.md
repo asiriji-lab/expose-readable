@@ -148,7 +148,7 @@ Island 3  ←  Island 2
 ```
 
 - Each island has its own population of `island_population_size` chromosomes (default: 125).
-- Each island runs its own independent GA loop.
+- Each island runs its own independent GA loop **in a separate CPU process** (via Python's `ProcessPoolExecutor`). On a 4-core machine all 4 islands evolve simultaneously, cutting wall-clock time by roughly 2–3×.
 - Each island is given a **different mutation rate** — spread linearly from 0.5× to 2.0× the base `mutation_rate`. This means some islands are cautious (refining good solutions slowly) while others are aggressive (making big random changes to escape traps).
 - Every `migration_interval` generations (default: 50), the top migrants from each island are **sent to the next island** in the ring. Migrants replace the weakest individuals in the receiving island.
 

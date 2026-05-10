@@ -15,11 +15,31 @@ Benefits:
 """
 
 from collections import deque
+from concurrent.futures import ProcessPoolExecutor
 from typing import Any, Dict, List, Optional, Callable
 
 from src.preschedule.scheduleManager import ScheduleManager
+from .data_loader import GAContext, build_ga_context
 from .genetic_algorithm import GeneticAlgorithm
 from .models import Chromosome
+
+# ---------------------------------------------------------------------------
+# Module-level worker state (must be top-level for Windows spawn compatibility)
+# ---------------------------------------------------------------------------
+
+_worker_islands: Dict[int, GeneticAlgorithm] = {}
+
+
+def _init_islands_worker(islands_by_idx: Dict[int, GeneticAlgorithm]) -> None:
+    global _worker_islands
+    _worker_islands = islands_by_idx
+
+
+def _run_island_epoch(island_idx: int, population: list, n_gens: int):
+    island = _worker_islands[island_idx]
+    island.population = population
+    island.evolve_n_generations(n_gens)
+    return island_idx, island.population, island.best_chromosome
 
 
 class IslandGeneticAlgorithm:
@@ -54,6 +74,7 @@ class IslandGeneticAlgorithm:
         min_improvement: float = 500,  # min total fitness drop over the window to keep running
         window_size: int = 1000,       # generations to look back for the sliding-window stop
         progress_callback: Optional[Callable] = None,
+        context: Optional[GAContext] = None,
     ):
         self.schedule_manager = schedule_manager
         self.n_islands = n_islands
@@ -90,6 +111,10 @@ class IslandGeneticAlgorithm:
         self._fitness_window: deque = deque(maxlen=self.window_epochs)
         self._stopped_early: bool = False
 
+        # Build shared context once if not provided by caller
+        if context is None:
+            context = build_ga_context(schedule_manager)
+
         # Build islands — individual islands do NOT get the progress_callback;
         # IslandGA reports progress at the coarser epoch level instead.
         mutation_rates = self._spread_mutation_rates(mutation_rate, n_islands)
@@ -106,8 +131,19 @@ class IslandGeneticAlgorithm:
                 stagnation_limit=stagnation_limit,
                 block_crossover_rate=block_crossover_rate,
                 progress_callback=None,  # progress reported at epoch level by IslandGA
+                context=context,
             )
             self.islands.append(island)
+
+        # Spin up one worker process per island (initializer sends island objects once)
+        if self.n_islands > 1:
+            self._executor = ProcessPoolExecutor(
+                max_workers=self.n_islands,
+                initializer=_init_islands_worker,
+                initargs=({i: isl for i, isl in enumerate(self.islands)},),
+            )
+        else:
+            self._executor = None
 
     # =========================================================================
     # PROPERTIES
@@ -235,9 +271,22 @@ class IslandGeneticAlgorithm:
             gen_end = (epoch + 1) * self.migration_interval
 
             island_bests = []
-            for i, island in enumerate(self.islands):
-                island.evolve_n_generations(self.migration_interval)
-                island_bests.append(island.best_chromosome.fitness)
+            if self._executor is None:
+                for i, island in enumerate(self.islands):
+                    island.evolve_n_generations(self.migration_interval)
+                    island_bests.append(island.best_chromosome.fitness)
+            else:
+                futures = [
+                    self._executor.submit(
+                        _run_island_epoch, i, island.population, self.migration_interval
+                    )
+                    for i, island in enumerate(self.islands)
+                ]
+                for future in futures:
+                    idx, new_pop, best = future.result()
+                    self.islands[idx].population = new_pop
+                    self.islands[idx].best_chromosome = best
+                    island_bests.append(best.fitness)
 
             self._update_global_best()
 
@@ -329,6 +378,15 @@ class IslandGeneticAlgorithm:
         print("=" * 60 + "\n")
 
         return self.best_chromosome
+
+    # =========================================================================
+    # CLEANUP
+    # =========================================================================
+
+    def close(self) -> None:
+        """Shut down the worker pool (no-op when running single-island)."""
+        if self._executor:
+            self._executor.shutdown(wait=False)
 
     # =========================================================================
     # APPLY SOLUTION

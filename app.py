@@ -27,7 +27,10 @@ API Endpoints:
 
 import os
 import time
+from dotenv import load_dotenv
 from flask import Flask, g, request
+
+load_dotenv()  # Load environment variables from .env file
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flasgger import Swagger

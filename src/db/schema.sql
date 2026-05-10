@@ -47,6 +47,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS role       VARCHAR(50)  NOT NULL DEFA
 ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name VARCHAR(255);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name  VARCHAR(255);
 
+CREATE INDEX IF NOT EXISTS ix_users_org_id ON users (org_id);
+
 -- ----------------------------------------------------------------------------
 -- schedules
 -- ----------------------------------------------------------------------------
@@ -71,6 +73,9 @@ CREATE TABLE IF NOT EXISTS schedules (
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS ix_schedules_org_id_status  ON schedules (org_id,  status);
+CREATE INDEX IF NOT EXISTS ix_schedules_user_id_status ON schedules (user_id, status);
 
 -- ----------------------------------------------------------------------------
 -- Auto-update updated_at on row modification

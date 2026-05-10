@@ -20,6 +20,7 @@ from .models import (
 )
 
 from .data_loader import (
+    GAContext,
     _parse_block_pattern,
     get_teaching_period_cols,
     build_lessons_from_manager,
@@ -73,6 +74,7 @@ class GeneticAlgorithm:
         window_size: int = 1000,            # generations to look back for the sliding-window stop
         block_crossover_rate: float = 0.5,  # probability of block-level mixing per lesson in crossover
         progress_callback: Optional[Callable] = None,
+        context: Optional[GAContext] = None,
     ):
         self.manager = schedule_manager
         self.population_size = population_size
@@ -87,31 +89,44 @@ class GeneticAlgorithm:
         self.block_crossover_rate = block_crossover_rate
         self.progress_callback = progress_callback
 
-        # ── Blocked keywords (built from period labels, preplace, electives) ──
-        BLOCKED_CELL_KEYWORDS[:] = build_blocked_keywords(schedule_manager)
-        print(f"  [GA] Blocked keywords   : {BLOCKED_CELL_KEYWORDS}")
+        if context is not None:
+            # ── Blocked keywords from shared context ──────────────────────────
+            BLOCKED_CELL_KEYWORDS[:] = context.blocked_keywords
+            print(f"  [GA] Blocked keywords   : {BLOCKED_CELL_KEYWORDS}")
 
-        # ── Core data ─────────────────────────────────────────────────────────
-        self.teaching_cols: List[str] = get_teaching_period_cols(schedule_manager)
-        self.all_slots: Set[Tuple[str, str]] = {
-            (day, pc) for day in WEEKDAYS for pc in self.teaching_cols
-        }
-        self.lessons: List[Lesson] = build_lessons_from_manager(schedule_manager)
+            # ── Core data from shared context ──────────────────────────────────
+            self.teaching_cols = context.teaching_cols
+            self.all_slots     = context.all_slots
+            self.lessons       = context.lessons
+            self.free_slots    = context.free_slots
+            self._col_idx      = context.col_idx
+            self._block_sizes  = context.block_sizes
+        else:
+            # ── Blocked keywords (built from period labels, preplace, electives) ──
+            BLOCKED_CELL_KEYWORDS[:] = build_blocked_keywords(schedule_manager)
+            print(f"  [GA] Blocked keywords   : {BLOCKED_CELL_KEYWORDS}")
+
+            # ── Core data ─────────────────────────────────────────────────────
+            self.teaching_cols: List[str] = get_teaching_period_cols(schedule_manager)
+            self.all_slots: Set[Tuple[str, str]] = {
+                (day, pc) for day in WEEKDAYS for pc in self.teaching_cols
+            }
+            self.lessons: List[Lesson] = build_lessons_from_manager(schedule_manager)
+            # Preschedule-state free slots (immutable snapshot)
+            self.free_slots: Dict[str, Set[Tuple[str, str]]] = build_free_slots_per_entity(
+                schedule_manager, self.teaching_cols
+            )
+            # O(1) period column -> index
+            self._col_idx: Dict[str, int] = {col: i for i, col in enumerate(self.teaching_cols)}
+            # Pre-parsed block sizes per lesson
+            self._block_sizes: Dict[str, List[int]] = {
+                l.lesson_id: _parse_block_pattern(l.block_pattern) for l in self.lessons
+            }
+
         self.lesson_map: Dict[str, Lesson] = {l.lesson_id: l for l in self.lessons}
         self.room_list: List[str] = self._get_room_list()
 
-        # Preschedule-state free slots (immutable snapshot)
-        self.free_slots: Dict[str, Set[Tuple[str, str]]] = build_free_slots_per_entity(
-            schedule_manager, self.teaching_cols
-        )
-
         # ── Speed caches ───────────────────────────────────────────────────────
-        # O(1) period column -> index
-        self._col_idx: Dict[str, int] = {col: i for i, col in enumerate(self.teaching_cols)}
-        # Pre-parsed block sizes per lesson
-        self._block_sizes: Dict[str, List[int]] = {
-            l.lesson_id: _parse_block_pattern(l.block_pattern) for l in self.lessons
-        }
         # Pre-computed expected period count per lesson
         self._expected_periods: Dict[str, int] = {
             lid: sum(bs) for lid, bs in self._block_sizes.items()

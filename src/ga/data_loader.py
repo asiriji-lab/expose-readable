@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 import random
 import copy
+from dataclasses import dataclass
 from typing import Dict, List, Tuple, Set, Optional, Any, Callable
 from collections import defaultdict
 
@@ -437,3 +438,39 @@ def get_consecutive_slots(
     if idx < 0 or idx + count > len(teaching_cols):
         return None
     return [(day, teaching_cols[idx + i]) for i in range(count)]
+
+
+# =============================================================================
+# SHARED GA CONTEXT
+# =============================================================================
+
+@dataclass
+class GAContext:
+    """Pre-computed data shared across FeasibilityChecker and all GA islands."""
+    teaching_cols:     List[str]
+    all_slots:         Set[Tuple[str, str]]
+    lessons:           List[Any]   # List[Lesson] — typed as Any to avoid circular import
+    free_slots:        Dict[str, Set[Tuple[str, str]]]
+    col_idx:           Dict[str, int]
+    block_sizes:       Dict[str, List[int]]
+    blocked_keywords:  List[str]
+
+
+def build_ga_context(manager: 'ScheduleManager') -> GAContext:
+    """Build shared GA context once per job (replaces 5× independent builds)."""
+    teaching_cols = get_teaching_period_cols(manager)
+    all_slots = {(day, pc) for day in WEEKDAYS for pc in teaching_cols}
+    lessons = build_lessons_from_manager(manager)
+    free_slots = build_free_slots_per_entity(manager, teaching_cols)
+    col_idx = {col: i for i, col in enumerate(teaching_cols)}
+    block_sizes = {l.lesson_id: _parse_block_pattern(l.block_pattern) for l in lessons}
+    blocked_keywords = build_blocked_keywords(manager)
+    return GAContext(
+        teaching_cols=teaching_cols,
+        all_slots=all_slots,
+        lessons=lessons,
+        free_slots=free_slots,
+        col_idx=col_idx,
+        block_sizes=block_sizes,
+        blocked_keywords=blocked_keywords,
+    )

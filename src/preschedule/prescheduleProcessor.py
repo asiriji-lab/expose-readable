@@ -329,13 +329,16 @@ class PrescheduleProcessor:
                         teachers = teacher if isinstance(teacher, list) else ([teacher] if teacher else [])
                         rooms = room if isinstance(room, list) else ([room] if room else [])
                         
-                        # Assume there is 1 teacher and 1 room for elective subject
+                        if not teachers:
+                            print(f"  ⚠️  Elective '{subject_id}': no resolved teacher, placing without teacher assignment")
+                        if not rooms:
+                            print(f"  ⚠️  Elective '{subject_id}': no resolved room, placing without room assignment")
                         self.manager.place_slot(
                             day=day,
                             period_col=period_col,
                             subject_id=subject_id,
-                            teacher_id=teachers[0],
-                            room_id=rooms[0],
+                            teacher_id=teachers[0] if teachers else None,
+                            room_id=rooms[0] if rooms else None,
                             class_id=None,
                             reason='elective'
                         )

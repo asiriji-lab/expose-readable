@@ -16,7 +16,6 @@ gunicorn>=21.0.0
 # Utilities
 python-dotenv>=1.0.0
 werkzeug>=2.3.0
-optuna>=3.0.0
 
 # API documentation
 flasgger>=0.9.7

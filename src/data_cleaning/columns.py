@@ -38,6 +38,7 @@ prepalce_column = {
 
 room_column = {
     'ห้องทั้งหมด': 'room_id',
+    'room_id': 'room_id',       # already-English header in some datasets
     'หมายเหตุ': 'note',
     'ประเภท': 'tag'
 }
