@@ -24,13 +24,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: backend
 
       - name: Log in to GHCR
         run: docker login --username winsdominoes --password ${{ secrets.SCHEDOOL_ACTION_TOKEN }} ghcr.io
 
       - name: Build and push backend image
         run: |
-          cd schedool_backend
           docker buildx build \
             -t ghcr.io/schedool/backend:latest \
             --push \

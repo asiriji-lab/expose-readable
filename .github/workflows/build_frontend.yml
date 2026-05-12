@@ -24,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: frontend
 
       - name: Log in to GHCR
         run: docker login --username winsdominoes --password ${{ secrets.SCHEDOOL_ACTION_TOKEN }} ghcr.io
@@ -36,7 +38,6 @@ jobs:
           NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL: ${{ secrets.NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL }}
           NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL: ${{ secrets.NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL }}
         run: |
-          cd schedool_frontend
           docker buildx build \
             --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" \
             --build-arg NEXT_PUBLIC_CLERK_SIGN_IN_URL="$NEXT_PUBLIC_CLERK_SIGN_IN_URL" \
