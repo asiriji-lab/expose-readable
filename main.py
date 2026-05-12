@@ -33,7 +33,7 @@ from src.ga.feasibility_checker import FeasibilityChecker
 # CONFIGURATION
 # =============================================================================
 
-INPUT_DIR   = "input_dataset_test"
+INPUT_DIR   = "input_dataset"
 OUTPUT_DIR  = "output"
 CLEANED_DIR = "cleaned_input"
 
@@ -55,8 +55,15 @@ GA_PARAMS = dict(
     elite_size=10,
     stagnation_limit=50,
     catastrophic_after=3,
-    min_improvement=500,    # min total fitness drop over the window to keep running
-    window_size=1000,       # look-back window in generations for the sliding-window stop
+    min_improvement=500,
+    window_size=1000,
+    # SA local search
+    sa_threshold=500,
+    sa_budget=300,
+    sa_cooling=0.95,
+    # LNS repair
+    lns_after=2,
+    lns_collateral_rate=0.10,
 )
 
 
@@ -385,6 +392,11 @@ def main():
         )
     print(f"  ✅ GA statistics -> {ga_stats_path}")
 
+    # ── Analytics (timing + convergence) ──────────────────────────────────
+    analytics_path = os.path.join(OUTPUT_DIR, "ga_results", "analytics.json")
+    ga.get_analytics().write_json(analytics_path)
+    print(f"  ✅ Analytics     -> {analytics_path}")
+
     # =========================================================================
     # STEP 6 — Verification
     # =========================================================================
@@ -408,7 +420,7 @@ def main():
     print(f"   {OUTPUT_DIR}/final/students/        — {csv_stats['students_exported']} student CSVs")
     print(f"   {OUTPUT_DIR}/final/rooms/           — {csv_stats['rooms_exported']} room CSVs")
     print(f"   {OUTPUT_DIR}/schedule.json          — JSON schedule for API")
-    print(f"   {OUTPUT_DIR}/ga_results/            — GA run statistics")
+    print(f"   {OUTPUT_DIR}/ga_results/            — GA run statistics + analytics.json")
     print(f"\n   GA fitness  : {ga_result.get('final_fitness', 'N/A')}")
     print(f"   Violations  : {ga_result.get('final_violations', 'N/A')}")
     print(f"   Solution ✅ : {ga_result.get('solution_found', False)}")

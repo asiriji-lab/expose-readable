@@ -332,65 +332,87 @@ class PrescheduleProcessor:
         Manager handles all state updates.
         """
         print("\n--- TASK 4: Schedule Elective Courses ---")
-        
+
         df_elective = self.manager.get_sheet_data('elective')
         if df_elective is None:
             return {"status": "failed", "error": "ELECTIVE sheet not found"}
-        
+
         conflicts_before = len(self.manager.conflicts)
         slots_attempted = 0
-        
-        # Process each elective subject
-        for idx, row in df_elective.iterrows():
-            subject_id = row.get('subject_id', f'ELECTIVE_{idx}')
-            subject_name = row.get('subject_name', '')
-            teacher = row.get('teacher', None)
-            room = row.get('room', None)
-            
-            # Find elective slot columns (columns not in static columns)
-            static_cols = {'subject_id', 'subject_name', 'teacher', 'room'}
-            elective_slot_cols = [col for col in df_elective.columns if col not in static_cols]
-            
-            # Check which slots this elective is offered in (value = 1)
-            for slot_col in elective_slot_cols:
-                if row.get(slot_col, 0) == 1:
-                    # This elective is offered in this slot
 
-                    parsed_slots = self._parse_period_range(slot_col)
-                    
-                    # Schedule in teacher and room timetables
-                    for day, period_label in parsed_slots:
-                        period_col = self._find_period_column(period_label)
-                        if not period_col:
-                            continue
-                        
-                        # Handle teacher as list or single value
-                        teachers = teacher if isinstance(teacher, list) else ([teacher] if teacher else [])
-                        rooms = room if isinstance(room, list) else ([room] if room else [])
-                        
-                        # Assume there is 1 teacher and 1 room for elective subject
-                        self.manager.place_slot(
-                            day=day,
-                            period_col=period_col,
-                            subject_id=subject_id,
-                            teacher_id=teachers[0],
-                            room_id=rooms[0],
-                            class_id=None,
-                            reason='elective'
-                        )
-                        slots_attempted += 1
-        
-        conflicts_added = len(self.manager.conflicts) - conflicts_before
-        slots_scheduled = slots_attempted - conflicts_added
-        
-        print(f"✅ Scheduled {slots_scheduled} elective slots")
-        print(f"⚠️  Found {conflicts_added} conflicts")
-        
+        # subject_id -> {name, teacher, room, placed: [slot_str], failed: [(slot_str, reason)]}
+        subject_results: Dict[str, Dict] = {}
+
+        static_cols = {'subject_id', 'subject_name', 'teacher', 'room'}
+
+        for idx, row in df_elective.iterrows():
+            subject_id   = str(row.get('subject_id',   f'ELECTIVE_{idx}')).strip()
+            subject_name = str(row.get('subject_name', '')).strip()
+            teacher      = row.get('teacher', None)
+            room         = row.get('room',    None)
+
+            teachers = teacher if isinstance(teacher, list) else ([teacher] if teacher else [])
+            rooms    = room    if isinstance(room,    list) else ([room]    if room    else [])
+            teacher_id = teachers[0] if teachers else None
+            room_id    = rooms[0]    if rooms    else None
+
+            if subject_id not in subject_results:
+                subject_results[subject_id] = {
+                    'name': subject_name,
+                    'teacher': teacher_id,
+                    'room': room_id,
+                    'placed': [],
+                    'failed': [],
+                }
+
+            elective_slot_cols = [c for c in df_elective.columns if c not in static_cols]
+
+            for slot_col in elective_slot_cols:
+                if row.get(slot_col, 0) != 1:
+                    continue
+                for day, period_label in self._parse_period_range(slot_col):
+                    period_col = self._find_period_column(period_label)
+                    if not period_col:
+                        continue
+                    result = self.manager.place_slot(
+                        day=day,
+                        period_col=period_col,
+                        subject_id=subject_id,
+                        teacher_id=teacher_id,
+                        room_id=room_id,
+                        class_id=None,
+                        reason='elective',
+                    )
+                    slots_attempted += 1
+                    slot_label = f"{day} {period_label}"
+                    if result.startswith("SUCCESS"):
+                        subject_results[subject_id]['placed'].append(slot_label)
+                    else:
+                        subject_results[subject_id]['failed'].append((slot_label, result))
+
+        for subj_id, info in subject_results.items():
+            n_ok  = len(info['placed'])
+            n_bad = len(info['failed'])
+            icon  = "✅" if not n_bad else "⚠️ "
+            print(f"  {icon} {subj_id} ({info['name']}) | "
+                  f"teacher={info['teacher'] or '-'} room={info['room'] or '-'} | "
+                  f"placed={n_ok} failed={n_bad}")
+            if info['placed']:
+                print(f"       slots : {', '.join(info['placed'])}")
+            for slot_label, reason in info['failed']:
+                print(f"       ❌ {slot_label}: {reason}")
+
+        conflicts_added   = len(self.manager.conflicts) - conflicts_before
+        slots_scheduled   = slots_attempted - conflicts_added
+        print(f"\n✅ Scheduled {slots_scheduled} elective slots")
+        if conflicts_added:
+            print(f"⚠️  Found {conflicts_added} conflicts")
+
         return {
             "status": "success",
             "slots_attempted": slots_attempted,
             "slots_scheduled": slots_scheduled,
-            "conflicts": conflicts_added
+            "conflicts": conflicts_added,
         }
     
     # ========================================================================
@@ -403,15 +425,15 @@ class PrescheduleProcessor:
         Manager handles all state updates.
         """
         print("\n--- TASK 5: Assign Scout Sessions ---")
-        
+
         df_scout = self.manager.get_sheet_data('scout')
         if df_scout is None:
             return {"status": "skipped", "reason": "SCOUT sheet not found"}
-        
+
         df_preplace = self.manager.get_sheet_data('preplace')
         if df_preplace is None:
             return {"status": "failed", "error": "PREPLACE sheet needed for scout slot mapping"}
-        
+
         # Build mapping of scout slot names to periods
         scout_slots = {}
         for _, row in df_preplace.iterrows():
@@ -420,70 +442,90 @@ class PrescheduleProcessor:
                 periods_str = row.get('periods', '')
                 if not pd.isna(periods_str):
                     scout_slots[slot_name] = str(periods_str)
-        
+
         if not scout_slots:
             print("⚠️  No scout slots found in PREPLACE sheet")
             return {"status": "skipped", "reason": "No scout slots defined"}
-        
+
+        print(f"  Scout slot definitions ({len(scout_slots)}):")
+        for sn, sp in scout_slots.items():
+            print(f"    {sn} → {sp}")
+
         conflicts_before = len(self.manager.conflicts)
-        slots_attempted = 0
-        
-        # Process each grade column in SCOUT sheet
+        slots_attempted  = 0
+
+        # col -> {slot_name, periods: [slot_str], teachers: {tid: {placed:[],failed:[]}}}
+        col_results: Dict[str, Dict] = {}
+
         for col in df_scout.columns:
-            # Column name should be like "ลูกเสือม.1" or similar
-            # Find matching scout slot in preplace
             matching_slot = None
             for slot_name in scout_slots.keys():
                 if col in slot_name or slot_name in col:
                     matching_slot = slot_name
                     break
             if not matching_slot:
-                print(f"⚠️  No matching scout slot found for grade column: {col}")
+                print(f"  ⚠️  No matching scout slot for column: {col}")
                 continue
-            
-            periods_str = scout_slots[matching_slot]
-            parsed_slots = self._parse_period_range(periods_str)
-            
-            # Process all rows in the column
+
+            parsed_slots = self._parse_period_range(scout_slots[matching_slot])
+            col_results[col] = {'slot_name': matching_slot, 'teachers': {}}
+
             for idx, teacher_value in df_scout[col].items():
                 if pd.isna(teacher_value):
                     continue
-                
-                # Handle teacher as list or single value
                 teachers = teacher_value if isinstance(teacher_value, list) else [teacher_value]
-                
-                # Assign to each teacher
+
                 for teacher_id in teachers:
                     if pd.isna(teacher_id):
                         continue
-                    
+                    teacher_id = str(teacher_id).strip()
+                    if teacher_id not in col_results[col]['teachers']:
+                        col_results[col]['teachers'][teacher_id] = {'placed': [], 'failed': []}
+
                     for day, period_label in parsed_slots:
                         period_col = self._find_period_column(period_label)
                         if not period_col:
                             continue
-                        
-                        self.manager.place_slot(
+                        result = self.manager.place_slot(
                             day=day,
                             period_col=period_col,
                             subject_id=matching_slot,
                             teacher_id=teacher_id,
                             room_id=None,
                             class_id=None,
-                            reason='scout'
+                            reason='scout',
                         )
                         slots_attempted += 1
-        
+                        slot_label = f"{day} {period_label}"
+                        if result.startswith("SUCCESS"):
+                            col_results[col]['teachers'][teacher_id]['placed'].append(slot_label)
+                        else:
+                            col_results[col]['teachers'][teacher_id]['failed'].append((slot_label, result))
+
+        print(f"\n  Assignments by grade column:")
+        for col, info in col_results.items():
+            n_teachers = len(info['teachers'])
+            print(f"  [{col}] → {info['slot_name']} | {n_teachers} teacher(s)")
+            for tid, tinfo in info['teachers'].items():
+                n_ok  = len(tinfo['placed'])
+                n_bad = len(tinfo['failed'])
+                icon  = "✅" if not n_bad else "⚠️ "
+                slots_str = ", ".join(tinfo['placed']) if tinfo['placed'] else "none"
+                print(f"    {icon} {tid}: placed={n_ok} failed={n_bad} | {slots_str}")
+                for slot_label, reason in tinfo['failed']:
+                    print(f"       ❌ {slot_label}: {reason}")
+
         conflicts_added = len(self.manager.conflicts) - conflicts_before
-        slots_assigned = slots_attempted - conflicts_added
-        
-        print(f"✅ Assigned {slots_assigned} scout sessions")
-        print(f"⚠️  Found {conflicts_added} conflicts")
-        
+        slots_assigned  = slots_attempted - conflicts_added
+        print(f"\n✅ Assigned {slots_assigned} scout sessions")
+        if conflicts_added:
+            print(f"⚠️  Found {conflicts_added} conflicts")
+
         return {
             "status": "success",
             "slots_attempted": slots_attempted,
-            "slots_assigned": slots_assigned,
-            "conflicts": conflicts_added
+            "slots_assigned":  slots_assigned,
+            "conflicts":       conflicts_added,
         }
 
     
@@ -559,6 +601,7 @@ class PrescheduleProcessor:
 
             for class_group in class_groups:
                 placed_slot_labels: List[Tuple[str, str]] = []
+                slot_failures: List[str] = []
 
                 for day, period_label in parsed_slots:
                     period_col = self._find_period_column(period_label)
@@ -566,6 +609,7 @@ class PrescheduleProcessor:
                         print(f"  [LOCKED] Period '{period_label}' not found, skipping.")
                         continue
 
+                    conflicts_before_slot = len(self.manager.conflicts)
                     ok = self.manager.place_locked_lesson(
                         day=day,
                         period_col=period_col,
@@ -578,6 +622,14 @@ class PrescheduleProcessor:
                         placed_slot_labels.append((day, period_label))
                     else:
                         failed_count += 1
+                        # Grab the reason from the conflict record just appended
+                        new_conflicts = self.manager.conflicts[conflicts_before_slot:]
+                        reason = new_conflicts[0]['reason'] if new_conflicts else "unknown"
+                        slot_failures.append(f"{day} {period_label}: {reason}")
+
+                classes_str  = ", ".join(class_group)
+                teachers_str = ", ".join(teacher_ids) if teacher_ids else "-"
+                slots_str    = ", ".join(f"{d} {p}" for d, p in placed_slot_labels) if placed_slot_labels else "none"
 
                 if placed_slot_labels:
                     locked_lesson_counter += 1
@@ -593,8 +645,18 @@ class PrescheduleProcessor:
                         'constraint_type': constraint_type,
                     })
                     locked_count += 1
+                    icon = "✅" if not slot_failures else "⚠️ "
+                    print(f"  {icon} {subject_id} ({subject_name}) | "
+                          f"classes=[{classes_str}] teachers=[{teachers_str}] room={room_id or '-'}")
+                    print(f"       slots: {slots_str}")
+                    for fail in slot_failures:
+                        print(f"       ❌ {fail}")
+                else:
+                    print(f"  ❌ {subject_id} ({subject_name}) | classes=[{classes_str}] — all slots failed:")
+                    for fail in slot_failures:
+                        print(f"       ❌ {fail}")
 
-        print(f"✅ Locked {locked_count} curriculum lesson(s) into grids.")
+        print(f"\n✅ Locked {locked_count} curriculum lesson(s) into grids.")
         if failed_count:
             print(f"⚠️  {failed_count} slot placement(s) failed (conflicts).")
 

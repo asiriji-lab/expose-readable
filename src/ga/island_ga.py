@@ -15,11 +15,14 @@ Benefits:
 """
 
 from collections import defaultdict, deque
+from time import perf_counter
 from typing import Any, Dict, List, Optional, Callable
 
 from src.preschedule.scheduleManager import ScheduleManager
+from .analytics import AnalyticsCollector
 from .genetic_algorithm import GeneticAlgorithm
 from .models import Chromosome
+from .simulated_annealing import SimulatedAnnealing
 
 
 class IslandGeneticAlgorithm:
@@ -54,6 +57,15 @@ class IslandGeneticAlgorithm:
         min_improvement: float = 500,  # min total fitness drop over the window to keep running
         window_size: int = 1000,       # generations to look back for the sliding-window stop
         progress_callback: Optional[Callable] = None,
+        analytics: Optional[AnalyticsCollector] = None,
+        timing_sample_every: int = 20,
+        # SA params
+        sa_threshold: float = 500,     # trigger SA when global best fitness < this value
+        sa_budget: int = 300,          # SA iterations per epoch
+        sa_cooling: float = 0.95,      # SA cooling rate
+        # LNS params
+        lns_after: int = 2,            # stagnant epochs before LNS fires (< catastrophic_after)
+        lns_collateral_rate: float = 0.10,
     ):
         self.schedule_manager = schedule_manager
         self.n_islands = n_islands
@@ -75,6 +87,27 @@ class IslandGeneticAlgorithm:
         self.window_epochs = max(1, window_size // migration_interval)
         self.progress_callback = progress_callback
 
+        # Analytics — create one if not provided
+        self._analytics: AnalyticsCollector = analytics or AnalyticsCollector(
+            n_islands=n_islands,
+            max_generations=max_generations,
+            timing_sample_every=timing_sample_every,
+        )
+        self._timing_sample_every = timing_sample_every
+
+        # SA params
+        self.sa_threshold       = sa_threshold
+        self.sa_budget          = sa_budget
+        self.sa_cooling         = sa_cooling
+
+        # LNS params
+        self.lns_after          = lns_after
+        self.lns_collateral_rate = lns_collateral_rate
+
+        # LNS stagnation tracker (separate from global stagnation — resets after LNS fires)
+        self._lns_stagnation: int = 0
+        self._prev_lns_fitness: float = float('inf')
+
         self.n_migrants: int = max(1, int(island_population_size * migration_rate))
 
         # Global best tracking
@@ -93,7 +126,8 @@ class IslandGeneticAlgorithm:
         # Build islands — individual islands do NOT get the progress_callback;
         # IslandGA reports progress at the coarser epoch level instead.
         mutation_rates = self._spread_mutation_rates(mutation_rate, n_islands)
-        self.islands: List[GeneticAlgorithm] = []
+        self.islands:    List[GeneticAlgorithm]     = []
+        self._sa_runners: List[SimulatedAnnealing]  = []
         for i, mr in enumerate(mutation_rates):
             island = GeneticAlgorithm(
                 schedule_manager=schedule_manager,
@@ -106,8 +140,11 @@ class IslandGeneticAlgorithm:
                 stagnation_limit=stagnation_limit,
                 block_crossover_rate=block_crossover_rate,
                 progress_callback=None,  # progress reported at epoch level by IslandGA
+                analytics=self._analytics,
+                island_idx=i,
             )
             self.islands.append(island)
+            self._sa_runners.append(SimulatedAnnealing(island))
 
     # =========================================================================
     # PROPERTIES
@@ -226,6 +263,7 @@ class IslandGeneticAlgorithm:
 
         self._update_global_best()
         print(f"\n  Global initial best fitness: {self.best_chromosome.fitness}\n")
+        self._analytics.mark_init_done()
 
         # ── Epoch loop ────────────────────────────────────────────────────────
         n_epochs = self.max_generations // self.migration_interval
@@ -233,6 +271,7 @@ class IslandGeneticAlgorithm:
 
         for epoch in range(n_epochs):
             gen_end = (epoch + 1) * self.migration_interval
+            _t_sa = _t_lns = _t_catastrophic = _t_migrate = 0.0
 
             island_bests = []
             for i, island in enumerate(self.islands):
@@ -267,6 +306,11 @@ class IslandGeneticAlgorithm:
                 'window_improvement': window_improvement,
             }
             self.generation_stats.append(epoch_stat)
+            self._analytics.record_epoch(
+                epoch + 1, gen_end,
+                self.best_chromosome.fitness,
+                island_bests,
+            )
 
             if self.progress_callback:
                 self.progress_callback(gen_end, self.max_generations, epoch_stat)
@@ -324,6 +368,8 @@ class IslandGeneticAlgorithm:
 
             if self.best_chromosome.fitness == 0:
                 print(f"\n  Perfect solution found at epoch {epoch + 1}!")
+                self._analytics.set_stop_reason("perfect_solution", gen_end)
+                self._analytics.record_epoch_timing(epoch + 1, gen_end)
                 break
 
             # Sliding-window early stop: fires as soon as the window is full and
@@ -334,13 +380,80 @@ class IslandGeneticAlgorithm:
                       f"improvement over last {self.window_size} gens "
                       f"({self._fitness_window[0]:.0f} → {self.best_chromosome.fitness:.0f}) "
                       f"= {window_improvement:.0f} < {self.min_improvement:.0f}")
+                self._analytics.set_stop_reason(
+                    "window_stop", gen_end,
+                    window_improvement=float(window_improvement),
+                    min_improvement=self.min_improvement,
+                    window_size=self.window_size,
+                )
+                self._analytics.record_epoch_timing(epoch + 1, gen_end)
                 break
 
+            # ── SA local search ───────────────────────────────────────────
+            # Trigger when global best is below sa_threshold (last-mile mode)
+            if self.best_chromosome.fitness < self.sa_threshold and self.best_chromosome.fitness > 0:
+                sa = self._sa_runners[self.best_island_idx]
+                _t0 = perf_counter()
+                sa_result = sa.run(
+                    self.best_chromosome,
+                    budget=self.sa_budget,
+                    cooling=self.sa_cooling,
+                )
+                _t_sa = perf_counter() - _t0
+                if sa_result.fitness < self.best_chromosome.fitness:
+                    print(f"  [SA] Epoch {epoch + 1}: {self.best_chromosome.fitness:.0f} → {sa_result.fitness:.0f} ✅")
+                    self.best_chromosome = sa_result
+                    # Inject SA result into best island's population (replace worst)
+                    best_isl = self.islands[self.best_island_idx]
+                    best_isl.population.sort(key=lambda c: c.fitness, reverse=True)
+                    best_isl.population[0] = sa_result.copy()
+                    best_isl.best_chromosome = sa_result.copy()
+                else:
+                    print(f"  [SA] Epoch {epoch + 1}: no improvement ({sa_result.fitness:.0f})")
+
+            # ── LNS repair ────────────────────────────────────────────────
+            # Track LNS-specific stagnation (resets when global best improves)
+            lns_improved = self.best_chromosome.fitness < self._prev_lns_fitness
+            if lns_improved:
+                self._prev_lns_fitness = self.best_chromosome.fitness
+                self._lns_stagnation   = 0
+            else:
+                self._lns_stagnation  += 1
+
+            if self._lns_stagnation >= self.lns_after and self.best_chromosome.fitness > 0:
+                best_isl = self.islands[self.best_island_idx]
+                _t0 = perf_counter()
+                lns_result = best_isl.lns_repair(self.best_chromosome, self.lns_collateral_rate)
+                _t_lns = perf_counter() - _t0
+                if lns_result.fitness < self.best_chromosome.fitness:
+                    print(f"  [LNS] Epoch {epoch + 1}: {self.best_chromosome.fitness:.0f} → {lns_result.fitness:.0f} ✅")
+                    self.best_chromosome = lns_result
+                    best_isl.population.sort(key=lambda c: c.fitness, reverse=True)
+                    best_isl.population[0] = lns_result.copy()
+                    best_isl.best_chromosome = lns_result.copy()
+                    self._prev_lns_fitness = lns_result.fitness
+                else:
+                    print(f"  [LNS] Epoch {epoch + 1}: no improvement ({lns_result.fitness:.0f})")
+                self._lns_stagnation = 0
+
+            # ── Catastrophic reset (fallback after LNS still can't improve) ─
             if self._global_stagnation >= self.catastrophic_after:
+                _t0 = perf_counter()
                 self._catastrophic_reset(epoch + 1)
+                _t_catastrophic = perf_counter() - _t0
 
             if epoch < n_epochs - 1:
+                _t0 = perf_counter()
                 self._migrate(epoch + 1)
+                _t_migrate = perf_counter() - _t0
+
+            self._analytics.record_epoch_timing(
+                epoch + 1, gen_end,
+                migration_s=_t_migrate,
+                sa_s=_t_sa,
+                lns_s=_t_lns,
+                catastrophic_reset_s=_t_catastrophic,
+            )
 
         # ── Run remaining generations on the best island ─────────────────────
         if remaining > 0 and self.best_chromosome.fitness != 0:
@@ -348,6 +461,11 @@ class IslandGeneticAlgorithm:
             print(f"\n  Running {remaining} remaining gens on island {self.best_island_idx}...")
             best_island.evolve_n_generations(remaining)
             self._update_global_best()
+
+        if not self._analytics.stop:
+            self._analytics.set_stop_reason("max_generations", self.max_generations)
+
+        self._analytics.mark_evolution_done()
 
         print("\n" + "=" * 60)
         print("  ISLAND EVOLUTION COMPLETE")
@@ -391,6 +509,9 @@ class IslandGeneticAlgorithm:
     # =========================================================================
     # RESULT SUMMARY
     # =========================================================================
+
+    def get_analytics(self) -> AnalyticsCollector:
+        return self._analytics
 
     def get_result_summary(self) -> Dict[str, Any]:
         if not self.best_chromosome:

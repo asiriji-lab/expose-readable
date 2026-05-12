@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Tuple, Any
 from collections import defaultdict
 
 from .models import Lesson, Chromosome
+from src.constants import NO_CLASS, NO_ROOM, NO_TEACHER
 
 
 # Truly blocked slots — teacher constraints, not visible lessons.
@@ -174,19 +175,19 @@ class ScheduleJsonExporter:
                     "room":         None,
                     "slot_type":    "preplace",
                 }
-            if class_id in ('NoStudentListed', ''):
+            if class_id in (NO_CLASS, ''):
                 return {
                     "subject_id":   subject_id,
                     "subject_name": self._subject_name(subject_id),
                     "class":        None,
-                    "room":         room_id,
+                    "room":         None if room_id == NO_ROOM else room_id,
                     "slot_type":    "elective",
                 }
             return {
                 "subject_id":   subject_id,
                 "subject_name": self._subject_name(subject_id),
                 "class":        class_id,
-                "room":         room_id,
+                "room":         None if room_id == NO_ROOM else room_id,
             }
         if self._is_preplace_activity(s):
             return {
@@ -239,18 +240,18 @@ class ScheduleJsonExporter:
                     "class":        None,
                     "slot_type":    "preplace",
                 }
-            if class_id in ('NoStudentListed', ''):
+            if class_id in (NO_CLASS, ''):
                 return {
                     "subject_id":   subject_id,
                     "subject_name": self._subject_name(subject_id),
-                    "teacher":      self._teacher_name(teacher_id),
+                    "teacher":      None if teacher_id == NO_TEACHER else self._teacher_name(teacher_id),
                     "class":        None,
                     "slot_type":    "elective",
                 }
             return {
                 "subject_id":   subject_id,
                 "subject_name": self._subject_name(subject_id),
-                "teacher":      self._teacher_name(teacher_id),
+                "teacher":      None if teacher_id == NO_TEACHER else self._teacher_name(teacher_id),
                 "class":        class_id,
             }
         if self._is_preplace_activity(s):
@@ -392,7 +393,7 @@ class ScheduleJsonExporter:
             for ts, room in slots:
                 label    = self._period_label(ts.period_col)
                 key      = (ts.day, label)
-                room_str = room if room and room != "NO_ROOM" else None
+                room_str = room if room and room != NO_ROOM else None
 
                 # Join all classes and all teacher names so multi-class / team
                 # lessons are fully represented in every entity view.

@@ -26,6 +26,7 @@ from src.data_cleaning.data_cleaning import clean_input_data
 from src.data_cleaning.entity_meta import compute_entity_meta
 from src.preschedule.scheduleManager import ScheduleManager
 from src.preschedule.prescheduleProcessor import PrescheduleProcessor
+from .analytics import AnalyticsCollector
 from .island_ga import IslandGeneticAlgorithm
 from .genetic_algorithm import GeneticAlgorithm
 from .exporter import ScheduleExporter
@@ -54,16 +55,23 @@ _ISLAND_GA_DEFAULTS = dict(
     migration_interval=50,
     migration_rate=0.1,
     topology='ring',
-    mutation_rate=0.03,       # raised from 0.015 — 0.015 was too conservative for high-conflict starts
+    mutation_rate=0.03,
     crossover_rate=0.9,
-    tournament_size=5,        # lowered from 9 — reduces selection pressure, preserves diversity
+    tournament_size=5,
     max_generations=5000,
     elite_size=10,
-    stagnation_limit=150,     # raised from 50 — was == migration_interval, caused restart every epoch
+    stagnation_limit=150,
     catastrophic_after=3,
     block_crossover_rate=0.5,
     min_improvement=500,
     window_size=1000,
+    # SA
+    sa_threshold=500,
+    sa_budget=300,
+    sa_cooling=0.95,
+    # LNS
+    lns_after=2,
+    lns_collateral_rate=0.10,
 )
 
 
@@ -232,6 +240,14 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
     if job_manager:
         job_manager.update_job_progress(job_id, 'running_ga', 0, data_stats)
 
+    n_islands_param = params.get('n_islands', _ISLAND_GA_DEFAULTS['n_islands'])
+    analytics = AnalyticsCollector(
+        job_id=job_id,
+        n_islands=n_islands_param if n_islands_param > 1 else 1,
+        max_generations=params.get('max_generations', _ISLAND_GA_DEFAULTS['max_generations']),
+        timing_sample_every=params.get('timing_sample_every', 20),
+    )
+
     def ga_progress(generation, max_gen, stats):
         if cancel_event and cancel_event.is_set():
             raise JobCancelledError(f"Job {job_id} cancelled at generation {generation}")
@@ -268,6 +284,12 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
             min_improvement=ga_kwargs['min_improvement'],
             window_size=ga_kwargs['window_size'],
             progress_callback=ga_progress,
+            analytics=analytics,
+            sa_threshold=ga_kwargs['sa_threshold'],
+            sa_budget=ga_kwargs['sa_budget'],
+            sa_cooling=ga_kwargs['sa_cooling'],
+            lns_after=ga_kwargs['lns_after'],
+            lns_collateral_rate=ga_kwargs['lns_collateral_rate'],
         )
     else:
         ga = GeneticAlgorithm(
@@ -283,12 +305,26 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
             min_improvement=params.get('min_improvement', 500),
             window_size=params.get('window_size', 1000),
             progress_callback=ga_progress,
+            analytics=analytics,
+            island_idx=0,
         )
 
     best_solution = ga.evolve()
     ga_result     = ga.get_result_summary()
     log.info("  GA complete — best_fitness=%s  violations=%s",
              ga_result.get('best_fitness'), ga_result.get('violations'))
+
+    # For standalone GA, mark_evolution_done wasn't called inside evolve() — do it here.
+    if n_islands <= 1:
+        analytics.mark_evolution_done()
+
+    analytics_path = os.path.join(outputs_folder, 'analytics.json')
+    try:
+        analytics.write_json(analytics_path)
+        log.info("  Analytics written to %s", analytics_path)
+    except Exception as _ae:
+        log.warning("  Failed to write analytics.json: %s", _ae)
+        analytics_path = None
 
     # ── Step 5: Export ────────────────────────────────────────────────────────
     log.info("[STEP 5/5] Exporting schedule …")
@@ -325,22 +361,25 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
 
         if job_manager:
             job_manager.add_file_to_job(job_id, 'output_json', json_path)
+        if job_manager and analytics_path:
+            job_manager.add_file_to_job(job_id, 'output_analytics', analytics_path)
     else:
         log.warning("  No solution found — GA returned None.")
         export_result = {'error': 'No solution found'}
 
     # Slim result stored in jobs.json — no schedule content, just metadata + paths
     stored_result = {
-        'job_id':         job_id,
-        'data_stats':     data_stats,
-        'feasibility':    feasibility_report.to_dict(),
-        'ga_result':      ga_result,
-        'export_result':  export_result,
-        'outputs_folder': outputs_folder,
-        'json_path':      json_path,
-        'log_path':       log_path,
-        'success':        True,
-        'entity_meta':    entity_meta,
+        'job_id':          job_id,
+        'data_stats':      data_stats,
+        'feasibility':     feasibility_report.to_dict(),
+        'ga_result':       ga_result,
+        'export_result':   export_result,
+        'outputs_folder':  outputs_folder,
+        'json_path':       json_path,
+        'analytics_path':  analytics_path,
+        'log_path':        log_path,
+        'success':         True,
+        'entity_meta':     entity_meta,
     }
 
     # NOTE: job_manager status is updated here (inside scheduler) for progress

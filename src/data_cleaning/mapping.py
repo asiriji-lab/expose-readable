@@ -109,19 +109,22 @@ def resolve_teacher_names_to_ids(raw_teacher_name: Any, teacher_lookup: Dict[str
 
 # helper function map room requirements -> room_ids
 def resolve_room_to_ids(raw_room_value: Any, room_lookup: Dict[str, List[str]]) -> Union[str, List[str], None]:
-    # Case 1: If null/NaN, return None (no room required)
-    if pd.isna(raw_room_value) or str(raw_room_value).strip() == '':
+    # Case 1: null, NaN float, empty string, or string 'nan' — no room required
+    if pd.isna(raw_room_value) or str(raw_room_value).strip().lower() in ('', 'nan'):
         return None
 
     req = str(raw_room_value).strip()
-    
-    # Handle multiple requirements (e.g., 'COM, R201')
-    requirements = [r.strip() for r in req.split(',') if r.strip()]
-    
+
+    # Split on ',' or '/' (e.g. 'COM, R201' or 'D203 / D204')
+    requirements = [
+        r.strip() for r in re.split(r'[,/]', req)
+        if r.strip() and r.strip().lower() != 'nan'
+    ]
+
     resolved_rooms = set()
-    
+
     for single_req in requirements:
-        # Check if the requirement (Tag or ID) is in the lookup keys
+        # Check if the requirement (tag or ID) is in the lookup keys
         if single_req in room_lookup:
             resolved_rooms.update(room_lookup[single_req])
         else:

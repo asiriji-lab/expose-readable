@@ -8,7 +8,10 @@ Handles the execution of the main evolutionary process.
 
 import random
 from collections import defaultdict, deque
+from time import perf_counter
 from typing import Dict, List, Tuple, Set, Optional, Any, Callable
+
+from .analytics import AnalyticsCollector
 
 from src.preschedule.scheduleManager import ScheduleManager
 
@@ -30,6 +33,7 @@ from .data_loader import (
     build_blocked_keywords,
 )
 from .models import BLOCKED_CELL_KEYWORDS
+from src.constants import NO_ROOM
 
 # =============================================================================
 # GENETIC ALGORITHM
@@ -49,13 +53,15 @@ class GeneticAlgorithm:
 
     PENALTY_TEACHER_CONFLICT    = 100
     PENALTY_STUDENT_CONFLICT    = 100
-    PENALTY_ROOM_CONFLICT       = 75   # raised from 50 — double-booked room makes slot unusable
-    PENALTY_BLOCK_VIOLATION     = 80   # raised from 30 — non-consecutive is not a cheap option
-    PENALTY_PERIOD_COUNT        = 150  # raised from 20 — unplaced period must cost more than any single conflict
+    PENALTY_ROOM_CONFLICT       = 60   # lowered: rooms are easy to swap post-schedule (real-world flexible)
+    PENALTY_BLOCK_VIOLATION     = 100  # raised: non-consecutive blocks are a hard structural constraint
+    PENALTY_PERIOD_COUNT        = 125  # lowered: less dominant early, still > any single violation
     PENALTY_SEPERATE_SLOT       = 100  # two lessons in same SEPERATE_SLOT group share a slot
     PENALTY_SUB_GROUP           = 100  # lessons in same SUB_GROUP group are NOT at the same slot
     PENALTY_HOMEROOM_VIOLATION  = 100  # lesson placed in a homeroom belonging to another class
-    PENALTY_SPECIALIST_ROOM     = 80   # lesson placed in a specialist room without being assigned it
+    PENALTY_SPECIALIST_ROOM     = 50   # soft preference, not a hard constraint
+    PENALTY_DAY_DISTRIBUTION    = 25   # soft: teacher overloaded on one day (> DAY_LOAD_THRESHOLD periods)
+    DAY_LOAD_THRESHOLD          = 5    # periods per day per teacher before penalty kicks in
 
     # Stagnation: if best fitness hasn't improved in this many generations,
     # reseed the bottom half of the population.
@@ -75,6 +81,8 @@ class GeneticAlgorithm:
         window_size: int = 1000,            # generations to look back for the sliding-window stop
         block_crossover_rate: float = 0.5,  # probability of block-level mixing per lesson in crossover
         progress_callback: Optional[Callable] = None,
+        analytics: Optional[AnalyticsCollector] = None,
+        island_idx: int = 0,
     ):
         self.manager = schedule_manager
         self.population_size = population_size
@@ -88,6 +96,8 @@ class GeneticAlgorithm:
         self.window_size = window_size
         self.block_crossover_rate = block_crossover_rate
         self.progress_callback = progress_callback
+        self.analytics = analytics
+        self.island_idx = island_idx
 
         # ── Blocked keywords (built from period labels, preplace, electives) ──
         BLOCKED_CELL_KEYWORDS[:] = build_blocked_keywords(schedule_manager)
@@ -234,7 +244,7 @@ class GeneticAlgorithm:
         # 4. General pool.
         if self.room_list:
             return random.choice(self.room_list)
-        return "NO_ROOM"
+        return NO_ROOM
 
     def _normalize_gene_room(self, lid: str, gene: List[Tuple[TimeSlot, str]]) -> List[Tuple[TimeSlot, str]]:
         """
@@ -417,6 +427,7 @@ class GeneticAlgorithm:
         # Per-entity committed slots for this chromosome build pass
         # key: "teacher:T001" / "student:1/1" / "room:C103"
         committed_per_entity: Dict[str, Set[Tuple[str, str]]] = defaultdict(set)
+        force_placed_lids: Set[str] = set()  # lessons placed with conflicts (pure=True only)
 
         for lesson in sorted_lessons:
             room = self._pick_room(lesson)
@@ -430,7 +441,7 @@ class GeneticAlgorithm:
                     committed_per_entity[f"teacher:{tid}"] |= placed_slots
                 for cid in lesson.student_classes:
                     committed_per_entity[f"student:{cid}"] |= placed_slots
-                if room != "NO_ROOM":
+                if room != NO_ROOM:
                     committed_per_entity[f"room:{room}"] |= placed_slots
                 continue
 
@@ -443,7 +454,7 @@ class GeneticAlgorithm:
                 local_committed |= committed_per_entity[f"teacher:{tid}"]
             for cid in lesson.student_classes:
                 local_committed |= committed_per_entity[f"student:{cid}"]
-            if room != "NO_ROOM":
+            if room != NO_ROOM:
                 local_committed |= committed_per_entity[f"room:{room}"]
 
             lesson_free = list(base_available - local_committed)
@@ -461,6 +472,8 @@ class GeneticAlgorithm:
                 # committed=None tells _assign_blocks not to subtract anything.
                 fallback = list(base_available) or list(self.all_slots)
                 assignments = self._assign_blocks(lesson, fallback, room, committed=None)
+                if pure:
+                    force_placed_lids.add(lesson.lesson_id)
 
             # Register the newly committed slots back to each entity
             placed_slots = {(ts.day, ts.period_col) for ts, _ in assignments}
@@ -468,12 +481,83 @@ class GeneticAlgorithm:
                 committed_per_entity[f"teacher:{tid}"] |= placed_slots
             for cid in lesson.student_classes:
                 committed_per_entity[f"student:{cid}"] |= placed_slots
-            if room != "NO_ROOM":
+            if room != NO_ROOM:
                 committed_per_entity[f"room:{room}"] |= placed_slots
 
             c.genes[lesson.lesson_id] = assignments
 
+        # Pure seed repair pass: try to move force-placed lessons to conflict-free slots
+        if pure and force_placed_lids:
+            self._greedy_repair_pass(c, committed_per_entity, force_placed_lids)
+
         return c
+
+    def _greedy_repair_pass(
+        self,
+        c: Chromosome,
+        committed: Dict[str, Set[Tuple[str, str]]],
+        target_lids: Set[str],
+        max_repairs: int = 5,
+    ) -> None:
+        """
+        Post-placement repair for the pure greedy seed.
+        For each force-placed lesson (up to max_repairs), temporarily frees its
+        committed slots and tries to find a conflict-free alternative. If found,
+        re-places it there; otherwise restores the original placement unchanged.
+        """
+        repaired = 0
+        for lesson in self.lessons:
+            lid = lesson.lesson_id
+            if lid not in target_lids or lid in self._fixed_slots:
+                continue
+            if repaired >= max_repairs:
+                break
+
+            current_assignments = c.genes.get(lid, [])
+            if not current_assignments:
+                continue
+            current_slots = {(ts.day, ts.period_col) for ts, _ in current_assignments}
+            current_room  = current_assignments[0][1]
+
+            # Temporarily free this lesson's committed slots
+            for tid in lesson.teacher_ids:
+                committed[f"teacher:{tid}"] -= current_slots
+            for cid in lesson.student_classes:
+                committed[f"student:{cid}"] -= current_slots
+            if current_room and current_room != NO_ROOM:
+                committed[f"room:{current_room}"] -= current_slots
+
+            # Check what's free now
+            local_committed: Set[Tuple[str, str]] = set()
+            for tid in lesson.teacher_ids:
+                local_committed |= committed[f"teacher:{tid}"]
+            for cid in lesson.student_classes:
+                local_committed |= committed[f"student:{cid}"]
+            if current_room and current_room != NO_ROOM:
+                local_committed |= committed[f"room:{current_room}"]
+
+            free_slots = list(set(self._lesson_slots_cache[lid]) - local_committed)
+
+            if free_slots:
+                new_assignments = self._assign_blocks(lesson, free_slots, current_room, committed=set(local_committed))
+                new_slots = {(ts.day, ts.period_col) for ts, _ in new_assignments}
+                # Commit new slots
+                for tid in lesson.teacher_ids:
+                    committed[f"teacher:{tid}"] |= new_slots
+                for cid in lesson.student_classes:
+                    committed[f"student:{cid}"] |= new_slots
+                if current_room and current_room != NO_ROOM:
+                    committed[f"room:{current_room}"] |= new_slots
+                c.genes[lid] = new_assignments
+                repaired += 1
+            else:
+                # No improvement possible — restore original committed slots
+                for tid in lesson.teacher_ids:
+                    committed[f"teacher:{tid}"] |= current_slots
+                for cid in lesson.student_classes:
+                    committed[f"student:{cid}"] |= current_slots
+                if current_room and current_room != NO_ROOM:
+                    committed[f"room:{current_room}"] |= current_slots
 
     def _create_chromosome_random(self) -> Chromosome:
         """Original random initialization — used for diversity injection during restarts."""
@@ -514,9 +598,10 @@ class GeneticAlgorithm:
         violations: Dict[str, int] = defaultdict(int)
 
         # PERF-3: flat counters keyed by (entity_id, slot_key) — avoids nested defaultdict overhead
-        teacher_slot: Dict[Tuple[str, Tuple[str, str]], int] = defaultdict(int)
-        student_slot: Dict[Tuple[str, Tuple[str, str]], int] = defaultdict(int)
-        room_slot:    Dict[Tuple[str, Tuple[str, str]], int] = defaultdict(int)
+        teacher_slot:    Dict[Tuple[str, Tuple[str, str]], int] = defaultdict(int)
+        student_slot:    Dict[Tuple[str, Tuple[str, str]], int] = defaultdict(int)
+        room_slot:       Dict[Tuple[str, Tuple[str, str]], int] = defaultdict(int)
+        teacher_day_load: Dict[Tuple[str, str], int]            = defaultdict(int)
 
         for lesson in self.lessons:
             lid = lesson.lesson_id
@@ -530,6 +615,7 @@ class GeneticAlgorithm:
                 slot_key = (ts.day, ts.period_col)
                 for tid in lesson.teacher_ids:
                     teacher_slot[(tid, slot_key)] += 1
+                    teacher_day_load[(tid, ts.day)] += 1
                 for cid in lesson.student_classes:
                     student_slot[(cid, slot_key)] += 1
                 if room:
@@ -608,7 +694,7 @@ class GeneticAlgorithm:
             for lesson in self.lessons:
                 lesson_class_set = set(lesson.student_classes)
                 for ts, room in chromosome.genes.get(lesson.lesson_id, []):
-                    if not room or room == 'NO_ROOM':
+                    if not room or room == NO_ROOM:
                         continue
                     owner = self.homeroom_room_to_class.get(room)
                     if owner is not None and owner not in lesson_class_set:
@@ -625,6 +711,11 @@ class GeneticAlgorithm:
                         if not room_is_preferred:
                             violations['specialist_room'] += 1
 
+        # Day distribution: penalise teachers overloaded on a single day
+        for load in teacher_day_load.values():
+            if load > self.DAY_LOAD_THRESHOLD:
+                violations['day_distribution'] += load - self.DAY_LOAD_THRESHOLD
+
         fitness = (
             violations['teacher_conflict']   * self.PENALTY_TEACHER_CONFLICT   +
             violations['student_conflict']   * self.PENALTY_STUDENT_CONFLICT   +
@@ -634,7 +725,8 @@ class GeneticAlgorithm:
             violations['seperate_slot']      * self.PENALTY_SEPERATE_SLOT      +
             violations['sub_group']          * self.PENALTY_SUB_GROUP          +
             violations['homeroom_violation'] * self.PENALTY_HOMEROOM_VIOLATION +
-            violations['specialist_room']    * self.PENALTY_SPECIALIST_ROOM
+            violations['specialist_room']    * self.PENALTY_SPECIALIST_ROOM    +
+            violations['day_distribution']   * self.PENALTY_DAY_DISTRIBUTION
         )
         chromosome.fitness = fitness
         chromosome.violations = dict(violations)
@@ -1011,11 +1103,33 @@ class GeneticAlgorithm:
         student_usage_map: Optional[Dict]                            = None
         room_usage_map:    Optional[Dict]                            = None
 
+        # Violation-directed: collect lesson IDs with wrong period count (fast, no conflict build)
+        _violated_lids: Set[str] = {
+            l.lesson_id for l in self.lessons
+            if l.lesson_id not in self._fixed_slots
+            and len(chromosome.genes.get(l.lesson_id, [])) != self._expected_periods[l.lesson_id]
+        }
+        # Flag to merge slot-conflicted lessons once conflict_state is built
+        _conflict_state_merged: bool = False
+
         for lesson in self.lessons:
             if random.random() > self.mutation_rate:
                 continue
 
             lid = lesson.lesson_id
+
+            # Violation-directed: 70% chance to redirect this mutation to a violated lesson
+            if _violated_lids and random.random() < 0.70:
+                target_lid = random.choice(list(_violated_lids))
+                lesson = self.lesson_map[target_lid]
+                lid    = target_lid
+
+            # Merge slot-conflicted lessons into _violated_lids once available
+            if conflicted_slots is not None and not _conflict_state_merged:
+                _violated_lids |= {
+                    k for k in conflicted_slots if k not in self._fixed_slots
+                }
+                _conflict_state_merged = True
 
             # Fixed-period lessons: timeslot is locked — only room may change.
             # Skip if only one required room — no alternative to switch to.
@@ -1196,6 +1310,8 @@ class GeneticAlgorithm:
         with extra mutations, replace bottom 50% with fresh chromosomes.
         Replaces less than before, preserving more accumulated gene patterns.
         """
+        _t0 = perf_counter()
+
         self.population.sort(key=lambda c: c.fitness)
         n = self.population_size
         n_keep    = max(self.elite_size, n // 4)        # top 25% kept intact
@@ -1226,6 +1342,13 @@ class GeneticAlgorithm:
         self._gens_without_improvement = 0
         self._restart_count += 1
 
+        if self.analytics is not None:
+            self.analytics.record_restart(
+                self.island_idx, self._current_generation,
+                perf_counter() - _t0,
+                n_kept=n_keep, n_perturbed=n_perturb, n_fresh=n_fresh,
+            )
+
     # =========================================================================
     # ISLAND GA HELPER — evolve for a fixed number of generations
     # =========================================================================
@@ -1239,22 +1362,48 @@ class GeneticAlgorithm:
         for _ in range(n_generations):
             self._current_generation += 1
 
+            _t0 = perf_counter()
             self.population.sort(key=lambda c: c.fitness)
+            _t_sort = perf_counter() - _t0
+
+            _t0 = perf_counter()
             new_pop: List[Chromosome] = [c.copy() for c in self.population[:self.elite_size]]
+            _t_elite = perf_counter() - _t0
+
+            _t_sel = _t_cross = _t_mut = _t_eval = 0.0
 
             while len(new_pop) < self.population_size:
+                _t0 = perf_counter()
                 p1 = self._tournament_select()
                 p2 = self._tournament_select()
                 retries = 0
                 while p2 is p1 and retries < 5:
                     p2 = self._tournament_select()
                     retries += 1
+                _t_sel += perf_counter() - _t0
+
+                _t0 = perf_counter()
                 c1, c2 = self._crossover(p1, p2)
+                _t_cross += perf_counter() - _t0
+
+                _t0 = perf_counter()
                 self._mutate(c1)
                 self._mutate(c2)
+                _t_mut += perf_counter() - _t0
+
+                _t0 = perf_counter()
                 self.evaluate_fitness(c1)
                 self.evaluate_fitness(c2)
+                _t_eval += perf_counter() - _t0
+
                 new_pop.extend([c1, c2])
+
+            if self.analytics is not None:
+                self.analytics.record_gen_timing(
+                    self.island_idx, self._current_generation,
+                    _t_sel, _t_cross, _t_mut, _t_eval,
+                    sort_s=_t_sort, elite_copy_s=_t_elite,
+                )
 
             self.population = new_pop[:self.population_size]
 
@@ -1319,13 +1468,21 @@ class GeneticAlgorithm:
 
         for gen in range(self.max_generations):
             generations_run = gen + 1
+
+            _t0 = perf_counter()
             self.population.sort(key=lambda c: c.fitness)
+            _t_sort = perf_counter() - _t0
 
             # Elitism: carry forward best chromosomes unchanged
+            _t0 = perf_counter()
             new_pop: List[Chromosome] = [c.copy() for c in self.population[:self.elite_size]]
+            _t_elite = perf_counter() - _t0
+
+            _t_sel = _t_cross = _t_mut = _t_eval = 0.0
 
             # Breed offspring
             while len(new_pop) < self.population_size:
+                _t0 = perf_counter()
                 p1 = self._tournament_select()
                 p2 = self._tournament_select()
                 # GA-1: avoid crossing a chromosome with itself
@@ -1333,12 +1490,30 @@ class GeneticAlgorithm:
                 while p2 is p1 and retries < 5:
                     p2 = self._tournament_select()
                     retries += 1
+                _t_sel += perf_counter() - _t0
+
+                _t0 = perf_counter()
                 c1, c2 = self._crossover(p1, p2)
+                _t_cross += perf_counter() - _t0
+
+                _t0 = perf_counter()
                 self._mutate(c1)
                 self._mutate(c2)
+                _t_mut += perf_counter() - _t0
+
+                _t0 = perf_counter()
                 self.evaluate_fitness(c1)
                 self.evaluate_fitness(c2)
+                _t_eval += perf_counter() - _t0
+
                 new_pop.extend([c1, c2])
+
+            if self.analytics is not None:
+                self.analytics.record_gen_timing(
+                    self.island_idx, gen,
+                    _t_sel, _t_cross, _t_mut, _t_eval,
+                    sort_s=_t_sort, elite_copy_s=_t_elite,
+                )
 
             self.population = new_pop[:self.population_size]
 
@@ -1364,6 +1539,13 @@ class GeneticAlgorithm:
                 print(f"\n  ⏹  Window stop at gen {gen}: improvement over last {self.window_size} gens "
                       f"({self._fitness_window[0]:.0f} → {self.best_chromosome.fitness:.0f}) "
                       f"< {self.min_improvement:.0f}")
+                if self.analytics is not None:
+                    self.analytics.set_stop_reason(
+                        "window_stop", gen,
+                        window_improvement=float(self._fitness_window[0] - self.best_chromosome.fitness),
+                        min_improvement=self.min_improvement,
+                        window_size=self.window_size,
+                    )
                 break
 
             # Stats
@@ -1388,7 +1570,12 @@ class GeneticAlgorithm:
 
             if self.best_chromosome.fitness == 0:
                 print(f"\n  ✅ Perfect solution found at generation {gen}!")
+                if self.analytics is not None:
+                    self.analytics.set_stop_reason("perfect_solution", gen)
                 break
+
+        if self.analytics is not None and not self.analytics.stop:
+            self.analytics.set_stop_reason("max_generations", generations_run)
 
         print("\n" + "=" * 60)
         print("  EVOLUTION COMPLETE")
@@ -1437,7 +1624,7 @@ class GeneticAlgorithm:
         for lesson in self.lessons:
             assignments = self.best_chromosome.genes.get(lesson.lesson_id, [])
             for ts, room in assignments:
-                room_id = room if room and room != "NO_ROOM" else None
+                room_id = room if room and room != NO_ROOM else None
 
                 # Place for each student class
                 for class_id in lesson.student_classes:
@@ -1480,6 +1667,144 @@ class GeneticAlgorithm:
     # =========================================================================
     # RESULT SUMMARY
     # =========================================================================
+
+    # =========================================================================
+    # LNS REPAIR
+    # =========================================================================
+
+    def lns_repair(self, chromosome: Chromosome, collateral_rate: float = 0.10) -> Chromosome:
+        """
+        Large Neighbourhood Search repair on a single chromosome.
+
+        Destroy phase:
+          - Unassign all lessons involved in violations
+          - Randomly unassign `collateral_rate` fraction of remaining lessons
+            (creates breathing room so previously-frozen placements don't block repair)
+
+        Repair phase:
+          - Re-place unassigned lessons using greedy most-constrained-first,
+            respecting the slots already committed by the kept lessons.
+
+        Returns a new chromosome (original unchanged).
+        """
+        repaired = chromosome.copy()
+
+        # ── Identify violated lessons ─────────────────────────────────────────
+        destroy_lids: Set[str] = set()
+
+        # Period-count violations
+        for lesson in self.lessons:
+            lid = lesson.lesson_id
+            if len(repaired.genes.get(lid, [])) != self._expected_periods[lid]:
+                destroy_lids.add(lid)
+
+        # Slot-conflict violations (teacher / student / room)
+        teacher_slot: Dict[Tuple[str, Tuple[str, str]], int] = defaultdict(int)
+        student_slot: Dict[Tuple[str, Tuple[str, str]], int] = defaultdict(int)
+        room_slot:    Dict[Tuple[str, Tuple[str, str]], int] = defaultdict(int)
+        for lesson in self.lessons:
+            for ts, room in repaired.genes.get(lesson.lesson_id, []):
+                slot_key = (ts.day, ts.period_col)
+                for tid in lesson.teacher_ids:
+                    teacher_slot[(tid, slot_key)] += 1
+                for cid in lesson.student_classes:
+                    student_slot[(cid, slot_key)] += 1
+                if room:
+                    room_slot[(room, slot_key)] += 1
+
+        conflict_slots: Set[Tuple[str, str]] = set()
+        for (_, sk), cnt in teacher_slot.items():
+            if cnt > 1:
+                conflict_slots.add(sk)
+        for (_, sk), cnt in student_slot.items():
+            if cnt > 1:
+                conflict_slots.add(sk)
+        for (_, sk), cnt in room_slot.items():
+            if cnt > 1:
+                conflict_slots.add(sk)
+
+        for lesson in self.lessons:
+            lid = lesson.lesson_id
+            for ts, _ in repaired.genes.get(lid, []):
+                if (ts.day, ts.period_col) in conflict_slots:
+                    destroy_lids.add(lid)
+                    break
+
+        # ── Collateral damage: random 10% of kept lessons ─────────────────────
+        kept_lids = [
+            l.lesson_id for l in self.lessons
+            if l.lesson_id not in destroy_lids and l.lesson_id not in self._fixed_slots
+        ]
+        n_collateral = max(1, int(len(kept_lids) * collateral_rate))
+        destroy_lids |= set(random.sample(kept_lids, min(n_collateral, len(kept_lids))))
+
+        # ── Destroy ───────────────────────────────────────────────────────────
+        for lid in destroy_lids:
+            repaired.genes.pop(lid, None)
+
+        # ── Build committed map from kept lessons ─────────────────────────────
+        committed: Dict[str, Set[Tuple[str, str]]] = defaultdict(set)
+        for lesson in self.lessons:
+            lid = lesson.lesson_id
+            if lid in destroy_lids:
+                continue
+            for ts, room in repaired.genes.get(lid, []):
+                slot = (ts.day, ts.period_col)
+                for tid in lesson.teacher_ids:
+                    committed[f"teacher:{tid}"].add(slot)
+                for cid in lesson.student_classes:
+                    committed[f"student:{cid}"].add(slot)
+                if room and room != NO_ROOM:
+                    committed[f"room:{room}"].add(slot)
+
+        # ── Repair: greedy most-constrained-first on destroyed lessons ────────
+        destroyed_lessons = sorted(
+            [l for l in self.lessons if l.lesson_id in destroy_lids],
+            key=lambda l: len(self._lesson_slots_cache[l.lesson_id]),
+        )
+
+        for lesson in destroyed_lessons:
+            lid = lesson.lesson_id
+            if lid in self._fixed_slots:
+                slots = self._fixed_slots[lid]
+                room  = self._pick_room(lesson)
+                repaired.genes[lid] = [(TimeSlot(d, c), room) for d, c in slots]
+                for d, c in slots:
+                    for tid in lesson.teacher_ids:
+                        committed[f"teacher:{tid}"].add((d, c))
+                    for cid in lesson.student_classes:
+                        committed[f"student:{cid}"].add((d, c))
+                continue
+
+            room = self._pick_room(lesson)
+            local_committed: Set[Tuple[str, str]] = set()
+            for tid in lesson.teacher_ids:
+                local_committed |= committed[f"teacher:{tid}"]
+            for cid in lesson.student_classes:
+                local_committed |= committed[f"student:{cid}"]
+            if room != NO_ROOM:
+                local_committed |= committed[f"room:{room}"]
+
+            free = list(set(self._lesson_slots_cache[lid]) - local_committed)
+            if not free:
+                free = list(self._lesson_slots_cache[lid]) or list(self.all_slots)
+
+            assignments = self._assign_blocks(lesson, free, room, committed=set(local_committed))
+            repaired.genes[lid] = assignments
+
+            placed_slots = {(ts.day, ts.period_col) for ts, _ in assignments}
+            for tid in lesson.teacher_ids:
+                committed[f"teacher:{tid}"] |= placed_slots
+            for cid in lesson.student_classes:
+                committed[f"student:{cid}"] |= placed_slots
+            if room != NO_ROOM:
+                committed[f"room:{room}"] |= placed_slots
+
+        self.evaluate_fitness(repaired)
+        return repaired
+
+    def get_analytics(self) -> Optional[AnalyticsCollector]:
+        return self.analytics
 
     def get_result_summary(self) -> Dict[str, Any]:
         if not self.best_chromosome:

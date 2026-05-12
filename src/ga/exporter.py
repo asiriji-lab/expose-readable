@@ -12,6 +12,7 @@ from typing import Dict, List, Tuple
 from collections import defaultdict
 
 from .models import Lesson, TimeSlot, Chromosome
+from src.constants import NO_ROOM
 
 # Avoid circular import by importing only for type hinting if needed
 # from .scheduler import ScheduleManager hiding inside method or relying on passing instance
@@ -131,7 +132,7 @@ class ScheduleExporter:
         all_rooms.update(self.manager.room_grids.keys())
         
         for room_id in all_rooms:
-            if not room_id or str(room_id).strip() in _SKIP_IDS:
+            if not room_id or str(room_id).strip() in _SKIP_IDS or room_id == NO_ROOM:
                 continue
             safe_room_id = str(room_id).replace('/', '-').replace('\\', '-')
             self._export_grid(

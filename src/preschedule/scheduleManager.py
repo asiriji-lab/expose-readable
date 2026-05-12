@@ -1,6 +1,7 @@
 import pandas as pd
 from typing import Dict, List, Optional, Any
 from src.types import PeriodItemData
+from src.constants import NO_CLASS, NO_ROOM, NO_TEACHER
 
 # ============================================
 # Schedule Manager (Your State Class)
@@ -105,11 +106,11 @@ class ScheduleManager:
         
         if teacher_id:
             # Include room info in teacher grid if available
-            t_value = f"{class_id or 'NoStudentListed'} ({subject_id}) at {room_id or 'NoRoomListed'}"
+            t_value = f"{class_id or NO_CLASS} ({subject_id}) at {room_id or NO_ROOM}"
             t_grid.at[day, period_col] = t_value
         
         if room_id:
-            r_value = f"{class_id or 'NoStudentListed'} ({subject_id}) with {teacher_id or 'NoTeacherListed'}"
+            r_value = f"{class_id or NO_CLASS} ({subject_id}) with {teacher_id or NO_TEACHER}"
             r_grid.at[day, period_col] = r_value
 
         return "SUCCESS: Slot scheduled."
@@ -164,7 +165,7 @@ class ScheduleManager:
 
         for tid in teacher_ids:
             g = self._get_or_create_grid("teacher", tid)
-            g.at[day, period_col] = f"{classes_str} ({subject_id}) at {room_id or 'NoRoomListed'}"
+            g.at[day, period_col] = f"{classes_str} ({subject_id}) at {room_id or NO_ROOM}"
 
         if room_id:
             g = self._get_or_create_grid("room", room_id)
