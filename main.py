@@ -23,6 +23,7 @@ from typing import Dict
 from src.data_cleaning.data_cleaning import clean_input_data
 from src.preschedule.scheduleManager import ScheduleManager
 from src.preschedule.prescheduleProcessor import PrescheduleProcessor
+from src.ga.data_loader import build_ga_context
 from src.ga.island_ga import IslandGeneticAlgorithm
 from src.ga.exporter import ScheduleExporter
 from src.ga.json_exporter import ScheduleJsonExporter
@@ -58,7 +59,7 @@ GA_PARAMS = dict(
     min_improvement=500,
     window_size=1000,
     # SA local search
-    sa_threshold=500,
+    sa_threshold=5000,
     sa_budget=300,
     sa_cooling=0.95,
     # LNS repair
@@ -320,7 +321,9 @@ def main():
     print("STEP 3.5 — FEASIBILITY CHECK")
     print("=" * 80)
 
-    checker = FeasibilityChecker(schedule_manager)
+    ga_context = build_ga_context(schedule_manager)
+
+    checker = FeasibilityChecker(schedule_manager, context=ga_context)
     feasibility_report = checker.check()
 
     if not feasibility_report.is_feasible:
@@ -335,8 +338,9 @@ def main():
     print("STEP 4 — GENETIC ALGORITHM")
     print("=" * 80)
 
-    ga = IslandGeneticAlgorithm(schedule_manager=schedule_manager, **GA_PARAMS)
+    ga = IslandGeneticAlgorithm(schedule_manager=schedule_manager, context=ga_context, **GA_PARAMS)
     best_chromosome = ga.evolve()
+    ga.close()
     ga_result = ga.get_result_summary()
 
     print("\n📊 GA Results:")

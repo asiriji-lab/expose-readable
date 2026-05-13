@@ -13,11 +13,12 @@ check proves infeasibility (GA will never reach fitness=0).
 
 import sys
 from collections import defaultdict
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Optional, Tuple, Set
 
 from src.preschedule.scheduleManager import ScheduleManager
 from .models import Lesson, WEEKDAYS
 from .data_loader import (
+    GAContext,
     _parse_block_pattern,
     _parse_list_field,
     get_teaching_period_cols,
@@ -129,26 +130,35 @@ class FeasibilityChecker:
     # Threshold above which an entity is flagged as 'highly loaded' (WARNING)
     HIGH_LOAD_RATIO = 0.85
 
-    def __init__(self, schedule_manager: ScheduleManager):
+    def __init__(self, schedule_manager: ScheduleManager, context: Optional[GAContext] = None):
         self.manager = schedule_manager
 
-        # Mirror GeneticAlgorithm's data setup
-        self.teaching_cols: List[str] = get_teaching_period_cols(schedule_manager)
-        self.all_slots: Set[Tuple[str, str]] = {
-            (day, pc) for day in WEEKDAYS for pc in self.teaching_cols
-        }
-        # Suppress the build print here — GA will print it again on its own init
-        import io, contextlib
-        with contextlib.redirect_stdout(io.StringIO()):
-            self.lessons: List[Lesson] = build_lessons_from_manager(schedule_manager)
-        self.free_slots: Dict[str, Set[Tuple[str, str]]] = build_free_slots_per_entity(
-            schedule_manager, self.teaching_cols
-        )
-        self._col_idx: Dict[str, int] = {col: i for i, col in enumerate(self.teaching_cols)}
-        self._block_sizes: Dict[str, List[int]] = {
-            l.lesson_id: _parse_block_pattern(l.block_pattern) for l in self.lessons
-        }
-        # Intersection of teacher+student free slots per lesson
+        if context is not None:
+            # Reuse pre-built shared context — avoids redundant data loading
+            self.teaching_cols = context.teaching_cols
+            self.all_slots     = context.all_slots
+            self.lessons       = context.lessons
+            self.free_slots    = context.free_slots
+            self._col_idx      = context.col_idx
+            self._block_sizes  = context.block_sizes
+        else:
+            # Standalone path — build independently (suppress duplicate lesson print)
+            self.teaching_cols: List[str] = get_teaching_period_cols(schedule_manager)
+            self.all_slots: Set[Tuple[str, str]] = {
+                (day, pc) for day in WEEKDAYS for pc in self.teaching_cols
+            }
+            import io, contextlib
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.lessons: List[Lesson] = build_lessons_from_manager(schedule_manager)
+            self.free_slots: Dict[str, Set[Tuple[str, str]]] = build_free_slots_per_entity(
+                schedule_manager, self.teaching_cols
+            )
+            self._col_idx: Dict[str, int] = {col: i for i, col in enumerate(self.teaching_cols)}
+            self._block_sizes: Dict[str, List[int]] = {
+                l.lesson_id: _parse_block_pattern(l.block_pattern) for l in self.lessons
+            }
+
+        # Intersection of teacher+student free slots per lesson (not in context)
         self._lesson_slots_cache: Dict[str, List[Tuple[str, str]]] = {
             l.lesson_id: get_lesson_available_slots(l, self.free_slots, self.all_slots)
             for l in self.lessons

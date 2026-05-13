@@ -27,6 +27,7 @@ from src.data_cleaning.entity_meta import compute_entity_meta
 from src.preschedule.scheduleManager import ScheduleManager
 from src.preschedule.prescheduleProcessor import PrescheduleProcessor
 from .analytics import AnalyticsCollector
+from .data_loader import build_ga_context
 from .island_ga import IslandGeneticAlgorithm
 from .genetic_algorithm import GeneticAlgorithm
 from .exporter import ScheduleExporter
@@ -66,7 +67,7 @@ _ISLAND_GA_DEFAULTS = dict(
     min_improvement=500,
     window_size=1000,
     # SA
-    sa_threshold=500,
+    sa_threshold=5000,
     sa_budget=300,
     sa_cooling=0.95,
     # LNS
@@ -218,9 +219,12 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
     processor.run_all_tasks(cleaned_data)
     log.info("  Preschedule tasks complete.")
 
+    # ── Build shared GA context once — avoids redundant data construction ────
+    ga_context = build_ga_context(schedule_manager)
+
     # ── Step 3: Feasibility check ─────────────────────────────────────────────
     log.info("[STEP 3/5] Running feasibility check …")
-    checker = FeasibilityChecker(schedule_manager)
+    checker = FeasibilityChecker(schedule_manager, context=ga_context)
     feasibility_report = checker.check()
     log.info("  Feasibility: is_feasible=%s", feasibility_report.is_feasible)
 
@@ -290,6 +294,7 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
             sa_cooling=ga_kwargs['sa_cooling'],
             lns_after=ga_kwargs['lns_after'],
             lns_collateral_rate=ga_kwargs['lns_collateral_rate'],
+            context=ga_context,
         )
     else:
         ga = GeneticAlgorithm(
@@ -307,9 +312,12 @@ def _run_scheduler_job_inner(job_id, uploads_folder, outputs_folder, log_path,
             progress_callback=ga_progress,
             analytics=analytics,
             island_idx=0,
+            context=ga_context,
         )
 
     best_solution = ga.evolve()
+    if hasattr(ga, 'close'):
+        ga.close()
     ga_result     = ga.get_result_summary()
     log.info("  GA complete — best_fitness=%s  violations=%s",
              ga_result.get('best_fitness'), ga_result.get('violations'))

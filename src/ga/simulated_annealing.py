@@ -57,6 +57,11 @@ class SimulatedAnnealing:
         best    = current.copy()
         T       = T0
 
+        iters = 0
+        accepts = 0
+        improvements = 0
+        move_counts = {'move_slot': 0, 'swap_slots': 0, 'room_reassign': 0}
+
         for _ in range(budget):
             if T < 1e-6:
                 break
@@ -64,20 +69,30 @@ class SimulatedAnnealing:
             neighbor = self._make_move(current)
             if neighbor is None:
                 T *= cooling
+                iters += 1
                 continue
 
             self.ga.evaluate_fitness(neighbor)
             delta = neighbor.fitness - current.fitness
+            iters += 1
 
             if delta < 0 or random.random() < math.exp(-delta / T):
                 current = neighbor
+                accepts += 1
                 if current.fitness < best.fitness:
                     best = current.copy()
+                    improvements += 1
                     if best.fitness == 0:
                         break
 
             T *= cooling
 
+        stop_reason = "T→0" if T < 1e-6 else "budget"
+        print(
+            f"    [SA] T0={T0:.1f}  Tf={T:.4f}  iters={iters}/{budget} ({stop_reason})"
+            f"  accepts={accepts}  improvements={improvements}"
+            f"  fitness: {chromosome.fitness:.0f}→{best.fitness:.0f}"
+        )
         return best
 
     # =========================================================================

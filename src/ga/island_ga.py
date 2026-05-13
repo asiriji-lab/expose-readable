@@ -15,14 +15,72 @@ Benefits:
 """
 
 from collections import defaultdict, deque
+from concurrent.futures import ProcessPoolExecutor
 from time import perf_counter
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, List, Optional, Callable, Set
 
 from src.preschedule.scheduleManager import ScheduleManager
 from .analytics import AnalyticsCollector
+from .data_loader import GAContext, build_ga_context
 from .genetic_algorithm import GeneticAlgorithm
 from .models import Chromosome
 from .simulated_annealing import SimulatedAnnealing
+
+
+# =============================================================================
+# MODULE-LEVEL WORKER STATE — must live at top level for spawn compatibility
+# =============================================================================
+
+_worker_islands: Dict[int, GeneticAlgorithm] = {}
+
+
+def _init_islands_worker(islands_by_idx: Dict[int, GeneticAlgorithm]) -> None:
+    global _worker_islands
+    _worker_islands = islands_by_idx
+
+
+def _run_island_epoch(
+    island_idx: int,
+    population: list,
+    n_gens: int,
+    reset_worker_state: bool = False,
+) -> tuple:
+    """
+    Execute one epoch on a worker island and return results to the main process.
+
+    reset_worker_state: set True after a catastrophic reset so the worker's
+    internal stagnation counters sync with the newly initialised population.
+    """
+    island = _worker_islands[island_idx]
+    island.reset_epoch_stats()
+    island.population = population
+
+    if reset_worker_state:
+        island._gens_without_improvement = 0
+        island._current_generation = 0
+        if population:
+            island.best_chromosome = min(population, key=lambda c: c.fitness).copy()
+
+    # ── Analytics delta tracking ─────────────────────────────────────────────
+    # Comment these 4 lines AND the 2 .extend() calls in evolve() to disable
+    # worker analytics collection entirely.
+    t_before = len(island.analytics.timing)   if island.analytics else 0
+    r_before = len(island.analytics.restarts) if island.analytics else 0
+
+    island.evolve_n_generations(n_gens)
+
+    new_timing   = island.analytics.timing[t_before:]   if island.analytics else []
+    new_restarts = island.analytics.restarts[r_before:] if island.analytics else []
+
+    return (
+        island_idx,
+        island.population,
+        island.best_chromosome,
+        new_timing,
+        new_restarts,
+        dict(island._mutation_stats),
+        island._restart_count,
+    )
 
 
 class IslandGeneticAlgorithm:
@@ -66,6 +124,7 @@ class IslandGeneticAlgorithm:
         # LNS params
         lns_after: int = 2,            # stagnant epochs before LNS fires (< catastrophic_after)
         lns_collateral_rate: float = 0.10,
+        context: Optional[GAContext] = None,
     ):
         self.schedule_manager = schedule_manager
         self.n_islands = n_islands
@@ -123,12 +182,28 @@ class IslandGeneticAlgorithm:
         self._fitness_window: deque = deque(maxlen=self.window_epochs)
         self._stopped_early: bool = False
 
+        # Build shared context once — avoids N independent redundant data builds
+        if context is None:
+            context = build_ga_context(schedule_manager)
+
         # Build islands — individual islands do NOT get the progress_callback;
         # IslandGA reports progress at the coarser epoch level instead.
         mutation_rates = self._spread_mutation_rates(mutation_rate, n_islands)
         self.islands:    List[GeneticAlgorithm]     = []
         self._sa_runners: List[SimulatedAnnealing]  = []
         for i, mr in enumerate(mutation_rates):
+            # Parallel mode: shadow analytics per island so worker-process writes
+            # stay within the process boundary; deltas are merged back each epoch.
+            # Sequential mode (n_islands == 1): share the master analytics directly.
+            island_analytics = (
+                AnalyticsCollector(
+                    n_islands=1,
+                    max_generations=max_generations,
+                    timing_sample_every=timing_sample_every,
+                )
+                if n_islands > 1
+                else self._analytics
+            )
             island = GeneticAlgorithm(
                 schedule_manager=schedule_manager,
                 population_size=island_population_size,
@@ -140,11 +215,29 @@ class IslandGeneticAlgorithm:
                 stagnation_limit=stagnation_limit,
                 block_crossover_rate=block_crossover_rate,
                 progress_callback=None,  # progress reported at epoch level by IslandGA
-                analytics=self._analytics,
+                analytics=island_analytics,
                 island_idx=i,
+                context=context,
             )
             self.islands.append(island)
             self._sa_runners.append(SimulatedAnnealing(island))
+
+        self._worker_reset_flags: Set[int] = set()
+
+        # Worker pool — one process per island; initializer ships island objects once.
+        # n_islands == 1 falls through to sequential path; no pool is created.
+        self._executor: Optional[ProcessPoolExecutor] = None
+        if n_islands > 1:
+            self._executor = ProcessPoolExecutor(
+                max_workers=n_islands,
+                initializer=_init_islands_worker,
+                initargs=({i: isl for i, isl in enumerate(self.islands)},),
+            )
+            import multiprocessing
+            print(f"  [Island GA] Parallel mode: {n_islands} worker processes "
+                  f"(start method: {multiprocessing.get_start_method()})")
+        else:
+            print(f"  [Island GA] Sequential mode (n_islands=1)")
 
     # =========================================================================
     # PROPERTIES
@@ -167,6 +260,92 @@ class IslandGeneticAlgorithm:
         lo, hi = 0.5 * base_rate, 2.0 * base_rate
         step = (hi - lo) / (n_islands - 1)
         return [lo + i * step for i in range(n_islands)]
+
+    def _find_top_offenders(
+        self, chromosome: Chromosome, top_n: int = 5
+    ) -> Dict[str, list]:
+        """
+        Scan chromosome for top conflict offenders per category.
+        Comment the call-site in evolve() to disable (adds ~1 fitness-eval of compute per epoch).
+        """
+        best_island = self.islands[self.best_island_idx]
+        slot_entries: Dict[tuple, list] = defaultdict(list)
+
+        for lid, assignments in chromosome.genes.items():
+            lesson = best_island.lesson_map.get(lid)
+            if not lesson:
+                continue
+            for ts, room in assignments:
+                slot = (ts.day, ts.period_col)
+                slot_entries[slot].append((room, lesson.teacher_ids, lesson.student_classes))
+
+        room_hits:    Dict[str, int] = defaultdict(int)
+        teacher_hits: Dict[str, int] = defaultdict(int)
+        student_hits: Dict[str, int] = defaultdict(int)
+
+        for slot, entries in slot_entries.items():
+            rc: Dict[str, int] = defaultdict(int)
+            for room, _, _ in entries:
+                rc[room] += 1
+            for room, cnt in rc.items():
+                if cnt > 1:
+                    room_hits[room] += cnt - 1
+
+            tc: Dict[str, int] = defaultdict(int)
+            for _, tids, _ in entries:
+                for tid in tids:
+                    tc[tid] += 1
+            for tid, cnt in tc.items():
+                if cnt > 1:
+                    teacher_hits[tid] += cnt - 1
+
+            sc: Dict[str, int] = defaultdict(int)
+            for _, _, classes in entries:
+                for cls in classes:
+                    sc[cls] += 1
+            for cls, cnt in sc.items():
+                if cnt > 1:
+                    student_hits[cls] += cnt - 1
+
+        period_offenders = []
+        for lesson in best_island.lessons:
+            lid = lesson.lesson_id
+            assigned = len(chromosome.genes.get(lid, []))
+            expected = best_island._expected_periods[lid]
+            if assigned != expected:
+                period_offenders.append((lid, assigned, expected))
+        period_offenders.sort(key=lambda x: x[2] - x[1], reverse=True)
+
+        def top(d: dict) -> list:
+            return sorted(d.items(), key=lambda x: -x[1])[:top_n]
+
+        return {
+            'room':    top(room_hits),
+            'teacher': top(teacher_hits),
+            'student': top(student_hits),
+            'period':  period_offenders[:top_n],
+        }
+
+    @staticmethod
+    def _print_top_offenders(offenders: Dict[str, list]) -> None:
+        rows = [
+            ('room_conflict   ', offenders.get('room',    [])),
+            ('teacher_conflict', offenders.get('teacher', [])),
+            ('student_conflict', offenders.get('student', [])),
+        ]
+        for label, entries in rows:
+            if not entries:
+                continue
+            print(f"    {label} :", end="")
+            for eid, cnt in entries:
+                print(f"  {eid}×{cnt}", end="")
+            print()
+        period = offenders.get('period', [])
+        if period:
+            print(f"    period_count     :", end="")
+            for lid, assigned, expected in period:
+                print(f"  {lid}({assigned}/{expected})", end="")
+            print()
 
     def _get_neighbors(self, island_idx: int) -> List[int]:
         """Return destination island indices for migration from island_idx."""
@@ -231,6 +410,8 @@ class IslandGeneticAlgorithm:
         island._current_generation = 0
 
         self._global_stagnation = 0
+        if self._executor is not None:
+            self._worker_reset_flags.add(worst_idx)
 
     # =========================================================================
     # MAIN EVOLUTION LOOP
@@ -246,6 +427,8 @@ class IslandGeneticAlgorithm:
         print(f"  Migrate every: {self.migration_interval} gens  ({self.n_migrants} migrants/island)")
         print(f"  Topology     : {self.topology}")
         print(f"  Window stop  : stop when improvement over last {self.window_epochs} epochs ({self.window_size} gens) < {self.min_improvement:.0f}")
+        mode = f"PARALLEL ({self.n_islands} workers)" if self._executor else "SEQUENTIAL"
+        print(f"  Mode         : {mode}")
         mutation_rates = [isl.mutation_rate for isl in self.islands]
         for i, mr in enumerate(mutation_rates):
             print(f"  Island {i}      : mutation={mr:.4f}")
@@ -274,10 +457,47 @@ class IslandGeneticAlgorithm:
             _t_sa = _t_lns = _t_catastrophic = _t_migrate = 0.0
 
             island_bests = []
-            for i, island in enumerate(self.islands):
-                island.reset_epoch_stats()
-                island.evolve_n_generations(self.migration_interval)
-                island_bests.append(island.best_chromosome.fitness)
+            if self._executor is not None:
+                # Parallel: submit all islands simultaneously to worker pool
+                futs = {
+                    self._executor.submit(
+                        _run_island_epoch,
+                        i,
+                        list(island.population),
+                        self.migration_interval,
+                        i in self._worker_reset_flags,
+                    ): i
+                    for i, island in enumerate(self.islands)
+                }
+                self._worker_reset_flags.clear()
+                results = {}
+                for fut in futs:
+                    tup = fut.result()
+                    results[tup[0]] = tup
+                if epoch == 0:
+                    returned = sorted(results.keys())
+                    expected = list(range(self.n_islands))
+                    ok = returned == expected
+                    print(f"  [Island GA] Worker check (epoch 1): "
+                          f"returned islands={returned}  expected={expected}  {'OK' if ok else 'MISMATCH'}")
+                for idx in range(self.n_islands):
+                    _, pop, best, new_timing, new_restarts, mut_stats, restart_count = results[idx]
+                    isl = self.islands[idx]
+                    isl.population      = pop
+                    isl.best_chromosome = best
+                    isl._mutation_stats = defaultdict(int, mut_stats)
+                    isl._restart_count  = restart_count
+                    island_bests.append(best.fitness)
+                    # Merge analytics deltas (comment these 2 lines to disable)
+                    if isl.analytics:
+                        self._analytics.timing.extend(new_timing)
+                        self._analytics.restarts.extend(new_restarts)
+            else:
+                # Sequential (n_islands == 1 or no executor)
+                for i, island in enumerate(self.islands):
+                    island.reset_epoch_stats()
+                    island.evolve_n_generations(self.migration_interval)
+                    island_bests.append(island.best_chromosome.fitness)
 
             self._update_global_best()
 
@@ -316,20 +536,27 @@ class IslandGeneticAlgorithm:
                 self.progress_callback(gen_end, self.max_generations, epoch_stat)
 
             win_str = f"{window_improvement:.0f}" if window_improvement is not None else "—"
-            print(f"  [Epoch {epoch + 1:>3d} | Gen {gen_end:>4d}] "
-                  f"Global best: {self.best_chromosome.fitness:.0f}  "
-                  f"Island bests: {[f'{f:.0f}' for f in island_bests]}  "
-                  f"GStag: {self._global_stagnation}  WinImprove: {win_str}/{self.min_improvement:.0f}")
+            _SEP = "  " + "─" * 58
+            print(f"\n{_SEP}")
+            print(f"  ▶ Epoch {epoch + 1:>3d} | Gen {gen_end:>4d} | "
+                  f"Best: {self.best_chromosome.fitness:.0f} | "
+                  f"GStag: {self._global_stagnation} | "
+                  f"Win: {win_str}/{self.min_improvement:.0f}")
+            print(_SEP)
+
+            # ── Island bests ──────────────────────────────────────────────
+            isl_str = "  ".join(f"I{i}:{f:.0f}" for i, f in enumerate(island_bests))
+            print(f"  Islands     : {isl_str}")
+
             # ── Violation breakdown ───────────────────────────────────────
             v = self.best_chromosome.violations or {}
             vparts = [f"{k}={n}" for k, n in sorted(v.items()) if n > 0]
-            print(f"  [Debug] Violations : {', '.join(vparts) if vparts else 'none'}")
+            print(f"  Violations  : {', '.join(vparts) if vparts else 'none'}")
 
             # ── Unassigned lessons ────────────────────────────────────────
             best_island_obj = self.islands[self.best_island_idx]
             n_miss_lessons, n_miss_periods = best_island_obj.unassigned_summary(self.best_chromosome)
             if n_miss_lessons:
-                # List which lessons are missing periods for root-cause diagnosis
                 missing_details = []
                 for lesson in best_island_obj.lessons:
                     assigned = len(self.best_chromosome.genes.get(lesson.lesson_id, []))
@@ -340,12 +567,11 @@ class IslandGeneticAlgorithm:
                             f"/{','.join(lesson.student_classes)}"
                             f" {assigned}/{expected})"
                         )
-                print(f"  [Debug] Unassigned : {n_miss_lessons} lessons, "
-                      f"{n_miss_periods} periods missing → "
-                      f"{', '.join(missing_details[:6])}"
+                print(f"  Unassigned  : {n_miss_lessons} lessons, {n_miss_periods} periods missing")
+                print(f"    → {', '.join(missing_details[:6])}"
                       f"{'...' if len(missing_details) > 6 else ''}")
             else:
-                print(f"  [Debug] Unassigned : none — all lessons fully placed")
+                print(f"  Unassigned  : none")
 
             # ── Mutation stats across all islands this epoch ──────────────
             agg: Dict[str, int] = defaultdict(int)
@@ -358,13 +584,15 @@ class IslandGeneticAlgorithm:
             sb_att = agg.get('swap_blocker_attempt', 0)
             sb_hit = agg.get('swap_blocker_hit', 0)
             sb_str = f"swap={sb_hit}/{sb_att}" if sb_att else "swap=0"
-            print(f"  [Debug] Mutations  : "
-                  f"targeted={agg['targeted_block']} "
-                  f"{sb_str} "
-                  f"explore={agg['explore']} "
-                  f"full={agg['full_slot']} "
-                  f"room={agg.get('room', 0)} "
+            print(f"  Mutations   : targeted={agg['targeted_block']} "
+                  f"{sb_str} explore={agg['explore']} "
+                  f"full={agg['full_slot']} room={agg.get('room', 0)} "
                   f"| restarts={total_restarts}")
+
+            # ── Top conflict offenders ────────────────────────────────────
+            # Comment these 2 lines to disable (adds ~1 fitness-eval of compute per epoch)
+            offenders = self._find_top_offenders(self.best_chromosome)
+            self._print_top_offenders(offenders)
 
             if self.best_chromosome.fitness == 0:
                 print(f"\n  Perfect solution found at epoch {epoch + 1}!")
@@ -400,11 +628,14 @@ class IslandGeneticAlgorithm:
                     cooling=self.sa_cooling,
                 )
                 _t_sa = perf_counter() - _t0
+                # Repair room conflicts introduced by SA's non-aware _pick_room
+                best_isl = self.islands[self.best_island_idx]
+                best_isl._repair_rooms(sa_result)
+                best_isl.evaluate_fitness(sa_result)
                 if sa_result.fitness < self.best_chromosome.fitness:
                     print(f"  [SA] Epoch {epoch + 1}: {self.best_chromosome.fitness:.0f} → {sa_result.fitness:.0f} ✅")
                     self.best_chromosome = sa_result
                     # Inject SA result into best island's population (replace worst)
-                    best_isl = self.islands[self.best_island_idx]
                     best_isl.population.sort(key=lambda c: c.fitness, reverse=True)
                     best_isl.population[0] = sa_result.copy()
                     best_isl.best_chromosome = sa_result.copy()
@@ -505,6 +736,12 @@ class IslandGeneticAlgorithm:
         best_island.best_chromosome = self.best_chromosome
         best_island.apply_solution()
         best_island.best_chromosome = original
+
+    def close(self) -> None:
+        """Shut down the worker pool if one was created."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=True)
+            self._executor = None
 
     # =========================================================================
     # RESULT SUMMARY
