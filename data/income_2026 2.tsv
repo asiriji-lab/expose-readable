@@ -1,0 +1,14 @@
+ID	Date	Payer	Source Project	Gross Amount 	Tax	Amount Net (THB) 	Payment Method	Description	Notes
+INC20260109-001	2026-01-09	TQM 	TQM	฿40,000.00	฿1,200.00	฿38,800.00	Bank Transfer	TQM monthly payment for Technical Consulting
+INC20260119-002	2026-01-19	BotnLife	ai-debt-call-center	฿2,448.01	฿0.00	฿2,448.01	Bank Transfer	SIP Trunking Payment from BotnLife for Chayo Development
+INC20260130-003	2026-01-30	BotnLife	SIA	฿25,000	฿750.00	฿24,250	Bank Transfer	SIA Outbound AI call center development cost (deposit)
+INC20260213-001	2026-02-13	TQM	TQM	฿40,000.00	฿1,200.00	฿38,800.00	Bank Transfer	TQM monthly payment for Technical Consulting
+INC20260220-002	2026-02-20	BotnLife	INET	฿150,000.00	฿4,500.00	฿145,500.00	Bank Transfer	Upfront payment TVOP news reporter project development
+INC20260227-003	2026-02-27	BotnLife	Echonic 	฿678.92	฿0.00	฿678.92	Bank Transfer	Cal4Care cost sharing
+INC20260313-001	2026-03-13	TQM	TQM	฿40,000.00	฿1,200.00	฿38,800.00	Bank Transfer	TQM monthly payment for Technical Consulting
+INC20260327-002	2026-03-27	BotnLife	INET	฿150,000.00	฿4,500.00	฿145,500.00	Bank Transfer	inet TVOP project second installment (30%)
+INC20260401-001	2026-04-01	BotnLife	Echonic	฿339.46	฿0.00	฿329.28	Bank Transfer	Share Infra Cost for Echonic	
+INC20260416-002	2026-04-16	BotnLife	ai-debt-call-center	฿15,000.00	฿450.00	฿14,550.00	Bank Transfer	Setup Fee for TRUE BOP	client forgot to deduce WHD and has asked Sonar to reduce it from future payments
+INC20260509-001	2026-05-09	TQM	TQM	฿80,000.00	฿2,400.00	฿77,600.00	Bank Transfer	Technical Consulting Fee March-April 2026
+INC20260517-001	2026-05-17	TQM	TQM	฿40,000.00	฿1,200.00	฿38,800.00	Bank Transfer	Technical Consulting Fee May 2026
+INC20260517-002	2026-05-17	BotnLife	CPN Avatar	฿25,000.00	฿750.00	฿24,250.00	Bank Transfer	CPN Avatar Development 3rd Installment
