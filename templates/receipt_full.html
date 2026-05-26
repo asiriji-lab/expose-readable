@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>Receipt {{ receipt_no }}</title>
+
+<style>
+@page {
+  size: A4;
+  margin: 1.5cm;
+}
+
+body {
+  font-family: "Sarabun", "TH Sarabun New", "Angsana New", "Cordia New", Arial, sans-serif;
+  font-size: 14pt;
+  color: #000;
+  margin: 0;
+  padding: 0;
+  line-height: 1.3;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ===== Two receipts on one page ===== */
+.receipt-container {
+  height: 49%;
+  page-break-inside: avoid;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+
+.receipt-container:first-child {
+  border-bottom: 2px dashed #999;
+}
+
+/* ===== Layout ===== */
+.copy-label {
+  text-align: right;
+  font-size: 11pt;
+  color: #666;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.header {
+  text-align: center;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.company-name-th {
+  font-size: 15pt;
+  margin-bottom: 2px;
+}
+
+.company-name-en {
+  font-size: 13pt;
+  margin-bottom: 2px;
+}
+
+.company-details {
+  font-size: 10pt;
+  line-height: 1.2;
+  margin-bottom: 1px;
+}
+
+.title-box {
+  border: 2px solid #000;
+  padding: 6px;
+  text-align: center;
+  font-size: 15pt;
+  font-weight: bold;
+  margin: 8px 0;
+  background: #f5f5f5;
+}
+
+/* Customer info section */
+.customer-section {
+  display: table;
+  width: 100%;
+  border: 1px solid #000;
+  margin-bottom: 8px;
+  font-size: 11pt;
+}
+
+.customer-left {
+  display: table-cell;
+  width: 60%;
+  padding: 8px;
+  border-right: 1px solid #000;
+  vertical-align: top;
+}
+
+.customer-right {
+  display: table-cell;
+  width: 40%;
+  padding: 8px;
+  vertical-align: top;
+}
+
+.info-row {
+  margin-bottom: 3px;
+}
+
+.label {
+  display: inline-block;
+  min-width: 120px;
+}
+
+.checkbox {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #000;
+  text-align: center;
+  line-height: 12px;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+.checkbox.checked::before {
+  content: "X";
+  font-weight: bold;
+}
+
+/* Reference section */
+.ref-section {
+  border: 1px solid #000;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  font-size: 11pt;
+}
+
+/* Items table */
+table.items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 8px;
+  font-size: 11pt;
+}
+
+.items-table th,
+.items-table td {
+  border: 1px solid #000;
+  padding: 5px;
+  text-align: center;
+}
+
+.items-table th {
+  background: #f5f5f5;
+  font-weight: bold;
+}
+
+.items-table td.left {
+  text-align: left;
+}
+
+.items-table td.right {
+  text-align: right;
+}
+
+.items-table .total-row td {
+  font-weight: bold;
+}
+
+/* Amount in words */
+.amount-words {
+  border: 1px solid #000;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  font-size: 11pt;
+}
+
+/* Payment method */
+.payment-method {
+  border: 1px solid #000;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  font-size: 11pt;
+}
+
+/* Signature section */
+.signature-section {
+  display: table;
+  width: 100%;
+  margin-top: 10px;
+  font-size: 10pt;
+}
+
+.signature-col {
+  display: table-cell;
+  width: 33.33%;
+  text-align: center;
+  vertical-align: bottom;
+  padding: 0 5px;
+}
+
+.signature-title {
+  font-weight: bold;
+  margin-bottom: 2px;
+}
+
+.signature-subtitle {
+  font-size: 9pt;
+  margin-bottom: 15px;
+}
+
+.signature-line {
+  border-bottom: 1px solid #000;
+  width: 140px;
+  margin: 0 auto 3px;
+  height: 20px;
+}
+
+.signature-date {
+  font-size: 9pt;
+}
+
+.bold {
+  font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+
+{% for label in ["ORIGINAL", "COPY"] %}
+<div class="receipt-container">
+
+<div class="copy-label">
+  {% if label == "ORIGINAL" %}
+  สำหรับลูกค้า
+  {% else %}
+  สำหรับบัญชี
+  {% endif %}
+</div>
+
+<div class="header">
+  <div class="company-name-th">{{ seller_name_th }}</div>
+  <div class="company-name-en">{{ seller_name_en }}</div>
+  <div class="company-details">{{ seller_address }}</div>
+  <div class="company-details">
+    {% if seller_phone %}Tel : {{ seller_phone }}{% endif %}
+    {% if seller_email %} Email : {{ seller_email }}{% endif %}
+    TAX ID {{ seller_tax_formatted }}
+  </div>
+</div>
+
+<div class="title-box">
+  {{ "ต้นฉบับ ใบเสร็จรับเงิน" if label == "ORIGINAL" else "สำเนา ใบเสร็จรับเงิน" }}<br>
+  {{ "ORIGINAL RECEIPT" if label == "ORIGINAL" else "COPY RECEIPT" }}
+</div>
+
+<div class="customer-section">
+  <div class="customer-left">
+    <div class="info-row"><span class="label">นามลูกค้า</span> {{ buyer_name }}</div>
+    <div class="info-row"><span class="label">ที่อยู่</span> {{ buyer_address }}</div>
+    <div class="info-row">
+      <span class="label">เลขประจำตัวผู้เสียภาษี</span> 
+      <span class="checkbox checked"></span> {{ buyer_branch }}
+      <span style="margin-left: 15px;">สาขาที่</span> {{ buyer_branch_code }}
+    </div>
+    <div class="info-row" style="margin-left: 120px;">{{ buyer_tax_formatted }}</div>
+  </div>
+  <div class="customer-right">
+    <div class="info-row"><span class="label">เลขที่</span> <span class="bold">{{ receipt_no }}</span></div>
+    <div class="info-row"><span class="label">วันที่</span> {{ receipt_date }}</div>
+  </div>
+</div>
+
+<div class="ref-section">
+  <div style="display: inline-block; width: 48%;">
+    <span class="bold">อ้างถึงใบแจ้งหนี้</span>
+    <span style="margin-left: 20px; color: #0066cc; font-weight: bold;">{{ ref_invoice }}</span>
+  </div>
+  <div style="display: inline-block; width: 48%;">
+    <span class="bold">วันที่ใบแจ้งหนี้</span>
+    <span style="margin-left: 20px; color: #0066cc; font-weight: bold;">{{ ref_date }}</span>
+  </div>
+</div>
+
+<table class="items-table">
+  <thead>
+    <tr>
+      <th style="width: 8%;">ลำดับ</th>
+      <th style="width: 42%;">รายการ</th>
+      <th style="width: 10%;">จำนวน</th>
+      <th style="width: 18%;">ราคาต่อหน่วย</th>
+      <th style="width: 18%;">จำนวนเงิน</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td class="left">{{ description }}</td>
+      <td>{{ qty }}</td>
+      <td class="right">{{ unit_price }}</td>
+      <td class="right">{{ amount }}</td>
+    </tr>
+    <tr>
+      <td colspan="4" class="right">รวมเงิน</td>
+      <td class="right">{{ subtotal }}</td>
+    </tr>
+    <tr>
+      <td colspan="4" class="right">ภาษีมูลค่าเพิ่ม {{ vat_rate }}</td>
+      <td class="right">{{ vat }}</td>
+    </tr>
+    <tr class="total-row">
+      <td colspan="4" class="right">จำนวนเงินทั้งสิ้น</td>
+      <td class="right">{{ total }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="amount-words">
+  <span class="bold">ตัวอักษร</span> ({{ amount_text }})
+</div>
+
+<div class="payment-method">
+  <span class="checkbox {% if payment_cash %}checked{% endif %}"></span> เงินสด
+  <span style="margin-left: 20px;"></span>บาท
+  
+  <span style="margin-left: 30px;">
+    <span class="checkbox {% if payment_transfer %}checked{% endif %}"></span> เงินโอน
+  </span>
+  <span style="margin-left: 20px;"></span>{{ bank_info if payment_transfer else "" }}
+  
+  <span style="margin-left: 30px;">
+    <span class="checkbox {% if payment_check %}checked{% endif %}"></span> เช็คธนาคาร
+  </span>
+  <span style="margin-left: 10px;">เลขที่</span>
+  
+  <div style="margin-top: 5px;">
+    <span style="margin-left: 20px;">ลงวันที่</span>
+    <span style="margin-left: 150px;">จำนวนเงิน</span>
+    <span style="margin-left: 100px;">บาท</span>
+  </div>
+</div>
+
+{% if notes %}
+<div class="amount-words" style="margin-bottom: 8px;">
+  <span class="bold">หมายเหตุ / Notes:</span> {{ notes }}
+</div>
+{% endif %}
+
+<div class="signature-section">
+  <div class="signature-col">
+    <div class="signature-title">ผู้รับเงิน</div>
+    <div class="signature-line"></div>
+    <div class="signature-date">ลงวันที่ {% if label == "ORIGINAL" %}{{ receipt_date }}{% endif %}</div>
+  </div>
+  <div class="signature-col">
+    <div class="signature-title">ผู้รับใบเสร็จ</div>
+    <div class="signature-line"></div>
+    <div class="signature-date">ลงวันที่</div>
+  </div>
+  <div class="signature-col">
+    <div class="signature-title">ในนาม {{ seller_name_th }}</div>
+    <div class="signature-subtitle">ผู้มีอำนาจลงนาม</div>
+    <div class="signature-line"></div>
+    <div class="signature-date">ลงวันที่</div>
+  </div>
+</div>
+
+</div>
+{% endfor %}
+
+</body>
+</html>

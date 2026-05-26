@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings - Sonar Accounting</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Sonar Accounting</h1>
+  <a href="/">&larr; Dashboard</a>
+  <div class="topbar-right">
+    <a href="/settings" class="settings-link" style="color:var(--accent) !important;">Settings</a>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for cat, msg in messages %}
+<div class="flash flash-{{ cat }}">{{ msg }}</div>
+{% endfor %}
+{% endwith %}
+
+<div class="container">
+  <div class="page-title">Company Profile</div>
+  <div class="page-subtitle">These details appear on all generated documents. Changes are saved to profile.json.</div>
+
+  <form method="POST" action="/settings/save">
+  <div class="settings-card">
+    <div class="settings-header">
+      <h2>Company Information</h2>
+      <p>Official company names, address, and registration details</p>
+    </div>
+    <div class="settings-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Company Name (Thai)</label>
+          <input type="text" name="company_th" value="{{ profile.company_th }}">
+        </div>
+        <div class="form-group">
+          <label>Company Name (English)</label>
+          <input type="text" name="company_en" value="{{ profile.company_en }}">
+        </div>
+        <div class="form-group full">
+          <label>Address</label>
+          <textarea name="address" rows="2">{{ profile.address }}</textarea>
+        </div>
+        <div class="form-group">
+          <label>Tax ID</label>
+          <input type="text" name="tax_id" value="{{ profile.tax_id }}">
+        </div>
+        <div class="form-group">
+          <label>Bank Account</label>
+          <input type="text" name="bank" value="{{ profile.bank }}">
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-header" style="border-top:1px solid var(--border);">
+      <h2>Contact Details</h2>
+      <p>Phone and email shown on tax receipts</p>
+    </div>
+    <div class="settings-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Phone Number</label>
+          <input type="text" name="phone" value="{{ profile.phone }}">
+        </div>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" name="email" value="{{ profile.email }}">
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-actions">
+      <div style="display:flex;gap:8px;">
+        <button type="submit" class="btn btn-primary">Save Profile</button>
+        <a href="/" class="btn">Cancel</a>
+      </div>
+    </div>
+  </div>
+  </form>
+
+  <form method="POST" action="/settings/reset" style="margin-top:24px;">
+    <div class="settings-card">
+      <div class="settings-header">
+        <h2>Reset to Defaults</h2>
+        <p>Revert all fields to the values from sonarinfo_2026.tsv</p>
+      </div>
+      <div class="settings-actions">
+        <button type="submit" class="btn btn-danger" onclick="return confirm('Reset all profile fields to TSV defaults?')">Reset Profile</button>
+      </div>
+    </div>
+  </form>
+
+</div>
+</body>
+</html>

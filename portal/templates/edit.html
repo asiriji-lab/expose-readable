@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edit Records - Sonar Accounting</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Sonar Accounting</h1>
+  <a href="/">&larr; Dashboard</a>
+  <div class="topbar-right">
+    <div class="step-indicator">
+      <div class="step done">1</div>
+      <div class="step-line"></div>
+      <div class="step active">2</div>
+      <div class="step-line"></div>
+      <div class="step">3</div>
+    </div>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for cat, msg in messages %}
+<div class="flash flash-{{ cat }}">{{ msg }}</div>
+{% endfor %}
+{% endwith %}
+
+<form method="POST" action="/generate">
+<input type="hidden" name="record_count" value="{{ records|length }}">
+
+<div class="container">
+  <div class="page-title">Review &amp; Edit</div>
+  <div class="page-subtitle">Edit any field before generating. Click a card header to collapse/expand.</div>
+
+  {% for rec in records %}
+  <div class="record-card">
+    <div class="card-header" onclick="toggleCard(this)">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="id-badge {{ 'exp' if rec.type == 'EXP' else 'inc' }}">{{ rec.id }}</span>
+        <span style="color:var(--text2);font-size:13px;">{{ rec.description[:60] }}{% if rec.description|length > 60 %}...{% endif %}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="doc-tags">
+          {% for dt in rec.doc_types %}
+            {% if dt == 'pv' %}<span class="doc-tag pv">PV</span>{% endif %}
+            {% if dt == 'rv' %}<span class="doc-tag rv">RV</span>{% endif %}
+            {% if dt == 'tax_receipt' %}<span class="doc-tag tax">TAX</span>{% endif %}
+          {% endfor %}
+        </div>
+        <span class="toggle-icon">&#9660;</span>
+      </div>
+    </div>
+
+    <div class="card-body">
+      <input type="hidden" name="rec_{{ loop.index0 }}_id" value="{{ rec.id }}">
+      <input type="hidden" name="rec_{{ loop.index0 }}_type" value="{{ rec.type }}">
+      {% for dt in rec.doc_types %}
+      <input type="hidden" name="rec_{{ loop.index0 }}_doc_types" value="{{ dt }}">
+      {% endfor %}
+
+      <div class="form-grid">
+
+        {% if rec.type == 'EXP' %}
+        <div class="form-group">
+          <label>Date</label>
+          <input type="text" name="rec_{{ loop.index0 }}_date" value="{{ rec.date }}">
+        </div>
+        <div class="form-group">
+          <label>Payment Method</label>
+          <input type="text" name="rec_{{ loop.index0 }}_payment_method" value="{{ rec.payment_method }}">
+        </div>
+        <div class="form-group">
+          <label>Paid To (Vendor / Payee)</label>
+          <input type="text" name="rec_{{ loop.index0 }}_paid_to" value="{{ rec.paid_to }}">
+        </div>
+        <div class="form-group">
+          <label>Department / Project</label>
+          <input type="text" name="rec_{{ loop.index0 }}_department" value="{{ rec.department }}">
+        </div>
+        <div class="form-group full">
+          <label>Description</label>
+          <textarea name="rec_{{ loop.index0 }}_description">{{ rec.description }}</textarea>
+        </div>
+
+        <div class="section-divider">Amounts</div>
+        <div class="form-group">
+          <label>Gross Amount</label>
+          <input type="text" name="rec_{{ loop.index0 }}_gross" value="{{ rec.gross }}" class="money-input">
+        </div>
+        <div class="form-group">
+          <label>Withholding Tax</label>
+          <input type="text" name="rec_{{ loop.index0 }}_withholding" value="{{ rec.withholding }}" class="money-input">
+        </div>
+        <div class="form-group">
+          <label>Net Amount</label>
+          <input type="text" name="rec_{{ loop.index0 }}_net" value="{{ rec.net }}" class="money-input">
+        </div>
+
+        <div class="section-divider">Notes &amp; Signature</div>
+        <div class="form-group full">
+          <label>Notes (appears on voucher)</label>
+          <textarea name="rec_{{ loop.index0 }}_notes" rows="2" placeholder="Optional notes...">{{ rec.notes|default('') }}</textarea>
+        </div>
+        {% if signature_available %}
+        <div class="form-group full">
+          <div class="checkbox-group">
+            <label><input type="checkbox" name="rec_{{ loop.index0 }}_include_signature" checked> Include CFO signature on document</label>
+          </div>
+        </div>
+        {% endif %}
+
+        {% else %}
+        {# INCOME FIELDS #}
+        <div class="form-group">
+          <label>Date</label>
+          <input type="text" name="rec_{{ loop.index0 }}_date" value="{{ rec.date }}">
+        </div>
+        <div class="form-group">
+          <label>Payment Method</label>
+          <input type="text" name="rec_{{ loop.index0 }}_payment_method" value="{{ rec.payment_method }}">
+        </div>
+        <div class="form-group">
+          <label>Payer (Key)</label>
+          <input type="text" name="rec_{{ loop.index0 }}_payer" value="{{ rec.payer }}">
+        </div>
+        <div class="form-group">
+          <label>Received From (Official Name)</label>
+          <input type="text" name="rec_{{ loop.index0 }}_received_from" value="{{ rec.received_from }}">
+        </div>
+        <div class="form-group full">
+          <label>Description</label>
+          <textarea name="rec_{{ loop.index0 }}_description">{{ rec.description }}</textarea>
+        </div>
+
+        <div class="section-divider">Amounts</div>
+        <div class="form-group">
+          <label>Gross Amount</label>
+          <input type="text" name="rec_{{ loop.index0 }}_gross" value="{{ rec.gross }}" class="money-input">
+        </div>
+        <div class="form-group">
+          <label>Withholding Tax</label>
+          <input type="text" name="rec_{{ loop.index0 }}_withholding" value="{{ rec.withholding }}" class="money-input">
+        </div>
+        <div class="form-group">
+          <label>Net Amount</label>
+          <input type="text" name="rec_{{ loop.index0 }}_net" value="{{ rec.net }}" class="money-input">
+        </div>
+
+        {% if 'tax_receipt' in rec.doc_types %}
+        <div class="section-divider">Tax Receipt — Buyer Details</div>
+        <div class="form-group">
+          <label>Buyer Company Name</label>
+          <input type="text" name="rec_{{ loop.index0 }}_buyer_name" value="{{ rec.buyer_name }}">
+        </div>
+        <div class="form-group">
+          <label>Buyer Branch</label>
+          <input type="text" name="rec_{{ loop.index0 }}_buyer_branch" value="สำนักงานใหญ่">
+        </div>
+        <div class="form-group full">
+          <label>Buyer Address</label>
+          <textarea name="rec_{{ loop.index0 }}_buyer_address">{{ rec.buyer_address }}</textarea>
+        </div>
+        <div class="form-group">
+          <label>Reference Invoice Number</label>
+          <input type="text" name="rec_{{ loop.index0 }}_ref_invoice" value="{{ rec.ref_invoice }}" placeholder="e.g. INV-2026-001">
+        </div>
+        <div class="form-group">
+          <label>Reference Invoice Date (YYYY-MM-DD)</label>
+          <input type="text" name="rec_{{ loop.index0 }}_ref_date" value="{{ rec.ref_date }}" placeholder="2026-01-09">
+        </div>
+        <div class="form-group full">
+          <label>Payment Method Checkboxes</label>
+          <div class="checkbox-group">
+            <label><input type="checkbox" name="rec_{{ loop.index0 }}_payment_cash"> Cash</label>
+            <label><input type="checkbox" name="rec_{{ loop.index0 }}_payment_transfer" checked> Bank Transfer</label>
+            <label><input type="checkbox" name="rec_{{ loop.index0 }}_payment_check"> Cheque</label>
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="section-divider">Notes &amp; Signature</div>
+        <div class="form-group full">
+          <label>Notes (appears on voucher/receipt)</label>
+          <textarea name="rec_{{ loop.index0 }}_notes" rows="2" placeholder="Optional notes...">{{ rec.notes|default('') }}</textarea>
+        </div>
+        {% if signature_available %}
+        <div class="form-group full">
+          <div class="checkbox-group">
+            <label><input type="checkbox" name="rec_{{ loop.index0 }}_include_signature" checked> Include CFO signature on document</label>
+          </div>
+        </div>
+        {% endif %}
+
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="bottom-spacer"></div>
+</div>
+
+<div class="bottom-bar">
+  <a href="/" class="btn">&larr; Dashboard</a>
+  <div style="display:flex;gap:12px;align-items:center;">
+    <span style="color:var(--text2);font-size:14px;">{{ records|length }} record{{ 's' if records|length != 1 else '' }}</span>
+    <button type="submit" class="btn btn-green">Generate PDFs &rarr;</button>
+  </div>
+</div>
+</form>
+
+<script>
+function toggleCard(header) {
+  header.nextElementSibling.classList.toggle('collapsed');
+  header.classList.toggle('collapsed');
+}
+</script>
+</body>
+</html>

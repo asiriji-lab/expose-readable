@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@page { size: A5 landscape; margin: 1cm; }
+body { font-family: Tahoma, Arial, sans-serif; font-size: 10pt; }
+
+.header { border-bottom: 2px solid #f57c00; margin-bottom: 6px; }
+.logo { height: 22px; }
+
+table { width:100%; border-collapse: collapse; }
+td, th { border:1px solid #f57c00; padding:4px; }
+.right { text-align:right; }
+.sig { text-align:center; vertical-align:top; padding:6px; }
+.sig-inner { min-height:90px; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <img src="{{ logo }}" class="logo">
+  <div style="text-align:center;font-weight:bold;">RECEIPT VOUCHER</div>
+  <div style="text-align:center;">{{ company }}</div>
+</div>
+
+<table>
+<tr><td>RV No</td><td>{{ rv_no }}</td><td>Date</td><td>{{ date }}</td></tr>
+<tr><td>Received From</td><td colspan="3">{{ received_from }}</td></tr>
+<tr><td>Payment Method</td><td>{{ payment_method }}</td><td>Bank / A/C</td><td>{{ bank }}</td></tr>
+</table>
+
+<br>
+
+<table>
+<tr>
+<th>Doc No</th><th>Description</th><th>Gross</th><th>Withholding Tax</th><th>Net</th>
+</tr>
+<tr>
+<td>{{ doc_no }}</td>
+<td>{{ description }}</td>
+<td class="right">{{ gross }}</td>
+<td class="right">{{ withholding }}</td>
+<td class="right">{{ net }}</td>
+</tr>
+</table>
+
+<p><b>Amount in words:</b> {{ amount_text }}</p>
+
+<table>
+<tr><td style="min-height:40px;"><b>Notes:</b> {{ notes }}</td></tr>
+</table>
+
+<table>
+<tr>
+<td class="sig"><div class="sig-inner"><div style="font-weight:bold;margin-bottom:6px;">Prepared By</div>{% if signature_img %}<img src="cfosignnew_crop.png" style="height:52px;">{% endif %}</div></td>
+<td class="sig"><div class="sig-inner"><div style="font-weight:bold;margin-bottom:6px;">Approved By</div>{% if signature_img and gross_amount < 10000 %}<img src="cfosignnew_crop.png" style="height:52px;">{% endif %}</div></td>
+<td class="sig"><div class="sig-inner"><div style="font-weight:bold;">Received By</div></div></td>
+</tr>
+</table>
+
+</body>
+</html>

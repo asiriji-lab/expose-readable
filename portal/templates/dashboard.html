@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sonar Accounting Portal</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Sonar Accounting</h1>
+  <div class="topbar-right">
+    <a href="/settings" class="settings-link">Settings</a>
+    <span class="company-badge">{{ sonar.company }}</span>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for cat, msg in messages %}
+<div class="flash flash-{{ cat }}">{{ msg }}</div>
+{% endfor %}
+{% endwith %}
+
+<form id="mainForm" method="POST" action="/edit">
+<div class="container">
+
+  <div class="controls">
+    <div class="control-group">
+      <label>Document Types</label>
+      <div class="doc-checks">
+        <label class="doc-check">
+          <input type="checkbox" name="doc_types" value="pv" checked>
+          <span>Payment Voucher</span>
+        </label>
+        <label class="doc-check">
+          <input type="checkbox" name="doc_types" value="rv" checked>
+          <span>Receipt Voucher</span>
+        </label>
+        <label class="doc-check">
+          <input type="checkbox" name="doc_types" value="tax_receipt">
+          <span>Tax Receipt</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <label>Quick Select</label>
+      <div class="select-btns">
+        <button type="button" class="btn" onclick="selectAll()">All</button>
+        <button type="button" class="btn" onclick="selectNone()">None</button>
+        <button type="button" class="btn" onclick="selectAllExp()">EXP</button>
+        <button type="button" class="btn" onclick="selectAllInc()">INC</button>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <label>Month</label>
+      <div class="select-btns" id="monthBtns">
+        <button type="button" class="btn btn-month active" data-month="" onclick="filterMonth(this, '')">All</button>
+        <button type="button" class="btn btn-month" data-month="1" onclick="filterMonth(this, '1')">Jan</button>
+        <button type="button" class="btn btn-month" data-month="2" onclick="filterMonth(this, '2')">Feb</button>
+        <button type="button" class="btn btn-month" data-month="3" onclick="filterMonth(this, '3')">Mar</button>
+        <button type="button" class="btn btn-month" data-month="4" onclick="filterMonth(this, '4')">Apr</button>
+        <button type="button" class="btn btn-month" data-month="5" onclick="filterMonth(this, '5')">May</button>
+        <button type="button" class="btn btn-month" data-month="6" onclick="filterMonth(this, '6')">Jun</button>
+        <button type="button" class="btn btn-month" data-month="7" onclick="filterMonth(this, '7')">Jul</button>
+        <button type="button" class="btn btn-month" data-month="8" onclick="filterMonth(this, '8')">Aug</button>
+        <button type="button" class="btn btn-month" data-month="9" onclick="filterMonth(this, '9')">Sep</button>
+        <button type="button" class="btn btn-month" data-month="10" onclick="filterMonth(this, '10')">Oct</button>
+        <button type="button" class="btn btn-month" data-month="11" onclick="filterMonth(this, '11')">Nov</button>
+        <button type="button" class="btn btn-month" data-month="12" onclick="filterMonth(this, '12')">Dec</button>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <label>Search</label>
+      <input type="text" class="search-box" id="searchBox" placeholder="ID, name, description..." oninput="filterRows()">
+    </div>
+
+    <div class="control-group" style="margin-left:auto;">
+      <button type="submit" class="btn btn-primary" id="editBtn" disabled>
+        Edit &amp; Generate (0)
+      </button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('all')" id="tab-all">
+      All <span class="count">{{ expenses|length + income|length }}</span>
+    </div>
+    <div class="tab" onclick="switchTab('exp')" id="tab-exp">
+      Expenses <span class="count">{{ expenses|length }}</span>
+    </div>
+    <div class="tab" onclick="switchTab('inc')" id="tab-inc">
+      Income <span class="count">{{ income|length }}</span>
+    </div>
+  </div>
+
+  <div id="panel-exp" class="table-wrap">
+    <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:40px"><input type="checkbox" class="row-check" onchange="toggleGroup('exp', this.checked)"></th>
+          <th style="width:40px">#</th>
+          <th>ID</th>
+          <th>Date</th>
+          <th>Vendor / Payee</th>
+          <th>Description</th>
+          <th>Gross</th>
+          <th>WHT</th>
+          <th>Net</th>
+          <th>Method</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-exp">
+        {% for r in expenses %}
+        <tr data-id="{{ r.id }}" data-type="exp" data-month="{{ r.month }}" data-search="{{ r.id }} {{ r.counterparty }} {{ r.description }}">
+          <td><input type="checkbox" class="row-check item-check" name="selected_ids" value="{{ r.id }}" onchange="updateSummary()"></td>
+          <td class="row-num">{{ r.number }}</td>
+          <td><span class="id-badge exp">{{ r.id }}</span></td>
+          <td>{{ r.date }}</td>
+          <td>{{ r.counterparty }}</td>
+          <td class="desc-cell" title="{{ r.description }}">{{ r.description }}</td>
+          <td class="money">{{ r.gross }}</td>
+          <td class="money">{{ r.tax }}</td>
+          <td class="money">{{ r.net }}</td>
+          <td>{{ r.payment_method }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div id="panel-inc" class="table-wrap" style="margin-top:2px;">
+    <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:40px"><input type="checkbox" class="row-check" onchange="toggleGroup('inc', this.checked)"></th>
+          <th style="width:40px">#</th>
+          <th>ID</th>
+          <th>Date</th>
+          <th>Payer</th>
+          <th>Description</th>
+          <th>Gross</th>
+          <th>WHT</th>
+          <th>Net</th>
+          <th>Method</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-inc">
+        {% for r in income %}
+        <tr data-id="{{ r.id }}" data-type="inc" data-month="{{ r.month }}" data-search="{{ r.id }} {{ r.counterparty }} {{ r.description }}">
+          <td><input type="checkbox" class="row-check item-check" name="selected_ids" value="{{ r.id }}" onchange="updateSummary()"></td>
+          <td class="row-num">{{ r.number }}</td>
+          <td><span class="id-badge inc">{{ r.id }}</span></td>
+          <td>{{ r.date }}</td>
+          <td>{{ r.counterparty }}</td>
+          <td class="desc-cell" title="{{ r.description }}">{{ r.description }}</td>
+          <td class="money">{{ r.gross }}</td>
+          <td class="money">{{ r.tax }}</td>
+          <td class="money">{{ r.net }}</td>
+          <td>{{ r.payment_method }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="bottom-spacer"></div>
+</div>
+
+<div class="summary-bar hidden" id="summaryBar">
+  <div class="summary-info">
+    <div class="summary-stat">Selected: <strong id="selCount">0</strong></div>
+    <div class="summary-stat">EXP: <strong id="selExp">0</strong></div>
+    <div class="summary-stat">INC: <strong id="selInc">0</strong></div>
+  </div>
+  <button type="submit" class="btn btn-primary" id="editBtn2">Edit &amp; Generate &rarr;</button>
+</div>
+</form>
+
+<script>
+let activeMonth = '';
+
+function updateSummary() {
+  const checks = document.querySelectorAll('.item-check:checked');
+  let exp = 0, inc = 0;
+  checks.forEach(c => { c.value.startsWith('EXP') ? exp++ : inc++; });
+  const total = checks.length;
+  document.getElementById('selCount').textContent = total;
+  document.getElementById('selExp').textContent = exp;
+  document.getElementById('selInc').textContent = inc;
+  document.getElementById('summaryBar').classList.toggle('hidden', total === 0);
+  document.getElementById('editBtn').disabled = total === 0;
+  document.getElementById('editBtn').textContent = `Edit & Generate (${total})`;
+  document.querySelectorAll('tbody tr').forEach(tr => {
+    const cb = tr.querySelector('.item-check');
+    if (cb) tr.classList.toggle('selected', cb.checked);
+  });
+}
+function isRowVisible(tr) {
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  const matchSearch = !q || (tr.dataset.search || '').toLowerCase().includes(q);
+  const matchMonth = !activeMonth || tr.dataset.month === activeMonth;
+  return matchSearch && matchMonth;
+}
+function filterRows() {
+  document.querySelectorAll('tbody tr').forEach(tr => {
+    tr.style.display = isRowVisible(tr) ? '' : 'none';
+  });
+}
+function filterMonth(btn, month) {
+  activeMonth = month;
+  document.querySelectorAll('.btn-month').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  filterRows();
+}
+function selectAll() { document.querySelectorAll('.item-check').forEach(c => { if (isRowVisible(c.closest('tr'))) c.checked = true; }); updateSummary(); }
+function selectNone() { document.querySelectorAll('.item-check').forEach(c => c.checked = false); updateSummary(); }
+function selectAllExp() { document.querySelectorAll('.item-check').forEach(c => { if (c.value.startsWith('EXP') && isRowVisible(c.closest('tr'))) c.checked = true; }); updateSummary(); }
+function selectAllInc() { document.querySelectorAll('.item-check').forEach(c => { if (c.value.startsWith('INC') && isRowVisible(c.closest('tr'))) c.checked = true; }); updateSummary(); }
+function toggleGroup(type, checked) { document.querySelectorAll(`#tbody-${type} .item-check`).forEach(c => { if (isRowVisible(c.closest('tr'))) c.checked = checked; }); updateSummary(); }
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.getElementById('panel-exp').style.display = (tab === 'inc') ? 'none' : '';
+  document.getElementById('panel-inc').style.display = (tab === 'exp') ? 'none' : '';
+}
+</script>
+</body>
+</html>

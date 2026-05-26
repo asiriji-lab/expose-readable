@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generated - Sonar Accounting</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Sonar Accounting</h1>
+  <a href="/">&larr; Dashboard</a>
+  <div class="topbar-right">
+    <div class="step-indicator">
+      <div class="step done">1</div>
+      <div class="step-line"></div>
+      <div class="step done">2</div>
+      <div class="step-line"></div>
+      <div class="step active">3</div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  {% set success_count = generated | selectattr('path') | list | length %}
+  {% set error_count = generated | rejectattr('path') | list | length %}
+
+  <div class="success-banner">
+    <div class="icon">&#10003;</div>
+    <h2>Generation Complete</h2>
+    <p>
+      {{ success_count }} document{{ 's' if success_count != 1 else '' }} generated
+      {% if error_count %} &middot; {{ error_count }} error{{ 's' if error_count != 1 else '' }}{% endif %}
+    </p>
+  </div>
+
+  <div class="file-grid">
+    {% for g in generated %}
+    <div class="file-card {{ 'error' if not g.path else '' }}">
+      <div class="file-top">
+        <div class="file-icon {{ 'pv' if 'Payment' in g.type else ('rv' if 'Receipt Voucher' in g.type else ('tax' if 'Tax' in g.type else 'err')) }}">
+          {% if 'Payment' in g.type %}PV
+          {% elif 'Receipt Voucher' in g.type %}RV
+          {% elif 'Tax' in g.type %}TX
+          {% else %}!{% endif %}
+        </div>
+        <div class="file-info">
+          <h3>{{ g.name }}</h3>
+          <div class="type-label">{{ g.type }} &middot; {{ g.id }}</div>
+        </div>
+      </div>
+
+      {% if g.path %}
+      <div class="file-actions">
+        {% set rel_path = g.path.split('/output/')[-1] %}
+        <a href="/preview/{{ rel_path }}" target="_blank" class="btn">Preview</a>
+        <a href="/download/{{ rel_path }}" class="btn btn-green">Download</a>
+      </div>
+      {% else %}
+      <div class="error-msg">{{ g.get('error', 'Unknown error') }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if success_count > 1 %}
+  <form method="POST" action="/download_all">
+    {% for g in generated %}
+      {% if g.path %}
+      <input type="hidden" name="files" value="{{ g.path.split('/output/')[-1] }}">
+      {% endif %}
+    {% endfor %}
+    <div class="results-bar">
+      <div>
+        <span style="font-size:14px;font-weight:600;">{{ success_count }} files ready</span>
+        <span style="color:var(--text2);font-size:13px;margin-left:8px;">Download individually or as ZIP</span>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <a href="/" class="btn">Generate More</a>
+        <button type="submit" class="btn btn-primary">Download All as ZIP</button>
+      </div>
+    </div>
+  </form>
+  {% else %}
+  <div class="results-bar">
+    <div></div>
+    <a href="/" class="btn btn-primary">Generate More</a>
+  </div>
+  {% endif %}
+
+</div>
+</body>
+</html>
