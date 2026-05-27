@@ -188,6 +188,16 @@ class FeasibilityChecker:
         valid_classes  = set(self.manager.student_grids.keys())
         valid_rooms    = set(self.manager.room_grids.keys())
 
+        # Build valid tag names from room sheet so tag-preserved refs ("ชีววิทยา") pass
+        valid_room_tags: Set[str] = set()
+        df_room = self.manager.get_sheet_data('room')
+        if df_room is not None and 'tags' in df_room.columns:
+            _SKIP = {'', 'nan', 'none', 'exclude', 'homeroom'}
+            for raw in df_room['tags'].fillna('').astype(str):
+                for t in [x.strip().lower() for x in raw.split(',') if x.strip()]:
+                    if t not in _SKIP:
+                        valid_room_tags.add(t)
+
         unknown_teachers: Set[str] = set()
         unknown_classes:  Set[str] = set()
         unknown_rooms:    Set[str] = set()
@@ -200,7 +210,7 @@ class FeasibilityChecker:
                 if valid_classes and cid not in valid_classes:
                     unknown_classes.add(cid)
             for rid in _parse_list_field(row.get('room')):
-                if valid_rooms and rid not in valid_rooms:
+                if valid_rooms and rid not in valid_rooms and rid.lower() not in valid_room_tags:
                     unknown_rooms.add(rid)
 
         for tid in sorted(unknown_teachers):

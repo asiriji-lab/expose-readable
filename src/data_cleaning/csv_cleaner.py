@@ -16,7 +16,7 @@ def clean_curriculum(
 
     # Process lookups
     teacher_lookup = create_teacher_lookup(df_teacher)
-    room_lookup = create_room_lookup(df_room)
+    room_lookup, pure_tag_keys = create_room_lookup(df_room)
     grade_section_counts = get_grade_sections(df_student)
 
     # --- Main Iteration and Logic ---
@@ -147,7 +147,7 @@ def clean_curriculum(
         row_dict['student_class'] = [f"{grade_num}/{section}" for section in cleaned_sections]
 
         # D. Clean 'room' column (resolve after propagation so raw value is propagated above)
-        row_dict['room'] = resolve_room_to_ids(row_dict.get('room'), room_lookup)
+        row_dict['room'] = resolve_room_to_ids(row_dict.get('room'), room_lookup, pure_tag_keys)
 
         # E. Clean 'block_pattern' column
         block_pattern = row_dict.get('block_pattern')
@@ -192,8 +192,8 @@ def clean_elective(
 
     # Pre-process Lookups
     teacher_lookup = create_teacher_lookup(df_teacher)
-    room_lookup = create_room_lookup(df_room) 
-    
+    room_lookup, pure_tag_keys = create_room_lookup(df_room)
+
     # Apply Resolution to Columns
     # A. Resolve 'teacher' column (Name -> ID List)
     print("  - Resolving teacher names to IDs...")
@@ -204,7 +204,7 @@ def clean_elective(
     # B. Resolve 'room' column (Tag/ID -> Room ID/List)
     print("  - Resolving room requirements...")
     df_elective['room'] = df_elective['room'].apply(
-        lambda x: resolve_room_to_ids(x, room_lookup)
+        lambda x: resolve_room_to_ids(x, room_lookup, pure_tag_keys)
     )
     
     # Ensure subject ID and name are strings

@@ -1,15 +1,26 @@
 import pandas as pd
-from typing import Dict, List, Union, Any
+from typing import Dict, List, Union, Any, Optional, Set, Tuple
 import re
 from src.data_cleaning.columns import csv_column_mapping
 
 # helper funciton to create map for room_name / tags -> 'room_id'
-def create_room_lookup(df_room: pd.DataFrame) -> Dict[str, List[str]]:
+def create_room_lookup(df_room: pd.DataFrame):
+    """
+    Returns (tag_to_rooms, pure_tag_keys).
+
+    tag_to_rooms   : room_id/room_name/tag -> [room_id, ...]
+    pure_tag_keys  : lowercase tag strings that came from the 'tags' column only
+                     (NOT room IDs or room names).  Callers use this to decide
+                     whether a curriculum room reference is a soft tag preference
+                     vs. a hard room-ID/name requirement.
+    """
     if 'room_id' not in df_room.columns:
         print("🚨 ERROR: Room DataFrame missing 'room_id' column. Skipping lookup creation.")
-        return {}
+        return {}, set()
 
-    tag_to_rooms = {}
+    tag_to_rooms: Dict[str, List[str]] = {}
+    pure_tag_keys: set = set()   # only tag-column values (lowercased)
+    hard_keys: set = set()       # room IDs and room names (hard constraints)
 
     df_room = df_room.copy()
     df_room['room_id'] = df_room['room_id'].astype(str).str.strip()
@@ -17,6 +28,7 @@ def create_room_lookup(df_room: pd.DataFrame) -> Dict[str, List[str]]:
     df_room['tags'] = df_room['tags'].fillna('').astype(str).str.strip() if 'tags' in df_room.columns else ''
 
     _SKIP = {'', 'nan', 'none'}
+    _SOFT_EXCLUDE = {'exclude', 'homeroom'}  # tags that are role markers, not subject-type preferences
 
     for _, row in df_room.iterrows():
         room_id = row['room_id']
@@ -26,27 +38,35 @@ def create_room_lookup(df_room: pd.DataFrame) -> Dict[str, List[str]]:
         if not room_id or room_id.lower() in _SKIP:
             continue
 
-        all_keys = set()
-
-        if raw_name and raw_name.lower() not in _SKIP:
-            all_keys.add(raw_name)
-
-        tag_keys = [t.strip() for t in raw_tags.split(',') if t.strip() and t.strip().lower() not in _SKIP]
-        all_keys.update(tag_keys)
-
+        # Room ID is always a hard key
+        hard_keys.add(room_id)
         if room_id not in tag_to_rooms:
             tag_to_rooms[room_id] = []
         if room_id not in tag_to_rooms[room_id]:
             tag_to_rooms[room_id].append(room_id)
 
-        for key in all_keys:
-            if key not in tag_to_rooms:
-                tag_to_rooms[key] = []
-            if room_id not in tag_to_rooms[key]:
-                tag_to_rooms[key].append(room_id)
+        # Room name is a hard key (it's an alias for a specific room)
+        if raw_name and raw_name.lower() not in _SKIP:
+            hard_keys.add(raw_name)
+            hard_keys.add(raw_name.lower())
+            if raw_name not in tag_to_rooms:
+                tag_to_rooms[raw_name] = []
+            if room_id not in tag_to_rooms[raw_name]:
+                tag_to_rooms[raw_name].append(room_id)
+
+        # Tags are soft keys (subject-type preferences)
+        tag_list = [t.strip() for t in raw_tags.split(',') if t.strip() and t.strip().lower() not in _SKIP]
+        for t in tag_list:
+            t_lower = t.lower()
+            if t_lower not in _SOFT_EXCLUDE:
+                pure_tag_keys.add(t_lower)
+            if t not in tag_to_rooms:
+                tag_to_rooms[t] = []
+            if room_id not in tag_to_rooms[t]:
+                tag_to_rooms[t].append(room_id)
 
     print(f"✅ Room requirement lookup generated (room_name and tags). Total unique lookup keys: {len(tag_to_rooms)}")
-    return tag_to_rooms
+    return tag_to_rooms, pure_tag_keys
 
 # helper funciton to create map for teacher_name -> 'teacher_id'
 def create_teacher_lookup(df_teacher: pd.DataFrame) -> dict[str, str]:
@@ -108,7 +128,20 @@ def resolve_teacher_names_to_ids(raw_teacher_name: Any, teacher_lookup: Dict[str
         return valid_ids
 
 # helper function map room requirements -> room_ids
-def resolve_room_to_ids(raw_room_value: Any, room_lookup: Dict[str, List[str]]) -> Union[str, List[str], None]:
+def resolve_room_to_ids(
+    raw_room_value: Any,
+    room_lookup: Dict[str, List[str]],
+    pure_tag_keys: Optional[set] = None,
+) -> Union[str, List[str], None]:
+    """
+    Resolves a curriculum room reference to room ID(s) or preserves tag names.
+
+    When pure_tag_keys is provided:
+      - refs that match a pure tag key are returned as-is (lowercased tag name)
+        so data_loader can classify them as preferred_tags (soft preference).
+      - refs that match a room ID or room name are resolved to room IDs (hard constraint).
+    When pure_tag_keys is None, behaviour is unchanged (all resolved to room IDs).
+    """
     # Case 1: null, NaN float, empty string, or string 'nan' — no room required
     if pd.isna(raw_room_value) or str(raw_room_value).strip().lower() in ('', 'nan'):
         return None
@@ -121,20 +154,31 @@ def resolve_room_to_ids(raw_room_value: Any, room_lookup: Dict[str, List[str]]) 
         if r.strip() and r.strip().lower() != 'nan'
     ]
 
-    resolved_rooms = set()
+    resolved_rooms: List[str] = []
 
     for single_req in requirements:
-        # Check if the requirement (tag or ID) is in the lookup keys
+        r_lower = single_req.lower()
+        # Soft tag: return tag name unchanged so data_loader keeps it as preferred_tags
+        if pure_tag_keys is not None and r_lower in pure_tag_keys:
+            if r_lower not in resolved_rooms:
+                resolved_rooms.append(r_lower)
+            continue
+        # Hard: room ID or room name → resolve to room ID(s)
         if single_req in room_lookup:
-            resolved_rooms.update(room_lookup[single_req])
+            for rid in room_lookup[single_req]:
+                if rid not in resolved_rooms:
+                    resolved_rooms.append(rid)
+        elif r_lower in room_lookup:
+            for rid in room_lookup[r_lower]:
+                if rid not in resolved_rooms:
+                    resolved_rooms.append(rid)
         else:
-            # Issue a warning if the requirement cannot be resolved
             print(f"⚠️ Warning: Unresolved room requirement: '{single_req}'. This requirement will be ignored.")
 
     if len(resolved_rooms) == 1:
-        return resolved_rooms.pop()
+        return resolved_rooms[0]
     elif len(resolved_rooms) > 1:
-        return sorted(str(r) for r in resolved_rooms)
+        return sorted(resolved_rooms)
     else:
         return None
 

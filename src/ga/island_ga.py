@@ -24,6 +24,7 @@ from .analytics import AnalyticsCollector
 from .data_loader import GAContext, build_ga_context
 from .genetic_algorithm import GeneticAlgorithm
 from .models import Chromosome
+from src.constants import NO_ROOM
 from .simulated_annealing import SimulatedAnnealing
 
 
@@ -118,12 +119,12 @@ class IslandGeneticAlgorithm:
         analytics: Optional[AnalyticsCollector] = None,
         timing_sample_every: int = 20,
         # SA params
-        sa_threshold: float = 500,     # trigger SA when global best fitness < this value
-        sa_budget: int = 300,          # SA iterations per epoch
-        sa_cooling: float = 0.95,      # SA cooling rate
+        sa_threshold: float = 500,     # legacy — kept for API compat, no longer used as trigger
+        sa_budget: int = 2000,         # SA iterations per epoch
+        sa_cooling: float = 0.95,      # legacy — SA derives cooling from T0 and budget
         # LNS params
         lns_after: int = 2,            # stagnant epochs before LNS fires (< catastrophic_after)
-        lns_collateral_rate: float = 0.10,
+        lns_collateral_rate: float = 0.25,
         context: Optional[GAContext] = None,
     ):
         self.schedule_manager = schedule_manager
@@ -316,14 +317,33 @@ class IslandGeneticAlgorithm:
                 period_offenders.append((lid, assigned, expected))
         period_offenders.sort(key=lambda x: x[2] - x[1], reverse=True)
 
+        # Top non-excluded rooms by free slots (underutilised rooms)
+        all_rooms: set = set(best_island.room_list)
+        all_rooms.update(best_island.homeroom_room_to_class.keys())
+        for _tag_rooms in best_island._tag_to_rooms.values():
+            all_rooms.update(_tag_rooms)
+
+        room_occupied_slots: Dict[str, set] = defaultdict(set)
+        for lid, assignments in chromosome.genes.items():
+            for ts, room in assignments:
+                if room and room != NO_ROOM and room in all_rooms:
+                    room_occupied_slots[room].add((ts.day, ts.period_col))
+
+        total_slots = len(best_island.all_slots)
+        room_free: Dict[str, int] = {
+            r: total_slots - len(room_occupied_slots.get(r, set()))
+            for r in all_rooms
+        }
+
         def top(d: dict) -> list:
             return sorted(d.items(), key=lambda x: -x[1])[:top_n]
 
         return {
-            'room':    top(room_hits),
-            'teacher': top(teacher_hits),
-            'student': top(student_hits),
-            'period':  period_offenders[:top_n],
+            'room':      top(room_hits),
+            'teacher':   top(teacher_hits),
+            'student':   top(student_hits),
+            'period':    period_offenders[:top_n],
+            'room_free': top(room_free),
         }
 
     @staticmethod
@@ -345,6 +365,12 @@ class IslandGeneticAlgorithm:
             print(f"    period_count     :", end="")
             for lid, assigned, expected in period:
                 print(f"  {lid}({assigned}/{expected})", end="")
+            print()
+        room_free = offenders.get('room_free', [])
+        if room_free:
+            print(f"    room_free_slots  :", end="")
+            for room, free in room_free:
+                print(f"  {room}({free}free)", end="")
             print()
 
     def _get_neighbors(self, island_idx: int) -> List[int]:
@@ -390,28 +416,50 @@ class IslandGeneticAlgorithm:
 
     def _catastrophic_reset(self, epoch: int) -> None:
         """
-        Fully reinitialize the worst-performing island when no global improvement
-        has occurred for catastrophic_after consecutive epochs.
+        Reset the 2 worst-performing islands (or all if n_islands <= 2).
+        Keeps top elite_size chromosomes from each island; rebuilds the rest
+        with fresh greedy + random chromosomes to inject diversity while
+        preserving accumulated good genes.
         """
-        worst_idx = max(
+        n_reset = min(2, self.n_islands)
+        reset_indices = sorted(
             range(self.n_islands),
             key=lambda i: self.islands[i].best_chromosome.fitness,
-        )
-        island = self.islands[worst_idx]
+            reverse=True,
+        )[:n_reset]
+
         gen_label = epoch * self.migration_interval
-        print(f"  [Island GA] *** Catastrophic reset: island {worst_idx} "
+        print(f"  [Island GA] *** Catastrophic reset: islands {reset_indices} "
               f"at gen {gen_label} (global stagnation={self._global_stagnation} epochs) ***")
 
-        island.initialize_population()
-        for c in island.population:
-            island.evaluate_fitness(c)
-        island.best_chromosome = min(island.population, key=lambda c: c.fitness).copy()
-        island._gens_without_improvement = 0
-        island._current_generation = 0
+        for worst_idx in reset_indices:
+            island = self.islands[worst_idx]
+
+            # Keep top elite_size chromosomes intact
+            island.population.sort(key=lambda c: c.fitness)
+            elite = [c.copy() for c in island.population[:island.elite_size]]
+
+            # Rebuild the rest as greedy + random (same split as initialize_population)
+            n_fresh = island.population_size - island.elite_size
+            n_greedy = n_fresh // 2
+            n_random = n_fresh - n_greedy
+            fresh = (
+                [island._create_chromosome_greedy(pure=False) for _ in range(n_greedy)] +
+                [island._create_chromosome_random()            for _ in range(n_random)]
+            )
+            for c in fresh:
+                island._repair_rooms(c)
+                island.evaluate_fitness(c)
+
+            island.population = elite + fresh
+            island.best_chromosome = min(island.population, key=lambda c: c.fitness).copy()
+            island._gens_without_improvement = 0
+            island._current_generation = 0
+
+            if self._executor is not None:
+                self._worker_reset_flags.add(worst_idx)
 
         self._global_stagnation = 0
-        if self._executor is not None:
-            self._worker_reset_flags.add(worst_idx)
 
     # =========================================================================
     # MAIN EVOLUTION LOOP
@@ -587,6 +635,7 @@ class IslandGeneticAlgorithm:
             print(f"  Mutations   : targeted={agg['targeted_block']} "
                   f"{sb_str} explore={agg['explore']} "
                   f"full={agg['full_slot']} room={agg.get('room', 0)} "
+                  f"room_forced={agg.get('room_forced', 0)} "
                   f"| restarts={total_restarts}")
 
             # ── Top conflict offenders ────────────────────────────────────
@@ -618,14 +667,13 @@ class IslandGeneticAlgorithm:
                 break
 
             # ── SA local search ───────────────────────────────────────────
-            # Trigger when global best is below sa_threshold (last-mile mode)
-            if self.best_chromosome.fitness < self.sa_threshold and self.best_chromosome.fitness > 0:
+            # Trigger on stagnation (any epoch without global improvement)
+            if self._global_stagnation >= 1 and self.best_chromosome.fitness > 0:
                 sa = self._sa_runners[self.best_island_idx]
                 _t0 = perf_counter()
                 sa_result = sa.run(
                     self.best_chromosome,
                     budget=self.sa_budget,
-                    cooling=self.sa_cooling,
                 )
                 _t_sa = perf_counter() - _t0
                 # Repair room conflicts introduced by SA's non-aware _pick_room

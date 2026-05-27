@@ -60,8 +60,6 @@ class GeneticAlgorithm:
     PENALTY_SEPERATE_SLOT       = 100  # two lessons in same SEPERATE_SLOT group share a slot
     PENALTY_SUB_GROUP           = 100  # lessons in same SUB_GROUP group are NOT at the same slot
     PENALTY_HOMEROOM_VIOLATION  = 100  # lesson placed in a homeroom belonging to another class
-    PENALTY_SPECIALIST_ROOM     = 50   # soft preference, not a hard constraint
-    PENALTY_PREFERRED_ROOM_MISS = 30   # soft: lesson has preferred_tag but placed in general/wrong room
     PENALTY_DAY_DISTRIBUTION    = 25   # soft: teacher overloaded on one day (> DAY_LOAD_THRESHOLD periods)
     DAY_LOAD_THRESHOLD          = 5    # periods per day per teacher before penalty kicks in
 
@@ -154,6 +152,17 @@ class GeneticAlgorithm:
             l.lesson_id: get_lesson_available_slots(l, self.free_slots, self.all_slots)
             for l in self.lessons
         }
+        self._lesson_slots_set: Dict[str, Set[Tuple[str, str]]] = {
+            lid: set(slots) for lid, slots in self._lesson_slots_cache.items()
+        }
+
+        # ── Pre-computed lesson attribute fast-path sets ─────────────────────
+        # Avoid repeated lesson_map.get() + attribute access in tight loops.
+        self._req_room_lids:  Set[str] = {l.lesson_id for l in self.lessons if l.required_rooms}
+        self._pref_tag_lids:  Set[str] = {l.lesson_id for l in self.lessons if l.preferred_tags}
+        # lid → list caches (avoids .teacher_ids / .student_classes attribute lookup)
+        self._lid_teachers: Dict[str, List[str]] = {l.lesson_id: l.teacher_ids    for l in self.lessons}
+        self._lid_classes:  Dict[str, List[str]] = {l.lesson_id: l.student_classes for l in self.lessons}
 
         # ── Improvement 2: teacher -> lesson_ids grouping for crossover ─────────
         # Maps each teacher_id to the list of lesson_ids they teach.
@@ -189,7 +198,7 @@ class GeneticAlgorithm:
         # ── GA state ──────────────────────────────────────────────────────────
         self.population: List[Chromosome] = []
         self.best_chromosome: Optional[Chromosome] = None
-        self.generation_stats: List[Dict] = []
+        self.generation_stats: deque = deque(maxlen=200)
         self._gens_without_improvement: int = 0   # resets on restart
         self._fitness_window: deque = deque(maxlen=window_size)  # sliding window for stop check
         self._stopped_early: bool = False
@@ -227,34 +236,7 @@ class GeneticAlgorithm:
         return list(self.manager.room_grids.keys())
 
     def _pick_room(self, lesson: Lesson) -> str:
-        # 1. Hard: curriculum specifies required room(s) by id/name — must use.
-        if lesson.required_rooms:
-            return random.choice(lesson.required_rooms)
-        # 2. Single-class lesson — prefer the class's designated homeroom.
-        if len(lesson.student_classes) == 1:
-            hr = self.homeroom_map.get(lesson.student_classes[0])
-            if hr:
-                return hr
-        # 3. Soft: curriculum specifies preferred tag(s).
-        #    Pool = tagged rooms + general rooms so the GA can explore both.
-        #    Tagged rooms get 2× weight to bias toward the preference while
-        #    still allowing general rooms to be picked.
-        if lesson.preferred_tags:
-            lesson_class_set = set(lesson.student_classes)
-            tagged: List[str] = []
-            for tag in lesson.preferred_tags:
-                for rid in self._tag_to_rooms.get(tag, []):
-                    owner = self.homeroom_room_to_class.get(rid)
-                    if owner is None or owner in lesson_class_set:
-                        tagged.append(rid)
-            # Union of tagged (2× weight) + general rooms
-            pool = tagged + tagged + self.room_list
-            if pool:
-                return random.choice(pool)
-        # 4. General pool.
-        if self.room_list:
-            return random.choice(self.room_list)
-        return NO_ROOM
+        return self._pick_room_aware(lesson, set(), {})
 
     def _pick_room_aware(
         self,
@@ -263,9 +245,9 @@ class GeneticAlgorithm:
         occ: Dict[Tuple[str, str], Set[str]],
     ) -> str:
         """
-        Conflict-aware room pick (Options A & B).
-        Same priority as _pick_room but filters to conflict-free rooms first;
-        falls back to least-conflicted if every candidate is busy.
+        Conflict-aware room pick. Prefers free rooms; falls back to least-conflicted.
+        Tagged lessons draw from their tagged room(s) + general pool.
+        Untagged lessons draw from general pool only.
         """
         def is_free(room: str) -> bool:
             return not any(room in occ.get(s, set()) for s in busy_slots)
@@ -273,18 +255,18 @@ class GeneticAlgorithm:
         def least_conflicted(pool: List[str]) -> str:
             return min(pool, key=lambda r: sum(1 for s in busy_slots if r in occ.get(s, set())))
 
-        # 1. Required rooms: pick free one; fall back to least-conflicted
+        # 1. Required rooms
         if lesson.required_rooms:
             free = [r for r in lesson.required_rooms if is_free(r)]
             return random.choice(free) if free else least_conflicted(lesson.required_rooms)
 
-        # 2. Homeroom: use if free; else fall through to tagged/general
-        if len(lesson.student_classes) == 1:
+        # 2. Homeroom: use if free; else fall through (untagged only — tagged lessons use step 3)
+        if len(lesson.student_classes) == 1 and not lesson.preferred_tags:
             hr = self.homeroom_map.get(lesson.student_classes[0])
             if hr and is_free(hr):
                 return hr
 
-        # 3. Tagged rooms (2× weight) + general; prefer free
+        # 3. Tagged rooms + general pool
         if lesson.preferred_tags:
             lesson_class_set = set(lesson.student_classes)
             tagged: List[str] = []
@@ -293,23 +275,28 @@ class GeneticAlgorithm:
                     owner = self.homeroom_room_to_class.get(rid)
                     if owner is None or owner in lesson_class_set:
                         tagged.append(rid)
-            free_tagged   = [r for r in tagged          if is_free(r)]
-            free_general  = [r for r in self.room_list  if is_free(r)]
-            pool = free_tagged + free_general
+            pool = [r for r in tagged + self.room_list if is_free(r)]
             if pool:
                 return random.choice(pool)
             full = tagged + self.room_list
             return least_conflicted(full) if full else NO_ROOM
 
         # 4. General pool
-        free_general = [r for r in self.room_list if is_free(r)]
-        if free_general:
-            return random.choice(free_general)
-        if self.room_list:
-            return least_conflicted(self.room_list)
-        return NO_ROOM
+        free = [r for r in self.room_list if is_free(r)]
+        if free:
+            return random.choice(free)
+        return least_conflicted(self.room_list) if self.room_list else NO_ROOM
 
-    def _repair_rooms(self, chromosome: Chromosome, max_passes: int = 3) -> None:
+    def _build_room_occ(self, chromosome: Chromosome) -> Dict:
+        """Build slot → {room: count} occupancy for conflict-aware room picking."""
+        room_occ: Dict = defaultdict(lambda: defaultdict(int))
+        for _lid, _asgn in chromosome.genes.items():
+            for _ts, _rm in _asgn:
+                if _rm and _rm != NO_ROOM:
+                    room_occ[(_ts.day, _ts.period_col)][_rm] += 1
+        return room_occ
+
+    def _repair_rooms(self, chromosome: Chromosome, max_passes: int = 2) -> None:
         """
         Post-init/post-mutation room conflict repair.
 
@@ -381,6 +368,129 @@ class GeneticAlgorithm:
                 for s in busy_slots:
                     if new_room and new_room != NO_ROOM:
                         occ[s][new_room] += 1
+
+        # ── Required-room conflicts: retime the loser's TIME SLOT ─────────────
+        # required_rooms lessons can't change room; fix by finding a free block.
+        self._retime_required_room_conflicts(chromosome)
+
+    def _retime_required_room_conflicts(self, chromosome: Chromosome) -> None:
+        """
+        For required_rooms lessons sharing a room at the same slot (unfixable by
+        room change), move the loser lesson to a different consecutive block where
+        teacher, student, and required room are all free.
+        """
+        # Light pass first: detect conflicts among required_rooms lessons only.
+        # Avoids building full teacher/student occupancy in the common case (no conflicts).
+        req_slot_room: Dict[Tuple, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
+        req_lids = self._req_room_lids  # pre-computed set, avoid lesson_map lookup in loop
+        for lid, assignments in chromosome.genes.items():
+            if lid not in req_lids:
+                continue
+            for ts, room in assignments:
+                req_slot_room[(ts.day, ts.period_col)][room].append(lid)
+
+        loser_counts: Dict[str, int] = defaultdict(int)
+        for slot_map in req_slot_room.values():
+            for room, lids in slot_map.items():
+                if len(lids) > 1:
+                    for lid in lids[1:]:
+                        loser_counts[lid] += 1
+
+        if not loser_counts:
+            return
+
+        # Limit to worst 5 losers — processing all is O(n*slots) per chromosome
+        losers = sorted(loser_counts, key=lambda x: -loser_counts[x])[:5]
+
+        # Conflicts found — now build full chromosome-level occupancy for retiming.
+        teacher_occ: Dict[Tuple[str, str], Set[str]] = defaultdict(set)
+        student_occ: Dict[Tuple[str, str], Set[str]] = defaultdict(set)
+        room_occ:    Dict[Tuple[str, str], Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+
+        lid_teachers = self._lid_teachers
+        lid_classes  = self._lid_classes
+        for lid, assignments in chromosome.genes.items():
+            tids = lid_teachers.get(lid)
+            cids = lid_classes.get(lid)
+            if tids is None:
+                continue
+            for ts, room in assignments:
+                s = (ts.day, ts.period_col)
+                for tid in tids:
+                    teacher_occ[s].add(tid)
+                for cid in cids:
+                    student_occ[s].add(cid)
+                if room and room != NO_ROOM:
+                    room_occ[s][room] += 1
+
+        for lid in losers:
+            lesson = self.lesson_map.get(lid)
+            if not lesson:
+                continue
+            current = chromosome.genes.get(lid, [])
+            if not current:
+                continue
+
+            tids        = self._lid_teachers.get(lid, lesson.teacher_ids)
+            cids        = self._lid_classes.get(lid, lesson.student_classes)
+            block_size  = len(current)
+            req_room    = lesson.required_rooms[0]
+            current_set = {(ts.day, ts.period_col) for ts, _ in current}
+
+            # Free this lesson's occupancy so we can search without self-blocking
+            for s in current_set:
+                for tid in tids:
+                    teacher_occ[s].discard(tid)
+                for cid in cids:
+                    student_occ[s].discard(cid)
+                room_occ[s][req_room] -= 1
+                if room_occ[s][req_room] <= 0:
+                    del room_occ[s][req_room]
+
+            # Sample candidate blocks (avoid full shuffle of large list)
+            candidates_set = self._lesson_slots_set.get(lid, set())
+            candidates = random.sample(list(candidates_set), min(len(candidates_set), 60))
+
+            placed = False
+            for start_day, start_col in candidates:
+                idx = self._col_idx.get(start_col, -1)
+                if idx < 0 or idx + block_size > len(self.teaching_cols):
+                    continue
+                new_slots = [(start_day, self.teaching_cols[idx + i]) for i in range(block_size)]
+
+                if not all(s in candidates_set for s in new_slots):
+                    continue
+
+                ok = True
+                for s in new_slots:
+                    if any(tid in teacher_occ[s] for tid in tids):
+                        ok = False; break
+                    if any(cid in student_occ[s] for cid in cids):
+                        ok = False; break
+                    if room_occ[s].get(req_room, 0) > 0:
+                        ok = False; break
+
+                if ok:
+                    chromosome.genes[lid] = [
+                        (TimeSlot(day, col), req_room)
+                        for day, col in new_slots
+                    ]
+                    for s in new_slots:
+                        for tid in tids:
+                            teacher_occ[s].add(tid)
+                        for cid in cids:
+                            student_occ[s].add(cid)
+                        room_occ[s][req_room] += 1
+                    placed = True
+                    break
+
+            if not placed:
+                for s in current_set:
+                    for tid in tids:
+                        teacher_occ[s].add(tid)
+                    for cid in cids:
+                        student_occ[s].add(cid)
+                    room_occ[s][req_room] += 1
 
     def _normalize_gene_room(self, lid: str, gene: List[Tuple[TimeSlot, str]]) -> List[Tuple[TimeSlot, str]]:
         """
@@ -601,33 +711,8 @@ class GeneticAlgorithm:
                 local_committed |= committed_per_entity[f"student:{cid}"]
             if room != NO_ROOM:
                 local_committed |= committed_per_entity[f"room:{room}"]
-            # Virtual tagged-room tracking: treat the preferred specialist room as a
-            # shared resource even when this lesson ends up in a general room.
-            # This spreads all preferred_tags lessons across distinct time slots during
-            # init, preventing multiple same-tag lessons from stacking at the same
-            # time and competing for the single tagged room.
-            if lesson.preferred_tags:
-                for _tag in lesson.preferred_tags:
-                    for _rid in self._tag_to_rooms.get(_tag, []):
-                        local_committed |= committed_per_entity[f"room:{_rid}"]
 
             lesson_free = list(base_available - local_committed)
-
-            if not lesson_free and lesson.preferred_tags:
-                # Virtual tagged-room tracking emptied lesson_free. The tagged room
-                # may be "virtually full" but the actual rooms (general + tagged) at
-                # those slots may still be available. Relax by dropping the virtual
-                # constraint while keeping teacher/student/actual-room constraints —
-                # this avoids cascading teacher/student conflicts that _repair_rooms
-                # cannot fix, while still producing a reasonable placement.
-                local_committed_staged: Set[Tuple[str, str]] = set()
-                for _tid in lesson.teacher_ids:
-                    local_committed_staged |= committed_per_entity[f"teacher:{_tid}"]
-                for _cid in lesson.student_classes:
-                    local_committed_staged |= committed_per_entity[f"student:{_cid}"]
-                if room != NO_ROOM:
-                    local_committed_staged |= committed_per_entity[f"room:{room}"]
-                lesson_free = list(base_available - local_committed_staged)
 
             if lesson_free:
                 # Happy path: conflict-free slots exist within this chromosome.
@@ -654,12 +739,6 @@ class GeneticAlgorithm:
                 committed_per_entity[f"student:{cid}"] |= placed_slots
             if room != NO_ROOM:
                 committed_per_entity[f"room:{room}"] |= placed_slots
-            # Back-commit to all tagged rooms for this lesson's tags so that future
-            # same-tag lessons see this time slot as taken (virtual capacity tracking).
-            if lesson.preferred_tags:
-                for _tag in lesson.preferred_tags:
-                    for _rid in self._tag_to_rooms.get(_tag, []):
-                        committed_per_entity[f"room:{_rid}"] |= placed_slots
 
             c.genes[lesson.lesson_id] = assignments
 
@@ -869,8 +948,8 @@ class GeneticAlgorithm:
                 for j in range(i + 1, len(slot_sets)):
                     violations['sub_group'] += len(slot_sets[i].symmetric_difference(slot_sets[j]))
 
-        # Homeroom, specialist room, and preferred-room-miss violations
-        if self.homeroom_room_to_class or self._specialist_rooms:
+        # Homeroom violation: lesson placed in a homeroom belonging to another class
+        if self.homeroom_room_to_class:
             for lesson in self.lessons:
                 lesson_class_set = set(lesson.student_classes)
                 for ts, room in chromosome.genes.get(lesson.lesson_id, []):
@@ -878,30 +957,7 @@ class GeneticAlgorithm:
                         continue
                     owner = self.homeroom_room_to_class.get(room)
                     if owner is not None and owner not in lesson_class_set:
-                        # Wrong class's homeroom
                         violations['homeroom_violation'] += 1
-                    elif owner is None and room in self._specialist_rooms and not lesson.required_rooms:
-                        # Tagged specialist room — only penalise if lesson has no preferred-tag claim.
-                        # A lesson with preferred_tags that matches this room's tags has a soft claim
-                        # and should not be penalised (it was sent here by _pick_room on purpose).
-                        room_is_preferred = any(
-                            room in self._tag_to_rooms.get(tag, [])
-                            for tag in lesson.preferred_tags
-                        )
-                        if not room_is_preferred:
-                            violations['specialist_room'] += 1
-                    # Preferred-room miss: lesson has a tag preference but landed in a
-                    # non-preferred room (general or wrong specialist).  Penalty is soft
-                    # (30) — less than one room conflict (100) — so the GA prefers using
-                    # a general room over causing a conflict, but still has gradient to
-                    # pack as many tagged lessons into their preferred room as possible.
-                    if lesson.preferred_tags and not lesson.required_rooms:
-                        room_is_preferred = any(
-                            room in self._tag_to_rooms.get(tag, [])
-                            for tag in lesson.preferred_tags
-                        )
-                        if not room_is_preferred:
-                            violations['preferred_room_miss'] += 1
 
         # Day distribution: penalise teachers overloaded on a single day
         for load in teacher_day_load.values():
@@ -917,8 +973,6 @@ class GeneticAlgorithm:
             violations['seperate_slot']       * self.PENALTY_SEPERATE_SLOT       +
             violations['sub_group']           * self.PENALTY_SUB_GROUP           +
             violations['homeroom_violation']  * self.PENALTY_HOMEROOM_VIOLATION  +
-            violations['specialist_room']     * self.PENALTY_SPECIALIST_ROOM     +
-            violations['preferred_room_miss'] * self.PENALTY_PREFERRED_ROOM_MISS +
             violations['day_distribution']    * self.PENALTY_DAY_DISTRIBUTION
         )
         chromosome.fitness = fitness
@@ -1322,7 +1376,7 @@ class GeneticAlgorithm:
         teacher_usage_map: Optional[Dict]                            = None
         student_usage_map: Optional[Dict]                            = None
         room_usage_map:    Optional[Dict]                            = None
-        # Option B: slot → {room: count} for conflict-aware room mutation (Counter, lazy, updated on reassign)
+        # slot → {room: count} for conflict-aware room mutation (lazy, updated on reassign)
         room_occ: Optional[Dict[Tuple[str, str], Dict[str, int]]] = None
 
         # Violation-directed: collect lesson IDs with wrong period count (fast, no conflict build)
@@ -1394,11 +1448,7 @@ class GeneticAlgorithm:
                     conflicted_slots, teacher_usage_map, student_usage_map, room_usage_map = \
                         self._build_conflict_state(chromosome)
                 if room_occ is None:
-                    room_occ = defaultdict(lambda: defaultdict(int))
-                    for _lid, _asgn in chromosome.genes.items():
-                        for _ts, _rm in _asgn:
-                            if _rm and _rm != NO_ROOM:
-                                room_occ[(_ts.day, _ts.period_col)][_rm] += 1
+                    room_occ = self._build_room_occ(chromosome)
                 self._mutation_stats['swap_blocker_attempt'] += 1
                 hit = self._apply_swap_blocker(
                     chromosome, lesson,
@@ -1456,11 +1506,7 @@ class GeneticAlgorithm:
 
                 # Build room_occ lazily (shared with room/explore mutations).
                 if room_occ is None:
-                    room_occ = defaultdict(lambda: defaultdict(int))
-                    for _lid, _asgn in chromosome.genes.items():
-                        for _ts, _rm in _asgn:
-                            if _rm and _rm != NO_ROOM:
-                                room_occ[(_ts.day, _ts.period_col)][_rm] += 1
+                    room_occ = self._build_room_occ(chromosome)
 
                 all_available = [
                     s for s in (self._lesson_slots_cache[lid] or list(self.all_slots))
@@ -1538,11 +1584,7 @@ class GeneticAlgorithm:
                     continue
                 # Option B: conflict-aware room pick (Counter-based, not Set)
                 if room_occ is None:
-                    room_occ = defaultdict(lambda: defaultdict(int))
-                    for _lid, _asgn in chromosome.genes.items():
-                        for _ts, _rm in _asgn:
-                            if _rm and _rm != NO_ROOM:
-                                room_occ[(_ts.day, _ts.period_col)][_rm] += 1
+                    room_occ = self._build_room_occ(chromosome)
                 busy_slots = {(ts.day, ts.period_col) for ts, _ in current}
                 old_room   = current[0][1]
                 # Decrement this lesson's room count so it doesn't block itself,
@@ -1563,13 +1605,9 @@ class GeneticAlgorithm:
             # ── full_slot ────────────────────────────────────────────────────
             elif mutation_type == 'full_slot':
                 available = self._lesson_slots_cache[lid] or list(self.all_slots)
-                room = self._pick_room(lesson)
                 if room_occ is None:
-                    room_occ = defaultdict(lambda: defaultdict(int))
-                    for _lid, _asgn in chromosome.genes.items():
-                        for _ts, _rm in _asgn:
-                            if _rm and _rm != NO_ROOM:
-                                room_occ[(_ts.day, _ts.period_col)][_rm] += 1
+                    room_occ = self._build_room_occ(chromosome)
+                room = self._pick_room(lesson)
                 assignments = self._assign_blocks(lesson, available, room)
                 if assignments and room and room != NO_ROOM:
                     new_busy = {(ts.day, ts.period_col) for ts, _ in assignments}
@@ -1582,12 +1620,42 @@ class GeneticAlgorithm:
             # ── explore ──────────────────────────────────────────────────────
             elif mutation_type == 'explore':
                 if room_occ is None:
-                    room_occ = defaultdict(lambda: defaultdict(int))
-                    for _lid, _asgn in chromosome.genes.items():
-                        for _ts, _rm in _asgn:
-                            if _rm and _rm != NO_ROOM:
-                                room_occ[(_ts.day, _ts.period_col)][_rm] += 1
+                    room_occ = self._build_room_occ(chromosome)
                 self._apply_explore(chromosome, lesson, room_occ)
+
+        # ── Forced room-mutation pass for room-only-conflicted lessons ────────
+        # Lessons in _room_only_lids that weren't hit by the main loop still get
+        # a guaranteed conflict-aware room swap here (no probability gate).
+        if _room_only_lids:
+            if room_occ is None:
+                room_occ = self._build_room_occ(chromosome)
+            for _lid in _room_only_lids:
+                _lesson = self.lesson_map.get(_lid)
+                if not _lesson:
+                    continue
+                if _lesson.required_rooms and len(_lesson.required_rooms) <= 1:
+                    continue
+                if (len(_lesson.student_classes) == 1
+                        and not _lesson.preferred_tags
+                        and not _lesson.required_rooms
+                        and self.homeroom_map.get(_lesson.student_classes[0])):
+                    continue
+                _current = chromosome.genes.get(_lid, [])
+                if not _current:
+                    continue
+                _busy = {(ts.day, ts.period_col) for ts, _ in _current}
+                _old_room = _current[0][1]
+                for s in _busy:
+                    cnt = room_occ[s]
+                    cnt[_old_room] -= 1
+                    if cnt[_old_room] <= 0:
+                        del cnt[_old_room]
+                _new_room = self._pick_room_aware(_lesson, _busy, room_occ)
+                chromosome.genes[_lid] = [(ts, _new_room) for ts, _ in _current]
+                for s in _busy:
+                    if _new_room and _new_room != NO_ROOM:
+                        room_occ[s][_new_room] += 1
+                self._mutation_stats['room_forced'] += 1
 
         # Slot mutations move lessons without updating rooms → new room conflicts.
         # Repair once here so every mutated chromosome stays room-conflict-free.
@@ -1997,13 +2065,15 @@ class GeneticAlgorithm:
         Large Neighbourhood Search repair on a single chromosome.
 
         Destroy phase:
-          - Unassign all lessons involved in violations
-          - Randomly unassign `collateral_rate` fraction of remaining lessons
-            (creates breathing room so previously-frozen placements don't block repair)
+          - Unassign all lessons involved in hard violations (period_count + slot conflicts)
+          - Randomly unassign an adaptive collateral fraction of remaining lessons
+            (scales with violation density: high violations → more collateral, few → less)
 
         Repair phase:
-          - Re-place unassigned lessons using greedy most-constrained-first,
-            respecting the slots already committed by the kept lessons.
+          - Re-place unassigned lessons greedy most-constrained-first
+          - Two-pass room selection: place slots first (teacher/student aware),
+            then pick room conflict-aware against incremental room_occ
+          - room_occ tracks placed rooms across repair for _pick_room_aware
 
         Returns a new chromosome (original unchanged).
         """
@@ -2012,13 +2082,11 @@ class GeneticAlgorithm:
         # ── Identify violated lessons ─────────────────────────────────────────
         destroy_lids: Set[str] = set()
 
-        # Period-count violations
         for lesson in self.lessons:
             lid = lesson.lesson_id
             if len(repaired.genes.get(lid, [])) != self._expected_periods[lid]:
                 destroy_lids.add(lid)
 
-        # Slot-conflict violations (teacher / student / room)
         teacher_slot: Dict[Tuple[str, Tuple[str, str]], int] = defaultdict(int)
         student_slot: Dict[Tuple[str, Tuple[str, str]], int] = defaultdict(int)
         room_slot:    Dict[Tuple[str, Tuple[str, str]], int] = defaultdict(int)
@@ -2034,14 +2102,11 @@ class GeneticAlgorithm:
 
         conflict_slots: Set[Tuple[str, str]] = set()
         for (_, sk), cnt in teacher_slot.items():
-            if cnt > 1:
-                conflict_slots.add(sk)
+            if cnt > 1: conflict_slots.add(sk)
         for (_, sk), cnt in student_slot.items():
-            if cnt > 1:
-                conflict_slots.add(sk)
+            if cnt > 1: conflict_slots.add(sk)
         for (_, sk), cnt in room_slot.items():
-            if cnt > 1:
-                conflict_slots.add(sk)
+            if cnt > 1: conflict_slots.add(sk)
 
         for lesson in self.lessons:
             lid = lesson.lesson_id
@@ -2050,20 +2115,25 @@ class GeneticAlgorithm:
                     destroy_lids.add(lid)
                     break
 
-        # ── Collateral damage: random 10% of kept lessons ─────────────────────
+        # ── Adaptive collateral: scale with violation density ─────────────────
+        # When few violations remain, large collateral destroys good structure.
+        violation_rate = len(destroy_lids) / max(1, len(self.lessons))
+        adaptive_collateral = max(0.02, collateral_rate * min(1.0, violation_rate * 4))
         kept_lids = [
             l.lesson_id for l in self.lessons
             if l.lesson_id not in destroy_lids and l.lesson_id not in self._fixed_slots
         ]
-        n_collateral = max(1, int(len(kept_lids) * collateral_rate))
+        n_collateral = max(1, int(len(kept_lids) * adaptive_collateral))
         destroy_lids |= set(random.sample(kept_lids, min(n_collateral, len(kept_lids))))
 
         # ── Destroy ───────────────────────────────────────────────────────────
         for lid in destroy_lids:
             repaired.genes.pop(lid, None)
 
-        # ── Build committed map from kept lessons ─────────────────────────────
+        # ── Build committed map AND room_occ from kept lessons ────────────────
+        # room_occ: slot → {room: count} for conflict-aware room picking during repair
         committed: Dict[str, Set[Tuple[str, str]]] = defaultdict(set)
+        room_occ:  Dict[Tuple[str, str], Dict[str, int]] = defaultdict(lambda: defaultdict(int))
         for lesson in self.lessons:
             lid = lesson.lesson_id
             if lid in destroy_lids:
@@ -2076,6 +2146,7 @@ class GeneticAlgorithm:
                     committed[f"student:{cid}"].add(slot)
                 if room and room != NO_ROOM:
                     committed[f"room:{room}"].add(slot)
+                    room_occ[slot][room] += 1
 
         # ── Repair: greedy most-constrained-first on destroyed lessons ────────
         destroyed_lessons = sorted(
@@ -2085,40 +2156,50 @@ class GeneticAlgorithm:
 
         for lesson in destroyed_lessons:
             lid = lesson.lesson_id
+
             if lid in self._fixed_slots:
                 slots = self._fixed_slots[lid]
-                room  = self._pick_room(lesson)
+                placed_set = set(slots)
+                room = self._pick_room_aware(lesson, placed_set, room_occ)
                 repaired.genes[lid] = [(TimeSlot(d, c), room) for d, c in slots]
                 for d, c in slots:
+                    s = (d, c)
                     for tid in lesson.teacher_ids:
-                        committed[f"teacher:{tid}"].add((d, c))
+                        committed[f"teacher:{tid}"].add(s)
                     for cid in lesson.student_classes:
-                        committed[f"student:{cid}"].add((d, c))
+                        committed[f"student:{cid}"].add(s)
+                    if room and room != NO_ROOM:
+                        room_occ[s][room] += 1
                 continue
 
-            room = self._pick_room(lesson)
+            # Slot selection: avoid teacher + student conflicts only
+            # (room conflicts resolved after slot placement via _pick_room_aware)
             local_committed: Set[Tuple[str, str]] = set()
             for tid in lesson.teacher_ids:
                 local_committed |= committed[f"teacher:{tid}"]
             for cid in lesson.student_classes:
                 local_committed |= committed[f"student:{cid}"]
-            if room != NO_ROOM:
-                local_committed |= committed[f"room:{room}"]
 
             free = list(set(self._lesson_slots_cache[lid]) - local_committed)
             if not free:
                 free = list(self._lesson_slots_cache[lid]) or list(self.all_slots)
 
-            assignments = self._assign_blocks(lesson, free, room, committed=set(local_committed))
-            repaired.genes[lid] = assignments
-
+            # Place slots first with NO_ROOM placeholder; pick room after knowing placed slots
+            assignments = self._assign_blocks(lesson, free, NO_ROOM, committed=set(local_committed))
             placed_slots = {(ts.day, ts.period_col) for ts, _ in assignments}
+
+            # Now pick room conflict-aware against placed slots
+            room = self._pick_room_aware(lesson, placed_slots, room_occ)
+            repaired.genes[lid] = [(ts, room) for ts, _ in assignments]
+
             for tid in lesson.teacher_ids:
                 committed[f"teacher:{tid}"] |= placed_slots
             for cid in lesson.student_classes:
                 committed[f"student:{cid}"] |= placed_slots
-            if room != NO_ROOM:
+            if room and room != NO_ROOM:
                 committed[f"room:{room}"] |= placed_slots
+                for s in placed_slots:
+                    room_occ[s][room] += 1
 
         self._repair_rooms(repaired)
         self.evaluate_fitness(repaired)
@@ -2132,7 +2213,7 @@ class GeneticAlgorithm:
             return {}
         return {
             'final_fitness':     self.best_chromosome.fitness,
-            'generations_run':   len(self.generation_stats),
+            'generations_run':   self._current_generation,
             'solution_found':    self.best_chromosome.fitness == 0,
             'stopped_early':     self._stopped_early,
             'final_violations':  self.best_chromosome.violations,
