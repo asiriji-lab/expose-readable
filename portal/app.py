@@ -1,4 +1,30 @@
 import os
+
+# ── Windows: WeasyPrint / GTK DLL bootstrap ────────────────────────────────
+# Python 3.8+ no longer searches PATH for DLLs — the GTK bin directory must
+# be registered explicitly via os.add_dll_directory() before weasyprint loads.
+#
+# To override the auto-detected path, set the GTK_DLL_PATH environment variable:
+#   $env:GTK_DLL_PATH = "C:\my\custom\gtk\bin"   (PowerShell)
+#   set GTK_DLL_PATH=C:\my\custom\gtk\bin         (cmd)
+#
+# Recommended GTK3 source for Windows (Pango 1.44+ required by WeasyPrint 53+):
+#   https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer
+if os.name == "nt":
+    _gtk_path = os.environ.get("GTK_DLL_PATH") or next(
+        (p for p in [
+            r"C:\Program Files\GTK3-Runtime Win64\bin",   # tschoonj installer (recommended)
+            r"C:\Program Files\GTK3-Runtime\bin",
+            r"C:\Program Files\Gtk-Runtime\bin",          # GtkD / winget package
+            r"C:\gtk\bin",                                # manual / custom install
+            r"C:\msys64\mingw64\bin",                     # MSYS2
+        ] if os.path.isdir(p)),
+        None,
+    )
+    if _gtk_path:
+        os.add_dll_directory(_gtk_path)
+    del _gtk_path
+
 import json
 import pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
@@ -202,7 +228,8 @@ def load_clients():
 
 def load_expenses():
     df = normalize_columns(
-        pd.read_csv(os.path.join(DATA_DIR, "expense_2026.tsv"), sep="\t", dtype=str)
+        pd.read_csv(os.path.join(DATA_DIR, "expense_2026.tsv"), sep="\t", dtype=str,
+                    engine="python", on_bad_lines="warn")
     )
     df = df.rename(columns={"Withholding Tax": "Tax"})
     df = df[df["ID"].str.match(r"EXP20\d{6}-\d{3}", na=False)]

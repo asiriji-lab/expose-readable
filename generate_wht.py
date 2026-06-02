@@ -182,9 +182,13 @@ def main():
         except ValueError:
             return False
 
+    payees = load_payees()
+    skip_vendors = {k.lower() for k, v in payees.items() if v.get("skip")}
+
     mask = (
         expense_df["Date"].apply(in_target_month)
         & expense_df["Withholding Tax"].apply(lambda x: parse_money(x) > 0)
+        & ~expense_df["Vendor / Payee"].str.strip().str.lower().isin(skip_vendors)
     )
     filtered = expense_df[mask].copy()
 
@@ -199,7 +203,6 @@ def main():
     print(f"Found {len(filtered)} expense(s) with withholding tax.\n")
 
     # Resolve all payee info upfront (interactive prompts happen here)
-    payees = load_payees()
     resolved = [
         resolve_payee(str(row["Vendor / Payee"]).strip(), payees)
         for _, row in filtered.iterrows()
