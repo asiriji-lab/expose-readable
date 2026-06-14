@@ -1,0 +1,283 @@
+// ─── Sanitization ─────────────────────────────────────────────────────────────
+
+/**
+ * Strips zero-width characters (BOM, ZWSP, etc.) and trims whitespace.
+ * Matches the _str() helper used in Google Apps Script.
+ */
+export function sanitize(val: string | null | undefined): string {
+  if (val == null) return '';
+  let s = String(val).trim();
+  // Strip invisible/zero-width characters:
+  // BOM (U+FEFF), ZWSP (U+200B), NBSP (U+00A0), etc.
+  s = s.replace(/[\u0000-\u001F\u00A0\u200B\u200C\u200D\u2060\uFEFF]/g, '');
+  // Strip trailing punctuation commonly left by mistake (commas, semicolons)
+  s = s.replace(/[,;]+$/, '');
+  return s.trim();
+}
+
+/**
+ * Splits a string into an array of sanitized strings.
+ * Filters out any empty parts.
+ * Splits by comma, semicolon, newline, or a slash that is surrounded by spaces
+ * (to avoid splitting legitimate slashes in class IDs like "1/1").
+ */
+export function splitAndSanitize(input: string | null | undefined): string[] {
+  if (!input) return [];
+  return input
+    .split(/[,;\n\r]|\s+\/\s+/)
+    .map(sanitize)
+    .filter((s) => s.length > 0);
+}
+
+// ─── Time / Period Parsers ────────────────────────────────────────────────────
+
+/**
+ * Valid time formats:
+ *  - "HH.MM-HH.MM"  e.g. "08.05-08.55"
+ *  - Plain integer string (duration in minutes) e.g. "10"
+ */
+export function isValidTimeFormat(value: string): boolean {
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed)) return true; // plain duration number
+  return /^\d{2}\.\d{2}-\d{2}\.\d{2}$/.test(trimmed);
+}
+
+// ─── Slot Parsers ─────────────────────────────────────────────────────────────
+
+/**
+ * Slot token format: "DAY_PERIOD"  e.g. "MON_1", "TUE_Morning Break"
+ * Days: MON | TUE | WED | THU | FRI
+ */
+export function isValidSlotToken(token: string): boolean {
+  return /^(MON|TUE|WED|THU|FRI)_.+$/.test(token.trim());
+}
+
+/**
+ * Parses a comma-separated list of slot tokens.
+ * Returns invalid tokens (or empty array if all valid).
+ */
+export function getInvalidSlotTokens(value: string): string[] {
+  if (!value.trim()) return [];
+  return value
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => t && !isValidSlotToken(t));
+}
+
+// ─── ID / Code Parsers ────────────────────────────────────────────────────────
+
+/**
+ * Teacher IDs: T### or E###  (3 digits minimum)
+ */
+export function isValidTeacherId(value: string): boolean {
+  return /^[TE]\d{3,}$/.test(value.trim());
+}
+
+/**
+ * Class ID format raw: "{grade}/{section}"  e.g. "1/1", "6/3"
+ * (No M. prefix — that is the actual raw CSV format)
+ */
+export function isValidClassId(value: string): boolean {
+  return /^\d+\/\d+$/.test(value.trim());
+}
+
+// ─── Grade Range Parser ───────────────────────────────────────────────────────
+
+/**
+ * Grade notation appears in curriculum headers.
+ * Formats: "/1"  "/3-5"  "/1,3,5"
+ * Returns the array of grade numbers referenced.
+ */
+export function parseGradeNotation(value: string): number[] {
+  const trimmed = value.trim().replace(/^\//, '');
+  const grades: number[] = [];
+
+  for (const part of trimmed.split(',')) {
+    const rangeParts = part.trim().split('-');
+    if (rangeParts.length === 2) {
+      const start = parseInt(rangeParts[0]);
+      const end = parseInt(rangeParts[1]);
+      if (!isNaN(start) && !isNaN(end)) {
+        for (let g = start; g <= end; g++) grades.push(g);
+      }
+    } else {
+      const n = parseInt(part.trim());
+      if (!isNaN(n)) grades.push(n);
+    }
+  }
+
+  return grades;
+}
+
+/**
+ * Detects whether a cell value is a curriculum grade-level header.
+ * Actual format in raw CSV: "ม.1", "ม.2", ..., "ม.6"
+ */
+export function isGradeHeader(value: string): boolean {
+  return /^ม\.([1-6])$/.test(value.trim());
+}
+
+// ─── Skip-row Markers ─────────────────────────────────────────────────────────
+
+/**
+ * Rows where teacher_id is one of these are section-header rows — skip them.
+ * Actual markers from raw teacher.csv: 'ครูในโรงเรียน' and 'อาจารย์นอก'
+ */
+export const TEACHER_SKIP_MARKERS = new Set(['ครูในโรงเรียน', 'อาจารย์นอก', 'teacher_id', '']);
+
+/**
+ * Returns true if this row should be skipped during validation.
+ */
+export function isSkipRow(firstCellValue: string): boolean {
+  return TEACHER_SKIP_MARKERS.has(firstCellValue.trim());
+}
+
+/**
+ * Returns true if this row is a "Marker Cell" — a human-readability section
+ * divider that should not be included in validation or data export.
+ */
+export function isMarkerRow(row: string[]): boolean {
+  if (!row || row.length === 0) return false;
+  const first = sanitize(row[0]);
+  if (!first) return false;
+
+  // All non-first cells must be empty for this to be a marker row
+  const restEmpty = row.slice(1).every((c) => !sanitize(c));
+  if (!restEmpty) return false;
+
+  // Grade-header style: ม.1 – ม.6
+  if (isGradeHeader(first)) return true;
+
+  // Label ending with colon convention: e.g. "กลุ่มสาระ:"
+  if (/:\s*$/.test(first)) return true;
+
+  return false;
+}
+
+// ─── Fuzzy Matching ──────────────────────────────────────────────────────────
+
+/**
+ * Simple Levenshtein distance implementation for fuzzy matching names.
+ */
+function levenshtein(a: string, b: string): number {
+  const matrix = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
+/**
+ * Suggests a close match for a teacher name if it doesn't exist.
+ */
+export function fuzzyMatchTeacher(name: string, validNames: string[]): string | null {
+  const normalizedInput = sanitize(name).toLowerCase();
+  if (!normalizedInput) return null;
+
+  let bestMatch = null;
+  let minDistance = 3; // Max threshold for "closeness"
+
+  for (const validName of validNames) {
+    const normalizedValid = sanitize(validName).toLowerCase();
+    
+    // Check for exact substring match first (e.g. "สมชาย" in "สมชาย แซ่ดี")
+    if (normalizedValid.includes(normalizedInput) || normalizedInput.includes(normalizedValid)) {
+      return validName;
+    }
+
+    const dist = levenshtein(normalizedInput, normalizedValid);
+    if (dist < minDistance) {
+      minDistance = dist;
+      bestMatch = validName;
+    }
+  }
+
+  return bestMatch;
+}
+
+// ─── apply_to field parser ────────────────────────────────────────────────────
+
+/**
+ * apply_to field in preplace.csv (raw CSV format).
+ * Valid formats: "All" | "ม.{1-6}" | comma-list of grades e.g. "ม.1, ม.2, ม.3"
+ */
+export function isValidApplyTo(value: string): boolean {
+  const v = value.trim();
+  if (v === 'All' || v === 'all') return true;
+  // Single grade: ม.1 – ม.6
+  if (/^ม\.[1-6]$/.test(v)) return true;
+  // Comma-separated list of grades
+  const parts = v.split(',').map((p) => p.trim());
+  return parts.every((p) => /^ม\.[1-6]$/.test(p));
+}
+
+// ─── Preplace slot format parser ───────────────────────────────────────────────────────────────
+
+/**
+ * Validates a single preplace คาบ token.
+ * Valid formats:
+ *   DAY_N          e.g. MON_2
+ *   DAY_N-DAY_M    e.g. MON_2-MON_10
+ *   Everyday_N     e.g. Everyday_1
+ * Days: MON | TUE | WED | THU | FRI
+ */
+const DAY = '(MON|TUE|WED|THU|FRI)';
+export function isValidPreplaceSlotToken(token: string): boolean {
+  const t = token.trim();
+  if (/^Everyday_\d+$/.test(t)) return true;
+  if (new RegExp(`^${DAY}_\\d+$`).test(t)) return true;
+  if (new RegExp(`^${DAY}_\\d+-${DAY}_\\d+$`).test(t)) return true;
+  return false;
+}
+
+/**
+ * Returns invalid tokens from a comma-separated preplace คาบ string.
+ */
+export function getInvalidPreplaceSlotTokens(value: string): string[] {
+  if (!value.trim()) return [];
+  return value
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => t && !isValidPreplaceSlotToken(t));
+}
+
+// ─── Student class string parser (for curriculum CU-4) ────────────────────────────────────────
+
+/**
+ * Parses a ห้อง (นักเรียน) ที่สอน string like "/1, /3-5" into section numbers [1, 3, 4, 5].
+ * Supports:
+ *   /N       → single section
+ *   /N-M     → range inclusive
+ *   mixed    → comma-separated combination
+ */
+export function parseStudentClassString(value: string): number[] {
+  if (!value.trim()) return [];
+  const sections = new Set<number>();
+  const elements = value.replace(/\s/g, '').split(',').filter(Boolean);
+  for (const el of elements) {
+    const rangeMatch = el.match(/^\/(\d+)-(\d+)$/);
+    if (rangeMatch) {
+      const start = parseInt(rangeMatch[1]);
+      const end = parseInt(rangeMatch[2]);
+      for (let s = start; s <= end; s++) sections.add(s);
+      continue;
+    }
+    const singleMatch = el.match(/^\/(\d+)$/);
+    if (singleMatch) {
+      sections.add(parseInt(singleMatch[1]));
+    }
+  }
+  return [...sections].sort((a, b) => a - b);
+}

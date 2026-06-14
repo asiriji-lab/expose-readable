@@ -1,0 +1,69 @@
+'use server'
+
+import { setAuthCookies } from '@/utils/auth/server'
+import { BACKEND_BASE } from '@/lib/api/backend'
+
+function normalizeRole(value: unknown): 'school_admin' | 'teacher' | 'student' | null {
+    if (typeof value !== 'string') return null;
+    const role = value.trim().toLowerCase();
+    if (role === 'school_admin' || role === 'teacher' || role === 'student') {
+        return role;
+    }
+    return null;
+}
+
+export async function loginWithUsernameOrEmail(formData: FormData) {
+    const usernameOrEmail = formData.get('usernameOrEmail') as string;
+    const password = formData.get('password') as string;
+
+    if (!usernameOrEmail || !password) {
+        return { error: 'Username/Email and Password are required' };
+    }
+
+    try {
+        const res = await fetch(`${BACKEND_BASE}/api/v1/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: usernameOrEmail, password }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+            return { error: data.error || 'Login failed' };
+        }
+
+        const role = normalizeRole(data.user?.role);
+
+        await setAuthCookies(data.access_token, {
+            user_id:    data.user?.user_id    ?? '',
+            role:       role ?? 'student',
+            username:   data.user?.username   ?? '',
+            email:      data.user?.email      ?? '',
+            first_name: data.user?.first_name ?? '',
+            last_name:  data.user?.last_name  ?? '',
+        });
+
+        return { success: true, role };
+    } catch {
+        return { error: 'Network error — is the backend running?' };
+    }
+}
+
+export async function detectRoleAction(usernameOrEmail: string) {
+    if (!usernameOrEmail) return { role: null, available: false };
+
+    try {
+        const res = await fetch(
+            `${BACKEND_BASE}/api/v1/auth/detect-role?q=${encodeURIComponent(usernameOrEmail)}`
+        );
+        if (!res.ok) {
+            // Endpoint doesn't exist or server error — can't determine if user exists
+            return { role: null, available: false };
+        }
+        const data = await res.json();
+        return { role: normalizeRole(data.role), available: true };
+    } catch {
+        return { role: null, available: false };
+    }
+}

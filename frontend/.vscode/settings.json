@@ -1,0 +1,10 @@
+{
+    "css.lint.unknownAtRules": "ignore",
+    "chat.tools.terminal.autoApprove": {
+        "/^node \"D:\\\\OneDrive\\\\Documents\\\\New_Life\\\\Schedool\\\\frontend\\\\schedool\\\\\\.agent\\\\check_dom\\.js\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "netstat": true
+    }
+}
