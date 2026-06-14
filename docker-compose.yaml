@@ -4,8 +4,6 @@ services:
 
   # FRONTEND SERVICE
   frontend:
-    build:
-      context: ./frontend
     image: ghcr.io/schedool/frontend:latest
     container_name: schedool-frontend
     hostname: schedool-frontend
@@ -18,8 +16,6 @@ services:
 
   # BACKEND SERVICE
   backend:
-    build:
-      context: ./backend
     image: ghcr.io/schedool/backend:latest
     container_name: schedool-backend
     hostname: schedool-backend

@@ -263,7 +263,7 @@ def compute_entity_meta(cleaned_data: Dict[str, pd.DataFrame]) -> Dict:
                     workload_map[tid][sid]['totalPeriods'] += teacher_ppw * len(classes)
 
                 else:
-                    # Default / TEAM / SEPERATE_SLOT / SUB_GROUP:
+                    # Default / TEAM / SEPARATE_SLOT / SUB_GROUP:
                     # GA creates one lesson per class — teacher teaches ppw × num_classes periods.
                     for class_code in classes:
                         workload_map[tid][sid]['assignments'].append({

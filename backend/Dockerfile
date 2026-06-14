@@ -1,21 +1,18 @@
 # syntax=docker/dockerfile:1
 
-# base python image for custom image
-FROM python:3.14.0-slim-trixie
+FROM python:3.13-slim
 
-# create working directory and install pip dependencies
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 WORKDIR /backend
-COPY requirements.txt requirements.txt
-RUN pip3 install -r requirements.txt
 
-# copy python project files from local to /solver image working directory
+# Install dependencies first (layer cached until pyproject.toml changes)
+COPY pyproject.toml .
+RUN uv sync --no-dev
+
+# Copy application code
 COPY . .
 
-# switch dir
-RUN cd /backend
-
-# run the flask server  
-CMD [ "python3", "/backend/app.py" ]
-
-# export port
 EXPOSE 5000/tcp
+CMD ["uv", "run", "python", "app.py"]

@@ -117,5 +117,5 @@ This usually means the problem is genuinely over-constrained — the input data 
 
 - A teacher is assigned more lessons than they have available slots.
 - A class has more lessons than there are available periods in the week.
-- `SEPERATE_SLOT` lessons that must not clash are all constrained to the same few available slots.
+- `SEPARATE_SLOT` lessons that must not clash are all constrained to the same few available slots.
 - Run the feasibility report (in the `result.feasibility` field of the API response) — `ERROR`-level issues mean the GA **cannot** reach fitness 0.

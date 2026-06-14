@@ -32,8 +32,8 @@ def _parse_constraint_type(constraint_str: Any) -> Optional[str]:
         return 'MULTI_CLASS_TEAM'
     if 'TYPE=TEAM' in s:
         return 'TEAM'
-    if 'TYPE=SEPERATE_SLOT' in s:
-        return 'SEPERATE_SLOT'
+    if 'TYPE=SEPARATE_SLOT' in s:
+        return 'SEPARATE_SLOT'
     if 'TYPE=SUB_GROUP' in s:
         return 'SUB_GROUP'
     if 'TYPE=TEACHER_SPLIT' in s:

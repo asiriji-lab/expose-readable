@@ -37,7 +37,7 @@ class Lesson:
     preferred_tags: List[str]    # tag-based soft preference (fallback to general if no match)
     fixed_period: Optional[str]
     # Constraint fields — populated from curriculum 'constraint' column
-    constraint_type: Optional[str] = None          # TEAM | MULTI_CLASS_TEAM | SEPERATE_SLOT | SUB_GROUP | TEACHER_SPLIT
+    constraint_type: Optional[str] = None          # TEAM | MULTI_CLASS_TEAM | SEPARATE_SLOT | SUB_GROUP | TEACHER_SPLIT
     constraint_group_id: Optional[str] = None      # links lessons that share a constraint group
 
 

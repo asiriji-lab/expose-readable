@@ -120,7 +120,7 @@ def _parse_constraint_type(constraint_str: Any) -> Optional[str]:
     """
     Extract the constraint type keyword from the constraint column value.
     Checks for type=XXX patterns (case-insensitive, space-tolerant).
-    Returns one of: TEAM | MULTI_CLASS_TEAM | SEPERATE_SLOT | SUB_GROUP | TEACHER_SPLIT | None
+    Returns one of: TEAM | MULTI_CLASS_TEAM | SEPARATE_SLOT | SUB_GROUP | TEACHER_SPLIT | None
     """
     if constraint_str is None or (isinstance(constraint_str, float) and np.isnan(constraint_str)):
         return None
@@ -132,8 +132,8 @@ def _parse_constraint_type(constraint_str: Any) -> Optional[str]:
         return 'MULTI_CLASS_TEAM'
     if 'TYPE=TEAM' in s:
         return 'TEAM'
-    if 'TYPE=SEPERATE_SLOT' in s:
-        return 'SEPERATE_SLOT'
+    if 'TYPE=SEPARATE_SLOT' in s:
+        return 'SEPARATE_SLOT'
     if 'TYPE=SUB_GROUP' in s:
         return 'SUB_GROUP'
     if 'TYPE=TEACHER_SPLIT' in s:
@@ -153,7 +153,7 @@ def build_lessons_from_manager(manager: ScheduleManager) -> List['Lesson']:
 
     Constraint handling:
       TEAM / MULTI_CLASS_TEAM  — one lesson per ROW (all classes in that row share one slot)
-      SEPERATE_SLOT            — one lesson per class; tagged so the GA penalises same-slot
+      SEPARATE_SLOT            — one lesson per class; tagged so the GA penalises same-slot
       SUB_GROUP                — one lesson per class; tagged so the GA rewards same-slot
       TEACHER_SPLIT            — split into N sub-lessons per class (one per block/teacher pair)
       (none)                   — one lesson per class (default)
@@ -345,11 +345,11 @@ def build_lessons_from_manager(manager: ScheduleManager) -> List['Lesson']:
                     lessons.append(lesson)
 
         # ------------------------------------------------------------------
-        # SEPERATE_SLOT / SUB_GROUP: one lesson per class, tagged with group
+        # SEPARATE_SLOT / SUB_GROUP: one lesson per class, tagged with group
         # SUB_GROUP: fixed_period is the required shared slot for the whole group;
         #            each class has its own teacher(s) and room as listed.
         # ------------------------------------------------------------------
-        elif constraint_type in ('SEPERATE_SLOT', 'SUB_GROUP'):
+        elif constraint_type in ('SEPARATE_SLOT', 'SUB_GROUP'):
             sub_group_fp = fp_str if (constraint_type == 'SUB_GROUP' and has_fixed_period) else None
             for class_id in student_classes:
                 lesson = Lesson(

@@ -57,7 +57,7 @@ class GeneticAlgorithm:
     PENALTY_ROOM_CONFLICT       = 100
     PENALTY_BLOCK_VIOLATION     = 100  # raised: non-consecutive blocks are a hard structural constraint
     PENALTY_PERIOD_COUNT        = 125  # lowered: less dominant early, still > any single violation
-    PENALTY_SEPERATE_SLOT       = 100  # two lessons in same SEPERATE_SLOT group share a slot
+    PENALTY_SEPARATE_SLOT       = 100  # two lessons in same SEPARATE_SLOT group share a slot
     PENALTY_SUB_GROUP           = 100  # lessons in same SUB_GROUP group are NOT at the same slot
     PENALTY_HOMEROOM_VIOLATION  = 100  # lesson placed in a homeroom belonging to another class
     PENALTY_DAY_DISTRIBUTION    = 25   # soft: teacher overloaded on one day (> DAY_LOAD_THRESHOLD periods)
@@ -177,12 +177,12 @@ class GeneticAlgorithm:
         ]
 
         # ── Constraint groups ─────────────────────────────────────────────────
-        # Maps constraint_group_id -> [lesson_ids] for SEPERATE_SLOT and SUB_GROUP
-        self._seperate_slot_groups: Dict[str, List[str]] = defaultdict(list)
+        # Maps constraint_group_id -> [lesson_ids] for SEPARATE_SLOT and SUB_GROUP
+        self._SEPARATE_SLOT_groups: Dict[str, List[str]] = defaultdict(list)
         self._sub_group_groups:     Dict[str, List[str]] = defaultdict(list)
         for lesson in self.lessons:
-            if lesson.constraint_type == 'SEPERATE_SLOT' and lesson.constraint_group_id:
-                self._seperate_slot_groups[lesson.constraint_group_id].append(lesson.lesson_id)
+            if lesson.constraint_type == 'SEPARATE_SLOT' and lesson.constraint_group_id:
+                self._SEPARATE_SLOT_groups[lesson.constraint_group_id].append(lesson.lesson_id)
             elif lesson.constraint_type == 'SUB_GROUP' and lesson.constraint_group_id:
                 self._sub_group_groups[lesson.constraint_group_id].append(lesson.lesson_id)
 
@@ -925,15 +925,15 @@ class GeneticAlgorithm:
                         violations['block_violation'] += 1
                         break  # one gap violation per day is sufficient
 
-        # SEPERATE_SLOT: lessons in the same group must NOT share any (day, period_col)
-        for gid, lids in self._seperate_slot_groups.items():
+        # SEPARATE_SLOT: lessons in the same group must NOT share any (day, period_col)
+        for gid, lids in self._SEPARATE_SLOT_groups.items():
             slot_count: Dict[Tuple[str, str], int] = defaultdict(int)
             for lid in lids:
                 for ts, _ in chromosome.genes.get(lid, []):
                     slot_count[(ts.day, ts.period_col)] += 1
             for count in slot_count.values():
                 if count > 1:
-                    violations['seperate_slot'] += count - 1
+                    violations['SEPARATE_SLOT'] += count - 1
 
         # SUB_GROUP: all lessons in the same group MUST share the same slot set
         # BUG-9: all-pairs comparison so no single lesson acts as a privileged reference
@@ -970,7 +970,7 @@ class GeneticAlgorithm:
             violations['room_conflict']       * self.PENALTY_ROOM_CONFLICT       +
             violations['block_violation']     * self.PENALTY_BLOCK_VIOLATION     +
             violations['period_count']        * self.PENALTY_PERIOD_COUNT        +
-            violations['seperate_slot']       * self.PENALTY_SEPERATE_SLOT       +
+            violations['SEPARATE_SLOT']       * self.PENALTY_SEPARATE_SLOT       +
             violations['sub_group']           * self.PENALTY_SUB_GROUP           +
             violations['homeroom_violation']  * self.PENALTY_HOMEROOM_VIOLATION  +
             violations['day_distribution']    * self.PENALTY_DAY_DISTRIBUTION

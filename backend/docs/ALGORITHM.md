@@ -120,7 +120,7 @@ Every chromosome is given a **fitness score** — the total penalty for all the 
 |---|---|
 | Teacher booked in two places at the same time | 100 |
 | Student class booked in two places at the same time | 100 |
-| `SEPERATE_SLOT` group placed at the same time | 100 |
+| `SEPARATE_SLOT` group placed at the same time | 100 |
 | `SUB_GROUP` group NOT placed at the same time | 100 |
 | Block pattern broken (e.g. two periods not consecutive) | 80 |
 | Lesson placed in another class's homeroom | 100 |
