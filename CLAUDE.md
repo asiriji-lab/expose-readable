@@ -127,7 +127,7 @@ Full column spec: **`backend/docs/INPUT_SPEC.md`**
 ```bash
 cd frontend
 npm install --legacy-peer-deps
-cp .env.example .env.local   # fill in Clerk + Supabase + BACKEND_URL
+cp .env.example .env.local   # fill in Clerk + BACKEND_URL + Google vars
 npm run dev
 ```
 
@@ -139,10 +139,6 @@ npm run dev
 | `CLERK_SECRET_KEY` | Server-only (middleware, API routes) |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` etc. | Clerk redirect config |
 | `BACKEND_URL` | Server-side fetch to Flask API |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase client (public) |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase client (public) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server-only — Supabase admin operations |
-| `NEXT_PUBLIC_ADMIN_REGISTRATION_KEY` | Baked into bundle — gate for admin self-registration |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Server-only — Google Sheets API auth |
 | `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | Server-only secret — never expose to client |
 | `GOOGLE_SHEET_TEMPLATE_ID` | Server-only — template sheet to copy from |
@@ -159,7 +155,7 @@ app/
 │   ├── dashboard/          Schedule list + create button
 │   ├── dashboard/[id]/     Upload CSVs, track job, preview result
 │   └── schedule/           Drag-and-drop timetable editor
-├── (auth)/                 Login / register / OTP / complete-profile
+├── (auth)/                 Login / register / complete-profile
 ├── teacher/schedule/       Teacher-facing read-only timetable
 ├── student/schedule/       Student-facing read-only timetable
 └── room/schedule/          Room-facing read-only timetable
@@ -180,7 +176,6 @@ lib/api/scheduleApi.ts    Frontend ↔ backend HTTP calls
 lib/api/backend.ts        Low-level fetch wrapper with auth-token
 lib/adapters/scheduleAdapter.ts   Transform backend JSON → UI timetable model
 lib/hooks/useJobStatus.ts         Polls GET /jobs/<id> until complete
-lib/supabase.ts                   Supabase client (schedule persistence)
 ```
 
 ### Google Apps Script (`../appscript/`)
@@ -207,7 +202,7 @@ npm run lint         # ESLint
 ```bash
 # From project root
 cp backend/.env.example backend/.env   # fill in secrets
-cp frontend/.env.example frontend/.env.local  # fill in Clerk + Supabase
+cp frontend/.env.example frontend/.env.local  # fill in Clerk + BACKEND_URL + Google vars
 docker-compose up --build
 ```
 

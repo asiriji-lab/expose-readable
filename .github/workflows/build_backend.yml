@@ -1,18 +1,12 @@
 name: build_backend
 
 on:
-  schedule:
-    - cron: "00 05 * * *"
-
   push:
     branches:
-      - backend
-    paths-ignore:
-      - "**.md"
-
-  pull_request:
-    branches:
-      - backend
+      - main
+    paths:
+      - 'backend/**'
+      - '!backend/**/*.md'
   workflow_dispatch:
 
 concurrency:
@@ -24,8 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: backend
 
       - name: Log in to GHCR
         run: docker login --username winsdominoes --password ${{ secrets.SCHEDOOL_ACTION_TOKEN }} ghcr.io
@@ -35,4 +27,4 @@ jobs:
           docker buildx build \
             -t ghcr.io/schedool/backend:latest \
             --push \
-            .
+            ./backend

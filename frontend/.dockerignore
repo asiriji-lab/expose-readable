@@ -1,0 +1,11 @@
+.env
+.env.*
+.next/
+node_modules/
+.git
+.gitignore
+.vscode/
+README*.md
+docs/
+appscript/
+public/example_csv/

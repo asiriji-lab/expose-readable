@@ -56,11 +56,6 @@ const Box: React.FC = () => {
       const result = await loginWithUsernameOrEmail(formData);
 
       if (result.error) {
-        if (result.error.toLowerCase().includes('email not confirmed')) {
-          const roleQuery = selectedRole ? `&role=${selectedRole}` : '';
-          router.push(`/verify-otp?email=${encodeURIComponent(username)}${roleQuery}`);
-          return;
-        }
         throw new Error(result.error);
       }
 

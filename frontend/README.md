@@ -1,6 +1,6 @@
 # Schedool Frontend
 
-Web interface for the Schedool GA scheduling system. Built with Next.js 16 App Router, Clerk authentication, and Supabase for schedule persistence.
+Web interface for the Schedool GA scheduling system. Built with Next.js 16 App Router and Clerk authentication.
 
 ---
 
@@ -11,7 +11,6 @@ Web interface for the Schedool GA scheduling system. Built with Next.js 16 App R
 | Framework | Next.js 16 (App Router, standalone output) |
 | Language | TypeScript 5 |
 | Auth | Clerk (SSO + JWT) |
-| Database | Supabase (schedule persistence) |
 | Styling | Tailwind CSS v4 + shadcn/ui |
 | Drag & Drop | dnd-kit |
 | CSV parsing | PapaParse |
@@ -26,7 +25,7 @@ app/
 ├── (admin)/
 │   ├── dashboard/          # Schedule list + per-schedule detail ([id])
 │   └── schedule/           # Timetable viewer with drag-and-drop editor
-├── (auth)/                 # Login, register, OTP, complete-profile flows
+├── (auth)/                 # Login, register, complete-profile flows
 ├── teacher/                # Teacher-facing timetable view
 ├── student/                # Student-facing timetable view
 └── room/                   # Room-facing timetable view
@@ -34,8 +33,7 @@ app/
 lib/
 ├── api/                    # Backend API client (scheduleApi.ts, backend.ts)
 ├── hooks/                  # useJobStatus, useLatestSchedule
-├── adapters/               # scheduleAdapter — transforms backend JSON to UI model
-└── supabase.ts             # Supabase client
+└── adapters/               # scheduleAdapter — transforms backend JSON to UI model
 
 ../appscript/               # Google Apps Script — sheet validation + slot picker UI (root level)
 ```
@@ -59,7 +57,6 @@ All pages except `/`, `/login`, and `/after-sign-in` require both. `/complete-pr
 
 - Node.js 20+
 - Clerk account + application ([clerk.com](https://clerk.com))
-- Supabase project ([supabase.com](https://supabase.com))
 - Schedool backend running (see `../backend/HOW_TO_RUN.md`)
 
 ### Setup
@@ -85,16 +82,6 @@ CLERK_SECRET_KEY=sk_...
 
 # Backend
 BACKEND_URL=http://localhost:5000
-
-# Supabase (public)
-NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-
-# Supabase (server-only)
-SUPABASE_SERVICE_ROLE_KEY=...
-
-# Admin registration gate (baked into client bundle at build time)
-NEXT_PUBLIC_ADMIN_REGISTRATION_KEY=...
 
 # Google service account (server-only — never expose to client)
 GOOGLE_SERVICE_ACCOUNT_EMAIL=...@....iam.gserviceaccount.com
@@ -127,13 +114,10 @@ docker build \
   --build-arg NEXT_PUBLIC_CLERK_SIGN_UP_URL=/register \
   --build-arg NEXT_PUBLIC_CLERK_SIGN_IN_FORCE_REDIRECT_URL=/after-sign-in \
   --build-arg NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL=/after-sign-in \
-  --build-arg NEXT_PUBLIC_SUPABASE_URL=https://... \
-  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=... \
-  --build-arg NEXT_PUBLIC_ADMIN_REGISTRATION_KEY=... \
   -t schedool-frontend ./frontend
 ```
 
-> `NEXT_PUBLIC_*` variables are baked into the client bundle at build time and must be passed as `--build-arg`. Runtime-only variables (`CLERK_SECRET_KEY`, `BACKEND_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_*`) are injected via `docker-compose env_file` and do not need build args.
+> `NEXT_PUBLIC_*` variables are baked into the client bundle at build time and must be passed as `--build-arg`. Runtime-only variables (`CLERK_SECRET_KEY`, `BACKEND_URL`, `GOOGLE_*`) are injected via `docker-compose env_file` and do not need build args.
 
 ---
 

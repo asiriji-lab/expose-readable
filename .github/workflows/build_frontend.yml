@@ -1,18 +1,12 @@
 name: build_frontend
 
 on:
-  schedule:
-    - cron: "00 05 * * *"
-
   push:
     branches:
-      - frontend
-    paths-ignore:
-      - "**.md"
-
-  pull_request:
-    branches:
-      - frontend
+      - main
+    paths:
+      - 'frontend/**'
+      - '!frontend/**/*.md'
   workflow_dispatch:
 
 concurrency:
@@ -24,8 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: frontend
 
       - name: Log in to GHCR
         run: docker login --username winsdominoes --password ${{ secrets.SCHEDOOL_ACTION_TOKEN }} ghcr.io
@@ -46,4 +38,4 @@ jobs:
             --build-arg NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL="$NEXT_PUBLIC_CLERK_SIGN_UP_FORCE_REDIRECT_URL" \
             -t ghcr.io/schedool/frontend:latest \
             --push \
-            .
+            ./frontend
