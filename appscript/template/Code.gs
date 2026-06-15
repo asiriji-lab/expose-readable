@@ -147,8 +147,8 @@ var CELL_VALIDATORS = {
   'preplace': {
     'ชื่อ':     { check: function(v) { return v.length > 0 && v.indexOf(',') === -1; }, msg: 'ต้องระบุชื่อ slot และห้ามมีจุลภาค' },
     'คาบ':      { check: function(v) { return getInvalidPreplaceSlotTokens(v).length === 0; }, msg: 'รูปแบบ slot ไม่ถูกต้อง — ใช้ DAILY_1, MON_1 หรือ MON_1-3' },
-    'students': { check: function(v) { return splitAndSanitize(v).every(function(t) { return isValidStudentsToken(t); }); }, msg: 'ใช้ ALL, student_grade:N หรือ class_id เช่น 1/1' },
-    'teachers': { check: function(v) { return splitAndSanitize(v).every(function(t) { return isValidTeachersToken(t); }); }, msg: 'ใช้ ALL, department:X, homeroom_grade:N, homeroom_teacher หรือ teacher_id' },
+    'นักเรียน': { check: function(v) { return splitAndSanitize(v).every(function(t) { return isValidStudentsToken(t); }); }, msg: 'ใช้ ALL, student_grade:N หรือ class_id เช่น 1/1' },
+    'ครู':      { check: function(v) { return splitAndSanitize(v).every(function(t) { return isValidTeachersToken(t); }); }, msg: 'ใช้ ALL, department:X, homeroom_grade:N, homeroom_teacher หรือ teacher_id' },
   },
   'curriculum': {
     'คาบ/สัปดาห์':    { check: function(v) { return /^\d+$/.test(v) && parseInt(v, 10) > 0; }, msg: 'ต้องเป็นจำนวนเต็มบวก เช่น 3' },
@@ -296,30 +296,30 @@ var _CROSS_SHEET_CHECKS_ = {
     }
   },
   'preplace': {
-    'students': function(v, lu) {
+    'นักเรียน': function(v, lu) {
       if (!v) return null;
       var tokens = splitAndSanitize(v);
       for (var i = 0; i < tokens.length; i++) {
         var t = tokens[i];
         if (/^student_grade:(\d+)$/.test(t)) {
           var gn = parseInt(t.split(':')[1], 10);
-          if (!lu.gradeToSections['ม.' + gn]) return 'students: ไม่พบนักเรียนชั้น ม.' + gn;
+          if (!lu.gradeToSections['ม.' + gn]) return 'นักเรียน: ไม่พบนักเรียนชั้น ม.' + gn;
         } else if (isValidClassId(t)) {
-          if (!lu.classIds[t]) return 'students: ไม่พบ class_id "' + t + '"';
+          if (!lu.classIds[t]) return 'นักเรียน: ไม่พบ class_id "' + t + '"';
         }
       }
       return null;
     },
-    'teachers': function(v, lu) {
+    'ครู': function(v, lu) {
       if (!v) return null;
       var tokens = splitAndSanitize(v);
       for (var i = 0; i < tokens.length; i++) {
         var t = tokens[i];
         if (/^department:(.+)$/.test(t)) {
           var dept = t.split(':').slice(1).join(':');
-          if (!lu.departments[dept]) return 'teachers: ไม่พบ department "' + dept + '"';
+          if (!lu.departments[dept]) return 'ครู: ไม่พบ department "' + dept + '"';
         } else if (isValidTeacherId(t)) {
-          if (!lu.teacherIds[t]) return 'teachers: ไม่พบ teacher_id "' + t + '"';
+          if (!lu.teacherIds[t]) return 'ครู: ไม่พบ teacher_id "' + t + '"';
         }
       }
       return null;

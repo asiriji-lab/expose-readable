@@ -2,6 +2,7 @@
 
 > This document defines all 7 input CSV sheets sent to the GA scheduling backend.
 > All files are UTF-8 CSV. Column headers are in English (the frontend translates Thai Google Sheet headers before sending).
+> Each table now includes a **GSheet header** column showing the Thai header used in the Google Sheets template.
 
 ---
 
@@ -46,10 +47,10 @@ Validation runs in three layers. The first two are the source of truth — the s
 
 Defines the time slots in a school day. The scheduler uses this to label timetable columns.
 
-| Column | Type | Required | Description |
-|---|---|---|---|
-| `period_label` | string | ✅ | Display name of the period (e.g. `1`, `2`, `Morning Break`) |
-| `period_time` | string | ✅ | Time range string (e.g. `08.05-08.55`). Use a duration in minutes for break rows (e.g. `10`). |
+| Column | GSheet header | Type | Required | Description |
+|---|---|---|---|---|
+| `period_label` | `คาบ` | string | ✅ | Display name of the period (e.g. `1`, `2`, `Morning Break`) |
+| `period_time` | `เวลา` | string | ✅ | Time range string (e.g. `08.05-08.55`). Use a duration in minutes for break rows (e.g. `10`). |
 
 **Notes:**
 - Rows with a duration (no `-` separator) are treated as non-schedulable breaks.
@@ -70,15 +71,15 @@ Morning Break,10
 
 Defines all teachers. In-school and external teachers are in the same sheet distinguished by the `type` column.
 
-| Column | Type | Required | Description |
-|---|---|---|---|
-| `teacher_id` | string | ✅ | Unique identifier. Format: `T` + digits for in-school (e.g. `T001`), `E` + digits for external (e.g. `E001`). The prefix determines availability handling — no separate type column needed. |
-| `prefix` | string | | Title/prefix (e.g. `ครู`, `อ.`, `รศ.ดร.`) — display only |
-| `teacher_name` | string | ✅ | Full name used to reference this teacher in other sheets |
-| `department` | string | ✅ | Department/subject group (e.g. `คณิตศาสตร์`, `ฟิสิกส์`). Used by preplace `teachers` targeting. |
-| `available_slots` | string | | **`E`-prefixed teachers only.** Whitelist of slots when this teacher is available. Empty means always available. Format: `MON_2-10, WED_5-6` (see Timeslot format). `T`-prefixed teachers leave this empty. |
-| `homeroom_class` | string | | **`T`-prefixed teachers only.** The student class this teacher is homeroom teacher for (e.g. `1/1`). One teacher can be homeroom for at most 1 class. Leave empty if not a homeroom teacher. |
-| `note` | string | | Free-text note — display only, not used by scheduler |
+| Column | GSheet header | Type | Required | Description |
+|---|---|---|---|---|
+| `teacher_id` | `teacher_id` | string | ✅ | Unique identifier. Format: `T` + digits for in-school (e.g. `T001`), `E` + digits for external (e.g. `E001`). The prefix determines availability handling — no separate type column needed. |
+| `prefix` | `คำนำหน้า` | string | | Title/prefix (e.g. `ครู`, `อ.`, `รศ.ดร.`) — display only |
+| `teacher_name` | `ชื่อ` | string | ✅ | Full name used to reference this teacher in other sheets |
+| `department` | `กลุ่มสาระ` | string | ✅ | Department/subject group (e.g. `คณิตศาสตร์`, `ฟิสิกส์`). Used by preplace `teachers` targeting. |
+| `available_slots` | `available_slots` | string | | **`E`-prefixed teachers only.** Whitelist of slots when this teacher is available. Empty means always available. Format: `MON_2-10, WED_5-6` (see Timeslot format). `T`-prefixed teachers leave this empty. |
+| `homeroom_class` | `homeroom_class` | string | | **`T`-prefixed teachers only.** The student class this teacher is homeroom teacher for (e.g. `1/1`). One teacher can be homeroom for at most 1 class. Leave empty if not a homeroom teacher. |
+| `note` | `หมายเหตุ` | string | | Free-text note — display only, not used by scheduler |
 
 **Notes:**
 - Teacher type is derived from `teacher_id` prefix: `T` = in-school, `E` = external.
@@ -100,10 +101,10 @@ E002,อ.,อรชุน,อาจารย์นอก,"MON_2-5, WED_5-6",,
 
 Defines all student classes.
 
-| Column | Type | Required | Description |
-|---|---|---|---|
-| `class_id` | string | ✅ | Unique class identifier. Format: `{grade}/{section}` where both are positive integers (e.g. `1/1`, `4/5`). Grade and section are derived from this — no separate columns needed. |
-| `homeroom_room` | string | | Room ID of this class's homeroom room (e.g. `C103`). Nullable — leave empty if the class has no fixed homeroom room. Must match an existing `room_id` in the Room sheet (hard error if not found). Each room can only be assigned to one class (validation error if duplicated). |
+| Column | GSheet header | Type | Required | Description |
+|---|---|---|---|---|
+| `class_id` | `class_id` | string | ✅ | Unique class identifier. Format: `{grade}/{section}` where both are positive integers (e.g. `1/1`, `4/5`). Grade and section are derived from this — no separate columns needed. |
+| `homeroom_room` | `homeroom_room` | string | | Room ID of this class's homeroom room (e.g. `C103`). Nullable — leave empty if the class has no fixed homeroom room. Must match an existing `room_id` in the Room sheet (hard error if not found). Each room can only be assigned to one class (validation error if duplicated). |
 
 **Notes:**
 - `grade` and `section` columns removed — both are derived by parsing `class_id` (e.g. `4/5` → grade 4, section 5).
@@ -124,11 +125,11 @@ class_id,homeroom_room
 
 Defines all rooms and their scheduling constraints.
 
-| Column | Type | Required | Description |
-|---|---|---|---|
-| `room_id` | string | ✅ | Unique room identifier (e.g. `B101-102`, `COM1`) |
-| `room_name` | string | | Display name (e.g. `ยิม`, `ดนตรีสากล`). Falls back to `room_id` if empty. |
-| `tags` | string | | Comma-separated capability tags used to match rooms to subjects (e.g. `เคมี`, `COM`, `homeroom`, `exclude`). |
+| Column | GSheet header | Type | Required | Description |
+|---|---|---|---|---|
+| `room_id` | `room_id` | string | ✅ | Unique room identifier (e.g. `B101-102`, `COM1`) |
+| `room_name` | `ชื่อห้อง` | string | | Display name (e.g. `ยิม`, `ดนตรีสากล`). Falls back to `room_id` if empty. |
+| `tags` | `ประเภท` | string | | Comma-separated capability tags used to match rooms to subjects (e.g. `เคมี`, `COM`, `homeroom`, `exclude`). |
 
 **Tag meanings:**
 
@@ -170,17 +171,17 @@ The main scheduling input. Each row represents one teaching assignment or one **
 
 > **`room_count` and `total_periods`** are not CSV columns. They are locked calculated cells in the Google Sheet template only (`total_periods = periods_per_week × room_count`). The scheduler derives these values itself.
 
-| Column | Type | Required | Description |
-|---|---|---|---|
-| `subject_id` | string | | Subject code (e.g. `ท21102`). Empty for activities (EFF, กิจกรรมแนะแนว) or continuation rows. |
-| `subject_name` | string | ✅ | Display name. Required on anchor rows; inherited by continuation rows. |
-| `periods_per_week` | integer | ✅ | Periods per week for this row. Read independently per row — not inherited by continuation rows. |
-| `teacher` | string | ✅ | Teacher name(s). See teaching type syntax below. |
-| `block_pattern` | string | | How periods split across the week (e.g. `1-2`, `2-1`, `2-2`). Empty = no split constraint. |
-| `student_class` | string | | Student classes for this row. See teaching type syntax below. |
-| `constraint` | string | | Teaching type flag and/or scheduling constraint. Inherited by continuation rows. See values below. |
-| `room` | string | | Room ID or capability tag. See teaching type syntax below. Inherited by continuation rows if empty. |
-| `fixed_period` | string | | Pre-fixed time slot (e.g. `MON_9-10`). Inherited by continuation rows if empty. |
+| Column | GSheet header | Type | Required | Description |
+|---|---|---|---|---|
+| `subject_id` | `รหัสวิชา` | string | | Subject code (e.g. `ท21102`). Empty for activities (EFF, กิจกรรมแนะแนว) or continuation rows. |
+| `subject_name` | `ชื่อวิชา` | string | ✅ | Display name. Required on anchor rows; inherited by continuation rows. |
+| `periods_per_week` | `คาบ/สัปดาห์` | integer | ✅ | Periods per week for this row. Read independently per row — not inherited by continuation rows. |
+| `teacher` | `ครูผู้สอน` | string | ✅ | Teacher name(s). See teaching type syntax below. |
+| `block_pattern` | `การแบ่งคาบสอน` | string | | How periods split across the week (e.g. `1-2`, `2-1`, `2-2`). Empty = no split constraint. |
+| `student_class` | `ห้อง (นักเรียน) ที่สอน` | string | | Student classes for this row. See teaching type syntax below. |
+| `constraint` | `เงื่อนไขพิเศษ` | string | | Teaching type flag and/or scheduling constraint. Inherited by continuation rows. See values below. |
+| `room` | `ห้องเรียน` | string | | Room ID or capability tag. See teaching type syntax below. Inherited by continuation rows if empty. |
+| `fixed_period` | `คาบเรียน` | string | | Pre-fixed time slot (e.g. `MON_9-10`). Inherited by continuation rows if empty. |
 
 ---
 
@@ -351,13 +352,13 @@ ART001,ศิลปะ,1,"Ta|Tb|Tc",,"/1|/2|/3",type=SUB_GROUP,"Ra|Rb|Rc",
 
 Defines elective subjects. Each row locks a teacher and room at the specified elective slot(s). Student eligibility and slot timing are fully handled by the Preplace sheet — the elective sheet does not need to repeat them.
 
-| Column | Type | Required | Description |
-|---|---|---|---|
-| `subject_id` | string | ✅ | Subject code |
-| `subject_name` | string | ✅ | Display name |
-| `teacher` | string | ✅ | Single teacher name. Must match a `teacher_name` in the Teacher sheet. A teacher cannot appear in two elective rows that share any slot (validation error). |
-| `room` | string | ✅ | Specific room ID. Must match a `room_id` in the Room sheet. A room cannot be double-assigned across elective rows that share any slot (validation error). |
-| `elective_slot` | string | ✅ | Comma-separated preplace `name` value(s) this subject is offered in (e.g. `เสรีม.ปลาย2, เสรีม.ปลาย5`). Each name must exactly match a row in the Preplace sheet. |
+| Column | GSheet header | Type | Required | Description |
+|---|---|---|---|---|
+| `subject_id` | `รหัสวิชา` | string | ✅ | Subject code |
+| `subject_name` | `ชื่อวิชา (เสรี)` | string | ✅ | Display name |
+| `teacher` | `ครูผู้สอน` | string | ✅ | Single teacher name. Must match a `teacher_name` in the Teacher sheet. A teacher cannot appear in two elective rows that share any slot (validation error). |
+| `room` | `ห้องเรียน` | string | ✅ | Specific room ID. Must match a `room_id` in the Room sheet. A room cannot be double-assigned across elective rows that share any slot (validation error). |
+| `elective_slot` | `คาบ` | string | ✅ | Comma-separated preplace `name` value(s) this subject is offered in (e.g. `เสรีม.ปลาย2, เสรีม.ปลาย5`). Each name must exactly match a row in the Preplace sheet. |
 
 **Notes:**
 - Student group eligibility is not defined here — it comes from the Preplace `students` column of the referenced slot.
@@ -379,12 +380,12 @@ subject_id,subject_name,teacher,room,elective_slot
 
 Defines pre-fixed time blocks. Applies to students, teachers, or both. Replaces the old scout sheet and teacher `unavailable_slots`.
 
-| Column | Type | Required | Description |
-|---|---|---|---|
-| `name` | string | ✅ | Unique label for this block (e.g. `Homeroom`, `Math dept. meeting`, `ลูกเสือม.1`). Referenced by Elective `elective_slot`. No commas allowed in the name. |
-| `periods` | string | ✅ | Slot(s) this block occupies. See timeslot format below. |
-| `students` | string | | Which student classes/grades are blocked. See targeting syntax below. |
-| `teachers` | string | | Which teachers are blocked (and/or duty triggered). See targeting syntax below. |
+| Column | GSheet header | Type | Required | Description |
+|---|---|---|---|---|
+| `name` | `ชื่อ` | string | ✅ | Unique label for this block (e.g. `Homeroom`, `Math dept. meeting`, `ลูกเสือม.1`). Referenced by Elective `elective_slot`. No commas allowed in the name. |
+| `periods` | `คาบ` | string | ✅ | Slot(s) this block occupies. See timeslot format below. |
+| `students` | `นักเรียน` | string | | Which student classes/grades are blocked. See targeting syntax below. |
+| `teachers` | `ครู` | string | | Which teachers are blocked (and/or duty triggered). See targeting syntax below. |
 
 ---
 
