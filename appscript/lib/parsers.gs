@@ -5,27 +5,17 @@
 
 // ─── Sanitization ─────────────────────────────────────────────────────────────
 
-/**
- * Strips zero-width characters (BOM, ZWSP, etc.) and trims whitespace.
- * Also strips trailing punctuation left by mistake (commas, semicolons).
- */
 function sanitize(val) {
   if (val == null) return '';
   var s = String(val).trim();
-  // BOM U+FEFF, ZWSP U+200B, NBSP U+00A0, etc.
-  s = s.replace(/[\u0000-\u001F\u00A0\u200B\u200C\u200D\u2060\uFEFF]/g, '');
-  // Strip trailing punctuation
+  // Remove BOM, zero-width chars, NBSP, C0 controls
+  s = s.replace(/\uFEFF|\u200B|\u200C|\u200D|\u2060|\u00A0|[\u0000-\u001F]/g, '');
   s = s.replace(/[,;]+$/, '');
   return s.trim();
 }
 
-/**
- * Splits a string into an array of sanitized strings.
- * Splits by comma, semicolon, newline, or a slash surrounded by spaces.
- */
 function splitAndSanitize(input) {
   if (!input) return [];
-  // GAS regex needs slightly different handling for newlines in some contexts
   var parts = String(input).split(/[,;\n\r]|\s+\/\s+/);
   var result = [];
   for (var i = 0; i < parts.length; i++) {
@@ -45,8 +35,9 @@ function isValidTimeFormat(value) {
 
 // ─── Slot Tokens ─────────────────────────────────────────────────────────────
 
+// Used by teacher.available_slots — supports DAY_p and DAY_p-q range within a day.
 function isValidSlotToken(token) {
-  return /^(MON|TUE|WED|THU|FRI)_.+$/.test(token.trim());
+  return /^(MON|TUE|WED|THU|FRI)_\d+(-\d+)?$/.test(token.trim());
 }
 
 function getInvalidSlotTokens(value) {
@@ -55,12 +46,9 @@ function getInvalidSlotTokens(value) {
     .filter(function(t) { return t && !isValidSlotToken(t); });
 }
 
+// Used by preplace.periods — DAILY_N, DAILY_N-M (every day), DAY_N, DAY_N-M (single day).
 function isValidPreplaceSlotToken(token) {
-  var t = token.trim();
-  if (/^Everyday_\d+$/.test(t)) return true;
-  if (/^(MON|TUE|WED|THU|FRI)_\d+$/.test(t)) return true;
-  if (/^(MON|TUE|WED|THU|FRI)_\d+-(MON|TUE|WED|THU|FRI)_\d+$/.test(t)) return true;
-  return false;
+  return /^(DAILY_\d+(-\d+)?|(MON|TUE|WED|THU|FRI)_\d+(-\d+)?)$/.test(token.trim());
 }
 
 function getInvalidPreplaceSlotTokens(value) {
@@ -93,26 +81,18 @@ function isSkipRow(firstCellValue) {
   return TEACHER_SKIP_MARKERS_.indexOf(firstCellValue.trim()) !== -1;
 }
 
-/**
- * Returns true if this row is a "Marker Cell" — a human-readability section
- * divider that should not be included in validation or data export.
- */
 function isMarkerRow(row) {
   if (!row || row.length === 0) return false;
   var first = sanitize(row[0]);
   if (!first) return false;
 
-  // All non-first cells must be empty for this to be a marker row
   var restEmpty = true;
   for (var i = 1; i < row.length; i++) {
     if (sanitize(row[i])) { restEmpty = false; break; }
   }
   if (!restEmpty) return false;
 
-  // Grade-header style: ม.1 – ม.6
   if (isGradeHeader(first)) return true;
-
-  // Label ending with colon convention: e.g. "กลุ่มสาระ:"
   if (/:\s*$/.test(first)) return true;
 
   return false;
@@ -120,17 +100,10 @@ function isMarkerRow(row) {
 
 // ─── Fuzzy Matching ──────────────────────────────────────────────────────────
 
-/**
- * Simple Levenshtein distance implementation for fuzzy matching names.
- */
 function levenshtein(a, b) {
   var matrix = [];
-  for (var i = 0; i <= a.length; i++) {
-    matrix[i] = [i];
-  }
-  for (var j = 1; j <= b.length; j++) {
-    matrix[0][j] = j;
-  }
+  for (var i = 0; i <= a.length; i++) { matrix[i] = [i]; }
+  for (var j = 1; j <= b.length; j++) { matrix[0][j] = j; }
 
   for (var i = 1; i <= a.length; i++) {
     for (var j = 1; j <= b.length; j++) {
@@ -138,9 +111,9 @@ function levenshtein(a, b) {
         matrix[i][j] = matrix[i - 1][j - 1];
       } else {
         matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1, // substitution
-          matrix[i][j - 1] + 1,     // insertion
-          matrix[i - 1][j] + 1      // deletion
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
         );
       }
     }
@@ -148,22 +121,17 @@ function levenshtein(a, b) {
   return matrix[a.length][b.length];
 }
 
-/**
- * Suggests a close match for a teacher name if it doesn't exist.
- * Returns the best match string or null.
- */
 function fuzzyMatchTeacher(name, validNames) {
   var normalizedInput = sanitize(name).toLowerCase();
   if (!normalizedInput) return null;
 
   var bestMatch = null;
-  var minDistance = 3; // Max threshold for "closeness"
+  var minDistance = 3;
 
   for (var i = 0; i < validNames.length; i++) {
     var validName = validNames[i];
     var normalizedValid = sanitize(validName).toLowerCase();
-    
-    // Check for exact substring match first (e.g. "สมชาย" in "สมชาย แซ่ดี")
+
     if (normalizedValid.indexOf(normalizedInput) !== -1 || normalizedInput.indexOf(normalizedValid) !== -1) {
       return validName;
     }
@@ -178,7 +146,68 @@ function fuzzyMatchTeacher(name, validNames) {
   return bestMatch;
 }
 
-// ─── apply_to ────────────────────────────────────────────────────────────────
+// ─── Students token (replaces apply_to) ──────────────────────────────────────
+// Accepts: ALL | student_grade:N | class_id (digit/digit)
+
+function isValidStudentsToken(token) {
+  var t = token.trim();
+  if (t === 'ALL') return true;
+  if (/^student_grade:\d+$/.test(t)) return true;
+  if (isValidClassId(t)) return true;
+  return false;
+}
+
+// ─── Teachers token ───────────────────────────────────────────────────────────
+// Accepts: ALL | department:X | homeroom_grade:N | homeroom_teacher | teacher_id
+
+function isValidTeachersToken(token) {
+  var t = token.trim();
+  if (t === 'ALL') return true;
+  if (/^department:.+$/.test(t)) return true;
+  if (/^homeroom_grade:\d+$/.test(t)) return true;
+  if (t === 'homeroom_teacher') return true;
+  if (isValidTeacherId(t)) return true;
+  return false;
+}
+
+// ─── Pipe segment parser ──────────────────────────────────────────────────────
+// Splits on "|" (pipe) for SUB_GROUP curriculum rows.
+
+function parsePipeSegments(value) {
+  if (!value || !value.trim()) return [];
+  return value.split('|').map(function(s) { return s.trim(); }).filter(Boolean);
+}
+
+// ─── Block pattern parser ────────────────────────────────────────────────────
+// "1-1-1" -> [1, 1, 1]. Returns null if any part is not a positive integer.
+
+function parseBlockPattern(value) {
+  if (!value || !value.trim()) return null;
+  var parts = value.trim().split('-');
+  var result = [];
+  for (var i = 0; i < parts.length; i++) {
+    var n = parseInt(parts[i].trim(), 10);
+    if (isNaN(n) || n < 1) return null;
+    result.push(n);
+  }
+  return result.length > 0 ? result : null;
+}
+
+// ─── Constraint type extractor ────────────────────────────────────────────────
+// Returns { value: string, valid: bool } if "type=X" found, or null if absent.
+
+var VALID_CONSTRAINT_TYPES_ = ['TEAM', 'MULTI_CLASS_TEAM', 'SUB_GROUP', 'TEACHER_SPLIT', 'SEPARATE_SLOT'];
+
+function parseConstraintType(value) {
+  if (!value || !value.trim()) return null;
+  var match = value.match(/\btype=(\S+)/);
+  if (!match) return null;
+  var typeName = match[1];
+  if (VALID_CONSTRAINT_TYPES_.indexOf(typeName) === -1) return { value: typeName, valid: false };
+  return { value: typeName, valid: true };
+}
+
+// ─── apply_to (legacy -- kept for backward compatibility) ─────────────────────
 
 function isValidApplyTo(value) {
   var v = value.trim();
@@ -188,26 +217,19 @@ function isValidApplyTo(value) {
   return parts.every(function(p) { return /^ม\.[1-6]$/.test(p); });
 }
 
-// ─── Student class string parser (for curriculum CU-4) ────────────────────────
+// ─── Student class string parser (/N-M relative format for curriculum) ────────
 
-/**
- * Parses a ห้อง (นักเรียน) ที่สอน string like "/1, /3-5" into section numbers [1, 3, 4, 5].
- * Supports:
- *   /N       → single section
- *   /N-M     → range inclusive
- *   mixed    → comma-separated combination
- */
 function parseStudentClassString(value) {
   if (!value || !value.trim()) return [];
   var sections = {};
   var elements = value.replace(/\s/g, '').split(',').filter(Boolean);
-  
+
   for (var i = 0; i < elements.length; i++) {
     var el = elements[i];
     var rangeMatch = el.match(/^\/(\d+)-(\d+)$/);
     if (rangeMatch) {
       var start = parseInt(rangeMatch[1], 10);
-      var end = parseInt(rangeMatch[2], 10);
+      var end   = parseInt(rangeMatch[2], 10);
       for (var s = start; s <= end; s++) sections[s] = true;
       continue;
     }
@@ -216,10 +238,8 @@ function parseStudentClassString(value) {
       sections[parseInt(singleMatch[1], 10)] = true;
     }
   }
-  
+
   var result = [];
-  for (var key in sections) {
-    result.push(parseInt(key, 10));
-  }
+  for (var key in sections) { result.push(parseInt(key, 10)); }
   return result.sort(function(a, b) { return a - b; });
 }
