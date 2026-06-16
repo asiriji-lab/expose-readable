@@ -69,10 +69,48 @@ Next.js frontend
 
 ---
 
+## clasp Setup
+
+All 3 projects are managed with [clasp](https://github.com/google/clasp), Google's CLI for Apps Script. This lets Claude Code (or you) push and deploy without touching the browser editor.
+
+### Script IDs
+
+| Project | Folder | Script ID |
+|---------|--------|-----------|
+| Library | `lib/` | `1nZoeOwH7Ti4DmthMiuyXQfU9NeqesgClUIiT2cLHrb2bdXIq8749wzMG` |
+| Web App | `webapp/` | `1sgkuArvMlGc9CHRsOJUOiOVEcBDuUpXUyR9SLFNGGeuJoe3Iw2-3xok9` |
+| Template Sheet | `template/` | `1mbngdGvmH91pMV7Z6rP8Yt6PorA4FxFcwT6WEui416cZshJ1c3B28u4I` |
+
+### One-time setup
+
+```bash
+npm install -g @google/clasp
+clasp login
+```
+
+To re-clone any project:
+
+```bash
+cd <folder>
+clasp clone <script-id>
+```
+
+### Push & Deploy
+
+```bash
+# Inside any project folder:
+clasp push        # push local changes to Apps Script
+clasp deploy      # create/update a deployment (web app)
+```
+
+> **Important:** Always push/deploy `lib/` first if you've changed the library, since `webapp/` and `template/` depend on it.
+
+---
+
 ## Deployment Checklist
 
 When making changes:
 
-1. **Library change** → deploy new Library version → update version in Template + Web App manifests
-2. **Template change** → paste updated `template/Code.gs` into the bound script editor → save (no versioning needed for bound scripts)
-3. **Web App change** → paste updated `Code.gs` into the Web App project → **Deploy → New deployment** (URL stays the same if you manage versions)
+1. **Library change** → `cd lib && clasp push && clasp deploy` → update version number in Template + Web App `appsscript.json` manifests
+2. **Template change** → `cd template && clasp push` (bound scripts don't need a new deployment)
+3. **Web App change** → `cd webapp && clasp push && clasp deploy` (URL stays the same across deployments)
