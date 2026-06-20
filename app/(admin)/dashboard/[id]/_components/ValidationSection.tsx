@@ -19,6 +19,8 @@ interface ValidationSectionProps {
   onTabClick: (tabName: TabName) => void;
   onSubmit?: () => void;
   isSubmitting?: boolean;
+  /** When false, the embedded submit button is hidden (submission handled elsewhere, e.g. the wizard's final step). */
+  showSubmit?: boolean;
 }
 
 export default function ValidationSection({
@@ -29,6 +31,7 @@ export default function ValidationSection({
   onTabClick,
   onSubmit,
   isSubmitting = false,
+  showSubmit = true,
 }: ValidationSectionProps) {
   const phase1Done = PHASE_1_TABS.every((t) => {
     const s = tabStates[t].status;
@@ -118,7 +121,9 @@ export default function ValidationSection({
               <span className={totalErrors > 0 ? 'text-danger font-semibold' : 'text-success'}>{totalErrors} ข้อผิดพลาด</span>
               <span className={totalWarnings > 0 ? 'text-warning font-semibold' : 'text-foreground-muted'}>{totalWarnings} คำเตือน</span>
             </div>
-            <SubmitButton allPassed={allPassed} hasErrors={hasErrors} onSubmit={onSubmit} isSubmitting={isSubmitting} />
+            {showSubmit && (
+              <SubmitButton allPassed={allPassed} hasErrors={hasErrors} onSubmit={onSubmit} isSubmitting={isSubmitting} />
+            )}
           </CardContent>
           {totalWarnings > 0 && !hasErrors && (
             <p className="text-xs text-warning px-4 pb-3 flex items-center gap-1.5">

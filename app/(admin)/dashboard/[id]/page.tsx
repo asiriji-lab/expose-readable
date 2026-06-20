@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Send, Loader2 } from 'lucide-react';
 import AdminHeader from '../../_components/AdminHeader';
 import InputPanel from './_components/InputPanel';
 import ValidationSection from './_components/ValidationSection';
 import ErrorPanel from './_components/ErrorPanel';
 import GenerationStatus from './_components/GenerationStatus';
+import WizardStepper, { WizardStep } from './_components/WizardStepper';
+import { Button } from '@/components/ui/button';
 import { useValidation } from './_hooks/useValidation';
 import { useGoogleSheet } from './_hooks/useGoogleSheet';
 import { TabName } from '../../validators/types';
@@ -22,7 +24,7 @@ export default function SessionDetailPage() {
   const id = Array.isArray(params.id) ? params.id[0] : (params.id ?? '');
 
   const { sheetData, fetchStatus, fetchError, missingTabs, fetchSheet, clearSheet, loadData, updateTabRow } = useGoogleSheet();
-  const { tabStates, isRunning, runValidation, resetStates } = useValidation(sheetData);
+  const { tabStates, isRunning, runValidation, resetStates, allPassed } = useValidation(sheetData);
 
   const [sessionInfo, setSessionInfo] = useState<SessionInfo>({
     name: '',
@@ -40,6 +42,7 @@ export default function SessionDetailPage() {
   }, []);
 
   const [openTab, setOpenTab] = useState<TabName | null>(null);
+  const [currentStep, setCurrentStep] = useState(1);
   const [generationState, setGenerationState] = useState<'idle' | 'generating' | 'completed' | 'failed'>('idle');
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -55,6 +58,8 @@ export default function SessionDetailPage() {
     getScheduleRecord(id)
       .then((res) => {
         const job = res.schedule;
+        // Reopened jobs (in-progress, completed, or failed) jump straight to the Generate step.
+        setCurrentStep(4);
         if (job.status === 'completed') {
           setJobId(id);
           setGenerationState('completed');
@@ -201,6 +206,31 @@ export default function SessionDetailPage() {
     }
   }, [sessionInfo, sheetData]);
 
+  // ── Wizard steps & per-step gating ──
+  const WIZARD_STEPS: WizardStep[] = [
+    { key: 'session', label: 'ข้อมูลตาราง' },
+    { key: 'data', label: 'นำเข้าข้อมูล' },
+    { key: 'validate', label: 'ตรวจสอบข้อมูล' },
+    { key: 'generate', label: 'สร้างตาราง' },
+  ];
+
+  const isGenerating = generationState === 'generating';
+
+  // Step 2 requires the same mandatory tabs that handleSubmit treats as non-optional.
+  const requiredTabsLoaded = !!sheetData.curriculum && !!sheetData.room;
+
+  const canAdvance = useMemo(() => {
+    switch (currentStep) {
+      case 1: return sessionInfo.name.trim().length > 0;
+      case 2: return requiredTabsLoaded;
+      case 3: return allPassed;
+      default: return false;
+    }
+  }, [currentStep, sessionInfo.name, requiredTabsLoaded, allPassed]);
+
+  const goNext = () => setCurrentStep((s) => Math.min(s + 1, WIZARD_STEPS.length));
+  const goBack = () => setCurrentStep((s) => Math.max(s - 1, 1));
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <AdminHeader />
@@ -214,54 +244,130 @@ export default function SessionDetailPage() {
             <span className="text-sm font-medium font-bold">กลับไปแดชบอร์ด</span>
           </button>
           <h2 className="text-2xl font-bold text-foreground tracking-tight">จัดการข้อมูลตารางสอน</h2>
-          <p className="text-foreground-muted text-sm mt-1">ตั้งค่าพื้นที่ทำงาน Google Sheet และตรวจสอบข้อมูลก่อนประมวลผล</p>
+          <p className="text-foreground-muted text-sm mt-1">ทำตามขั้นตอนเพื่อนำเข้าข้อมูล ตรวจสอบ และสร้างตารางสอน</p>
         </div>
 
-        <SessionInfoCard value={sessionInfo} onChange={setSessionInfo} />
-
-        {/* The New Command Center: Merges Sheet LifeCycle + Uploads + Stats */}
-        <InputPanel
-          currentData={sheetData}
-          onDataLoaded={(data) => {
-            loadData(data);
-            resetStates();
-          }}
-          onClear={() => {
-            clearSheet();
-            resetStates();
-            setConnectedSheetId(null);
-            setSheetUrl(null);
-          }}
-          onSheetUrlConnected={handleConnectImport}
-          connectedSheetId={connectedSheetId}
-          connectedSheetUrl={connectedSheetUrl}
-          isCreatingSheet={isCreatingSheet}
-          onCreateSkeleton={handleCreateSkeleton}
-          onTabClick={setOpenTab}
+        {/* Wizard progress indicator */}
+        <WizardStepper
+          steps={WIZARD_STEPS}
+          currentStep={currentStep}
+          onStepClick={isGenerating ? undefined : setCurrentStep}
         />
 
-        {(generationState === 'idle' || generationState === 'generating') && (
+        {/* ── Step 1: Session info ── */}
+        {currentStep === 1 && (
+          <SessionInfoCard value={sessionInfo} onChange={setSessionInfo} />
+        )}
+
+        {/* ── Step 2: Load data (Data Command Center) ── */}
+        {currentStep === 2 && (
+          <InputPanel
+            currentData={sheetData}
+            onDataLoaded={(data) => {
+              loadData(data);
+              resetStates();
+            }}
+            onClear={() => {
+              clearSheet();
+              resetStates();
+              setConnectedSheetId(null);
+              setSheetUrl(null);
+            }}
+            onSheetUrlConnected={handleConnectImport}
+            connectedSheetId={connectedSheetId}
+            connectedSheetUrl={connectedSheetUrl}
+            isCreatingSheet={isCreatingSheet}
+            onCreateSkeleton={handleCreateSkeleton}
+            onTabClick={setOpenTab}
+          />
+        )}
+
+        {/* ── Step 3: Validate ── */}
+        {currentStep === 3 && (
           <ValidationSection
             tabStates={tabStates}
             isRunning={isFetchingSheet || isRunning}
             missingTabs={missingTabs}
             onValidate={handleValidate}
             onTabClick={setOpenTab}
-            onSubmit={generationState === 'idle' ? handleSubmit : undefined}
-            isSubmitting={generationState === 'generating' ? true : isSubmitting}
+            showSubmit={false}
           />
         )}
 
-        {generationState !== 'idle' && (
-          <GenerationStatus
-            state={generationState}
-            sessionId={id}
-            jobId={jobId}
-            downloadUrl={downloadUrl}
-            errorMessage={generationError}
-            onCompleted={() => setGenerationState('completed')}
-            onFailed={(err) => { setGenerationError(err ?? null); setGenerationState('failed'); }}
-          />
+        {/* ── Step 4: Generate ── */}
+        {currentStep === 4 && (
+          <div className="space-y-4">
+            {generationState === 'idle' ? (
+              <div className="rounded-xl border border-border bg-surface p-5 space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">ตรวจทานก่อนสร้างตาราง</h3>
+                  <p className="text-xs text-foreground-muted mt-1">ยืนยันข้อมูลด้านล่างแล้วกดสร้างตาราง</p>
+                </div>
+                <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                  <div>
+                    <dt className="text-xs text-foreground-muted">ชื่อตาราง</dt>
+                    <dd className="font-semibold text-foreground truncate">{sessionInfo.name || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-foreground-muted">ภาคเรียน</dt>
+                    <dd className="font-semibold text-foreground">{sessionInfo.semester}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-foreground-muted">ปีการศึกษา</dt>
+                    <dd className="font-semibold text-foreground">{sessionInfo.year}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-foreground-muted">ข้อมูลที่โหลด</dt>
+                    <dd className="font-semibold text-foreground">
+                      {Object.values(sheetData).filter(Boolean).length}/8 แท็บ
+                    </dd>
+                  </div>
+                </dl>
+                <Button
+                  variant="success"
+                  size="full"
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  data-testid="generate-button"
+                >
+                  {isSubmitting ? (
+                    <><Loader2 size={16} className="animate-spin" /> กำลังส่ง...</>
+                  ) : (
+                    <><Send size={16} /> สร้างตารางสอน</>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <GenerationStatus
+                state={generationState}
+                sessionId={id}
+                jobId={jobId}
+                downloadUrl={downloadUrl}
+                errorMessage={generationError}
+                onCompleted={() => setGenerationState('completed')}
+                onFailed={(err) => { setGenerationError(err ?? null); setGenerationState('failed'); }}
+              />
+            )}
+          </div>
+        )}
+
+        {/* ── Wizard navigation ── */}
+        {generationState === 'idle' && (
+          <div className="flex items-center justify-between pt-2">
+            <Button
+              variant="outline"
+              onClick={goBack}
+              disabled={currentStep === 1}
+              className={currentStep === 1 ? 'invisible' : ''}
+            >
+              <ChevronLeft size={16} /> ย้อนกลับ
+            </Button>
+            {currentStep < WIZARD_STEPS.length && (
+              <Button onClick={goNext} disabled={!canAdvance} data-testid="wizard-next">
+                ถัดไป <ChevronRight size={16} />
+              </Button>
+            )}
+          </div>
         )}
 
         <ErrorPanel
