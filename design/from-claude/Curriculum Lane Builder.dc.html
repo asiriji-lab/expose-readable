@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;background:#F8FAFC;font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+  select{font-family:inherit;}
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:8px;border:3px solid #F8FAFC;}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#F1F5F9;padding:28px 20px 60px;display:flex;flex-direction:column;align-items:center;">
+
+  <!-- breadcrumb context -->
+  <div style="width:100%;max-width:760px;display:flex;align-items:center;gap:8px;font-size:13px;color:#64748B;margin-bottom:16px;">
+    <span style="font-weight:600;color:#0F172A;">Schedool</span>
+    <span style="color:#CBD5E1;">/</span><span>curriculum</span>
+    <span style="color:#CBD5E1;">/</span><span>ม.1</span>
+    <span style="color:#CBD5E1;">/</span><span style="color:#2563EB;font-weight:600;">เพิ่มวิชา</span>
+  </div>
+
+  <!-- ===================== MODAL CARD ===================== -->
+  <div style="width:100%;max-width:760px;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;box-shadow:0 24px 48px -12px rgba(15,23,42,.18),0 0 0 1px rgba(15,23,42,.02);overflow:hidden;">
+
+    <!-- header -->
+    <div style="padding:20px 24px;border-bottom:1px solid #E2E8F0;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:#0F172A;letter-spacing:-.01em;">เพิ่มวิชา · Subject builder</div>
+        <div style="font-size:13px;color:#64748B;margin-top:2px;">กรอกด้วยการเลือก ไม่ต้องพิมพ์สูตรหรือสัญลักษณ์ — ระบบสร้างไฟล์ให้เอง</div>
+      </div>
+      <button style="width:32px;height:32px;border-radius:8px;border:1px solid #E2E8F0;background:#fff;color:#64748B;font-size:16px;cursor:pointer;flex:none;" style-hover="background:#F1F5F9;">✕</button>
+    </div>
+
+    <!-- body (scroll) -->
+    <div style="max-height:64vh;overflow-y:auto;padding:22px 24px;">
+
+      <!-- identity -->
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:20px;">
+        <label style="flex:2;min-width:220px;display:flex;flex-direction:column;gap:6px;">
+          <span style="font-size:12px;font-weight:600;color:#334155;">ชื่อวิชา · Subject name</span>
+          <input value="{{ subjectName }}" onInput="{{ onName }}" placeholder="เช่น ศิลปะ" style="height:40px;border:1px solid #CBD5E1;border-radius:8px;padding:0 12px;font-size:14px;color:#0F172A;outline:none;background:#fff;" style-focus="border-color:#2563EB;box-shadow:0 0 0 3px #EFF6FF;" />
+        </label>
+        <label style="flex:1;min-width:140px;display:flex;flex-direction:column;gap:6px;">
+          <span style="font-size:12px;font-weight:600;color:#334155;">รหัสวิชา · Code</span>
+          <input value="{{ subjectCode }}" onInput="{{ onCode }}" placeholder="ART001" style="height:40px;border:1px solid #CBD5E1;border-radius:8px;padding:0 12px;font-size:14px;color:#0F172A;outline:none;background:#fff;font-family:'IBM Plex Mono',monospace;" style-focus="border-color:#2563EB;box-shadow:0 0 0 3px #EFF6FF;" />
+        </label>
+      </div>
+
+      <!-- teaching type -->
+      <div style="margin-bottom:8px;font-size:12px;font-weight:600;color:#334155;">วิธีสอน · Teaching type</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+        <button onClick="{{ pickStandard }}" style="{{ segStandard }}">Standard</button>
+        <button onClick="{{ pickTeam }}" style="{{ segTeam }}">Team</button>
+        <button onClick="{{ pickMulti }}" style="{{ segMulti }}">Multi-class</button>
+        <button onClick="{{ pickSub }}" style="{{ segSub }}">Sub-group</button>
+        <button onClick="{{ pickSplit }}" style="{{ segSplit }}">Teacher split</button>
+      </div>
+      <div style="font-size:12.5px;color:#64748B;margin-bottom:22px;display:flex;gap:7px;align-items:flex-start;">
+        <span style="color:#2563EB;flex:none;margin-top:1px;">ⓘ</span><span>{{ typeHint }}</span>
+      </div>
+
+      <!-- periods per week -->
+      <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;margin-bottom:22px;">
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <span style="font-size:12px;font-weight:600;color:#334155;">คาบ/สัปดาห์ · periods per week</span>
+          <div style="display:flex;align-items:center;gap:0;border:1px solid #CBD5E1;border-radius:9px;overflow:hidden;width:fit-content;">
+            <button onClick="{{ onPpwMinus }}" style="width:38px;height:40px;border:none;background:#F8FAFC;color:#475569;font-size:18px;cursor:pointer;" style-hover="background:#F1F5F9;">−</button>
+            <div style="width:48px;height:40px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#0F172A;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">{{ ppw }}</div>
+            <button onClick="{{ onPpwPlus }}" style="width:38px;height:40px;border:none;background:#F8FAFC;color:#475569;font-size:18px;cursor:pointer;" style-hover="background:#F1F5F9;">+</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MORE OPTIONS toggle -->
+      <button onClick="{{ toggleMore }}" style="display:flex;align-items:center;gap:8px;background:transparent;border:none;cursor:pointer;font-size:12.5px;font-weight:600;color:#2563EB;padding:0;margin-bottom:16px;" style-hover="color:#1D4ED8;">
+        <span style="{{ moreCaretStyle }}">▸</span> ตัวเลือกเพิ่มเติม · จัดคาบต่อเนื่อง / ล็อกเวลา
+      </button>
+
+      <sc-if value="{{ showMore }}" hint-placeholder-val="{{ false }}">
+      <!-- BLOCK BUILDER (visual, replaces 2-1 syntax) -->
+      <sc-if value="{{ showBlock }}" hint-placeholder-val="{{ true }}">
+      <div style="margin-bottom:22px;border:1px solid #E2E8F0;border-radius:12px;padding:15px;background:#FCFCFD;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <span style="font-size:12.5px;font-weight:700;color:#0F172A;">การจัดคาบต่อเนื่อง · how periods sit together</span>
+          <span style="{{ blockSumStyle }}">{{ blockSumText }}</span>
+        </div>
+        <div style="font-size:12px;color:#64748B;margin-bottom:12px;">แต่ละบล็อกคือคาบที่อยู่ติดกัน เช่น บล็อก 2 คาบ = เรียน 2 คาบรวด</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;">
+          <sc-for list="{{ blockChips }}" as="blk" hint-placeholder-count="2">
+            <div style="border:1px solid #E2E8F0;border-radius:10px;padding:10px 11px;background:#fff;display:flex;flex-direction:column;gap:8px;min-width:118px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-size:11px;font-weight:600;color:#64748B;">{{ blk.title }}</span>
+                <sc-if value="{{ blk.removable }}" hint-placeholder-val="{{ false }}">
+                <button onClick="{{ blk.onRemove }}" style="width:20px;height:20px;border-radius:5px;border:none;background:transparent;color:#CBD5E1;font-size:12px;cursor:pointer;" style-hover="color:#DC2626;">✕</button>
+                </sc-if>
+              </div>
+              <div style="display:flex;gap:4px;min-height:26px;align-items:center;">
+                <sc-for list="{{ blk.boxes }}" as="bx" hint-placeholder-count="2">
+                  <span style="width:18px;height:26px;border-radius:4px;background:#DBEAFE;border:1px solid #93C5FD;"></span>
+                </sc-for>
+              </div>
+              <div style="display:flex;align-items:center;gap:0;border:1px solid #E2E8F0;border-radius:7px;overflow:hidden;width:fit-content;">
+                <button onClick="{{ blk.onMinus }}" style="width:28px;height:28px;border:none;background:#F8FAFC;color:#475569;font-size:15px;cursor:pointer;">−</button>
+                <div style="width:30px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#0F172A;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">{{ blk.count }}</div>
+                <button onClick="{{ blk.onPlus }}" style="width:28px;height:28px;border:none;background:#F8FAFC;color:#475569;font-size:15px;cursor:pointer;">+</button>
+              </div>
+            </div>
+          </sc-for>
+          <button onClick="{{ addBlock }}" style="border:1px dashed #BFDBFE;border-radius:10px;background:#EFF6FF;color:#2563EB;font-size:12.5px;font-weight:600;cursor:pointer;padding:0 16px;min-width:96px;" style-hover="background:#DBEAFE;">+ เพิ่มบล็อก</button>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- SLOT PICKER (grid, replaces MON_9-10 syntax) -->
+      <div style="margin-bottom:24px;border:1px solid #E2E8F0;border-radius:12px;padding:15px;background:#FCFCFD;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+          <span style="font-size:12.5px;font-weight:700;color:#0F172A;">คาบที่กำหนด · fixed time</span>
+          <div style="display:flex;gap:6px;">
+            <button onClick="{{ onSlotAuto }}" style="{{ slotAutoStyle }}">ให้ระบบจัดให้</button>
+            <button onClick="{{ onSlotLock }}" style="{{ slotLockStyle }}">📌 ล็อกคาบเอง</button>
+          </div>
+        </div>
+        <sc-if value="{{ slotAuto }}" hint-placeholder-val="{{ true }}">
+        <div style="font-size:12px;color:#64748B;display:flex;gap:7px;align-items:flex-start;">
+          <span style="color:#16A34A;">✓</span><span>ตัวจัดตารางจะหาคาบว่างที่เหมาะสมให้เอง — เหมาะกับวิชาทั่วไป</span>
+        </div>
+        </sc-if>
+        <sc-if value="{{ slotLocked }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="font-size:12px;color:#64748B;margin-bottom:9px;">แตะคาบที่ต้องการล็อก (แตะซ้ำเพื่อยกเลิก)</div>
+          <div style="display:grid;grid-template-columns:58px repeat(5,1fr);gap:5px;">
+            <div></div>
+            <sc-for list="{{ slotDays }}" as="d" hint-placeholder-count="5">
+              <div style="text-align:center;font-size:11px;font-weight:700;color:#475569;padding-bottom:2px;">{{ d.l }}</div>
+            </sc-for>
+            <sc-for list="{{ slotRows }}" as="row" hint-placeholder-count="8">
+              <div style="display:flex;flex-direction:column;justify-content:center;font-size:10.5px;color:#94A3B8;line-height:1.1;">
+                <span style="font-weight:700;color:#64748B;">{{ row.label }}</span>
+                <span>{{ row.sub }}</span>
+              </div>
+              <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="5">
+                <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.mark }}</button>
+              </sc-for>
+            </sc-for>
+          </div>
+          <div style="font-size:12px;color:#475569;margin-top:10px;">เลือกแล้ว: <b style="color:#2563EB;">{{ slotHuman }}</b></div>
+        </div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <!-- lanes header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:9px;">
+          <span style="font-size:13px;font-weight:700;color:#0F172A;">{{ laneSectionTitle }}</span>
+          <sc-if value="{{ isSub }}" hint-placeholder-val="{{ true }}">
+          <span style="font-size:11px;font-weight:600;color:#7C3AED;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:20px;padding:2px 9px;">เรียนพร้อมกัน · same slot</span>
+          </sc-if>
+        </div>
+        <sc-if value="{{ canAddLane }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ addLane }}" style="display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:8px;border:1px solid #BFDBFE;background:#EFF6FF;color:#2563EB;font-size:12.5px;font-weight:600;cursor:pointer;" style-hover="background:#DBEAFE;">+ {{ addLaneLabel }}</button>
+        </sc-if>
+      </div>
+
+      <!-- lanes list -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <sc-for list="{{ lanes }}" as="lane" hint-placeholder-count="3">
+          <div style="{{ lane.cardStyle }}">
+            <!-- lane head -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <div style="display:flex;align-items:center;gap:9px;">
+                <span style="{{ lane.badgeStyle }}">{{ lane.label }}</span>
+                <span style="font-size:12px;color:#94A3B8;">{{ lane.sublabel }}</span>
+              </div>
+              <sc-if value="{{ lane.removable }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ lane.onRemoveLane }}" title="remove" style="width:26px;height:26px;border-radius:7px;border:1px solid #E2E8F0;background:#fff;color:#94A3B8;font-size:13px;cursor:pointer;" style-hover="background:#FEF2F2;border-color:#FECACA;color:#DC2626;">✕</button>
+              </sc-if>
+            </div>
+
+            <!-- teachers -->
+            <div style="margin-bottom:14px;">
+              <div style="font-size:11.5px;font-weight:600;color:#475569;margin-bottom:6px;">{{ lane.teacherLabel }}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center;">
+                <sc-for list="{{ lane.teachers }}" as="t" hint-placeholder-count="1">
+                  <span style="display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 4px 0 11px;border-radius:8px;background:#EEF2FF;border:1px solid #C7D2FE;font-size:13px;color:#3730A3;font-weight:500;">
+                    {{ t.name }}
+                    <button onClick="{{ t.onRemove }}" style="width:20px;height:20px;border-radius:5px;border:none;background:transparent;color:#818CF8;font-size:12px;cursor:pointer;" style-hover="background:#E0E7FF;color:#4338CA;">✕</button>
+                  </span>
+                </sc-for>
+                <select value="{{ lane.addTeacherValue }}" onChange="{{ lane.onAddTeacher }}" style="height:30px;border:1px dashed #CBD5E1;border-radius:8px;padding:0 8px;font-size:12.5px;color:#64748B;background:#fff;cursor:pointer;outline:none;" style-focus="border-color:#2563EB;">
+                  <option value="">+ ครู…</option>
+                  <sc-for list="{{ teacherOptions }}" as="opt" hint-placeholder-count="4">
+                    <option value="{{ opt.v }}">{{ opt.label }}</option>
+                  </sc-for>
+                </select>
+              </div>
+            </div>
+
+            <!-- who attends -->
+            <div style="margin-bottom:14px;">
+              <div style="font-size:11.5px;font-weight:600;color:#475569;margin-bottom:7px;">{{ lane.sectionLabel }}</div>
+              <!-- section checkboxes -->
+              <sc-if value="{{ lane.useChecks }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center;">
+                <sc-for list="{{ lane.sectionChips }}" as="sec" hint-placeholder-count="6">
+                  <button onClick="{{ sec.onToggle }}" style="{{ sec.style }}">{{ sec.label }}</button>
+                </sc-for>
+                <sc-if value="{{ lane.showAllChip }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ lane.onToggleAll }}" style="{{ lane.allChipStyle }}">{{ lane.allChipLabel }}</button>
+                </sc-if>
+              </div>
+              </sc-if>
+              <!-- period count stepper (teacher split) -->
+              <sc-if value="{{ lane.useCount }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;align-items:center;gap:0;border:1px solid #CBD5E1;border-radius:8px;overflow:hidden;width:fit-content;">
+                <button onClick="{{ lane.onCountMinus }}" style="width:34px;height:36px;border:none;background:#F8FAFC;color:#475569;font-size:16px;cursor:pointer;">−</button>
+                <div style="min-width:44px;height:36px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#0F172A;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;padding:0 6px;">{{ lane.sections }} คาบ</div>
+                <button onClick="{{ lane.onCountPlus }}" style="width:34px;height:36px;border:none;background:#F8FAFC;color:#475569;font-size:16px;cursor:pointer;">+</button>
+              </div>
+              </sc-if>
+            </div>
+
+            <!-- room (mode-aware: homeroom / specific / capability) -->
+            <div>
+              <div style="font-size:11.5px;font-weight:600;color:#475569;margin-bottom:7px;">ห้องเรียน · room</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px;">
+                <button onClick="{{ lane.onRoomHome }}" style="{{ lane.rmHomeStyle }}">🏠 ห้องประจำชั้น</button>
+                <button onClick="{{ lane.onRoomSpec }}" style="{{ lane.rmSpecStyle }}">🚪 ห้องเฉพาะ</button>
+                <button onClick="{{ lane.onRoomCap }}" style="{{ lane.rmCapStyle }}">🔖 ตามประเภทห้อง</button>
+              </div>
+              <sc-if value="{{ lane.roomIsHome }}" hint-placeholder-val="{{ true }}">
+              <div style="font-size:12px;color:#0E7490;background:#ECFEFF;border:1px solid #A5F3FC;border-radius:8px;padding:9px 11px;display:flex;gap:8px;align-items:flex-start;max-width:440px;">
+                <span style="flex:none;">↳</span><span>ครูไปสอนที่ <b>ห้องประจำชั้นของนักเรียน</b> — ตัวจัดตารางใช้ห้องตามที่กำหนดใน student sheet ปล่อยช่องห้องว่างให้อัตโนมัติ</span>
+              </div>
+              </sc-if>
+              <sc-if value="{{ lane.roomIsSpec }}" hint-placeholder-val="{{ false }}">
+              <select value="{{ lane.room }}" onChange="{{ lane.onRoom }}" style="{{ lane.roomSelectStyle }}">
+                <option value="">เลือกห้องเฉพาะ…</option>
+                <sc-for list="{{ roomOptions }}" as="r" hint-placeholder-count="4">
+                  <option value="{{ r.v }}">{{ r.label }}</option>
+                </sc-for>
+              </select>
+              </sc-if>
+              <sc-if value="{{ lane.roomIsCap }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;flex-direction:column;gap:7px;">
+                <select value="{{ lane.room }}" onChange="{{ lane.onRoom }}" style="{{ lane.roomSelectStyle }}">
+                  <option value="">เลือกประเภทห้อง…</option>
+                  <sc-for list="{{ capabilityOptions }}" as="c" hint-placeholder-count="4">
+                    <option value="{{ c.v }}">{{ c.label }}</option>
+                  </sc-for>
+                </select>
+                <div style="font-size:12px;color:#64748B;max-width:440px;">ตัวจัดตารางจะเลือกห้องว่างที่มีแท็กนี้ให้อัตโนมัติ</div>
+              </div>
+              </sc-if>
+            </div>
+
+            <!-- lane error -->
+            <sc-if value="{{ lane.hasError }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px;font-size:12px;color:#DC2626;display:flex;align-items:center;gap:6px;">
+              <span style="font-size:13px;">⚠</span> {{ lane.errorText }}
+            </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- ADVANCED: CSV preview (collapsed — it's output, not input) -->
+      <div style="margin-top:22px;border-top:1px solid #F1F5F9;padding-top:16px;">
+        <button onClick="{{ toggleCsv }}" style="display:flex;align-items:center;gap:8px;background:transparent;border:none;cursor:pointer;font-size:12px;font-weight:600;color:#94A3B8;padding:0;" style-hover="color:#475569;">
+          <span style="{{ csvCaretStyle }}">▸</span> ขั้นสูง · ดูบรรทัดข้อมูลที่ระบบจะสร้าง
+        </button>
+        <sc-if value="{{ showCsv }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:10px;">
+          <div style="font-size:11px;color:#94A3B8;margin-bottom:6px;">คุณไม่ต้องพิมพ์สิ่งนี้ — สร้างจากตัวเลือกด้านบนโดยอัตโนมัติ</div>
+          <div style="border:1px solid #E2E8F0;background:#0F172A;border-radius:10px;padding:13px 15px;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.7;color:#E2E8F0;overflow-x:auto;white-space:pre;">{{ csvPreview }}</div>
+        </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <!-- footer -->
+    <div style="padding:16px 24px;border-top:1px solid #E2E8F0;background:#F8FAFC;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+      <div style="{{ statusPillStyle }}">{{ statusText }}</div>
+      <div style="display:flex;gap:10px;">
+        <button style="height:40px;padding:0 18px;border-radius:9px;border:1px solid #CBD5E1;background:#fff;color:#334155;font-size:14px;font-weight:600;cursor:pointer;" style-hover="background:#F1F5F9;">ยกเลิก</button>
+        <button onClick="{{ onSave }}" disabled="{{ saveDisabled }}" style="{{ saveBtnStyle }}">บันทึกวิชา</button>
+      </div>
+    </div>
+  </div>
+
+  <div style="max-width:760px;width:100%;margin-top:14px;font-size:12px;color:#94A3B8;text-align:center;">ทุกช่องเป็นการเลือก ไม่ใช่การพิมพ์สูตร — ลองสลับวิธีสอน เลือกคาบ หรือกดเพิ่มกลุ่มดู</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:820,&quot;height&quot;:920}}">
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.teacherOptions = [
+      { v: 'สมใจ', d: 'วิทยาศาสตร์' },
+      { v: 'สุขุมาภรณ์', d: 'วิทยาศาสตร์' },
+      { v: 'พิรพงศ์', d: 'ฟิสิกส์' },
+      { v: 'นงค์นุช', d: 'เคมี' },
+      { v: 'พีรวัฒน์', d: 'ชีววิทยา' },
+      { v: 'มนรวัส', d: 'วิทยาศาสตร์' },
+      { v: 'รัชนิกร', d: 'วิทยาศาสตร์' },
+      { v: 'จิรัสชยาณ์', d: 'ภาษาไทย' },
+      { v: 'ปาริชาติ', d: 'วิทยาศาสตร์' },
+    ];
+    this.roomOptions = [
+      { v: 'B101-102', n: 'ปฏิบัติการเคมี' },
+      { v: 'B108-109', n: '' },
+      { v: 'D203', n: 'COM1' },
+      { v: 'B212', n: '' },
+      { v: 'B213', n: '' },
+      { v: 'A316', n: 'ห้องประชุม' },
+    ];
+    this.capabilityTags = [
+      { v: 'เคมี', d: 'ห้องปฏิบัติการเคมี' },
+      { v: 'ฟิสิกส์', d: 'ห้องปฏิบัติการฟิสิกส์' },
+      { v: 'ชีววิทยา', d: 'ห้องปฏิบัติการชีวะ' },
+      { v: 'COM', d: 'ห้องคอมพิวเตอร์' },
+      { v: 'ดนตรี', d: 'ห้องดนตรี' },
+      { v: 'พลศึกษา', d: 'โรงยิม / สนาม' },
+    ];
+    // foundation-sourced: this grade's sections, and the period grid
+    this.gradeSections = ['1', '2', '3', '4', '5', '6'];
+    this.days = [
+      { k: 'MON', l: 'จ.' }, { k: 'TUE', l: 'อ.' }, { k: 'WED', l: 'พ.' },
+      { k: 'THU', l: 'พฤ.' }, { k: 'FRI', l: 'ศ.' },
+    ];
+    this.periodCols = ['8-9', '9-10', '10-11', '11-12', '13-14', '14-15', '15-16', '16-17'];
+    this.state = { ...this.defaultsFor('subgroup', 'ศิลปะ', 'ART001'), showCsv: false, showMore: false };
+  }
+
+  uid() { return 'l' + Math.random().toString(36).slice(2, 8); }
+
+  defaultsFor(type, name, code) {
+    const base = { type, subjectName: name ?? '', subjectCode: code ?? '', ppw: 1, block: '', slot: '', slotMode: 'auto' };
+    if (type === 'standard')
+      return { ...base, ppw: 3, block: '1-2', lanes: [{ id: this.uid(), teachers: ['จิรัสชยาณ์'], roomMode: 'homeroom', room: '', sections: '' }] };
+    if (type === 'team')
+      return { ...base, ppw: 2, block: '2', lanes: [{ id: this.uid(), teachers: ['มนรวัส', 'นงค์นุช'], roomMode: 'homeroom', room: '', sections: '/1, /2' }] };
+    if (type === 'multi')
+      return { ...base, ppw: 3, block: '2-1', slot: 'TUE_9-10', slotMode: 'locked', lanes: [{ id: this.uid(), teachers: ['มนรวัส', 'มงคล', 'ปาริชาติ'], roomMode: 'specific', room: 'A316', sections: '/1, /2, /3' }] };
+    if (type === 'split')
+      return { ...base, ppw: 3, block: '2-1', lanes: [
+        { id: this.uid(), teachers: ['สมใจ'], roomMode: 'capability', room: 'เคมี', sections: '2' },
+        { id: this.uid(), teachers: ['สุขุมาภรณ์'], roomMode: 'homeroom', room: '', sections: '1' },
+      ] };
+    // subgroup — mixed on purpose: lab group + a group that stays in its homeroom
+    return { ...base, ppw: 1, slot: 'MON_9-10', slotMode: 'locked', lanes: [
+      { id: this.uid(), teachers: ['สมใจ'], roomMode: 'specific', room: 'B101-102', sections: '/1' },
+      { id: this.uid(), teachers: ['สุขุมาภรณ์'], roomMode: 'homeroom', room: '', sections: '/2' },
+      { id: this.uid(), teachers: [], roomMode: 'specific', room: '', sections: '/3' },
+    ] };
+  }
+
+  setType(type) { this.setState({ ...this.defaultsFor(type, this.state.subjectName, this.state.subjectCode), showCsv: this.state.showCsv, showMore: this.state.showMore }); }
+
+  updateLane(i, patch) {
+    const lanes = this.state.lanes.map((l, idx) => idx === i ? { ...l, ...patch } : l);
+    this.setState({ lanes });
+  }
+  addTeacher(i, name) {
+    if (!name) return;
+    const lane = this.state.lanes[i];
+    if (lane.teachers.includes(name)) return;
+    this.updateLane(i, { teachers: [...lane.teachers, name] });
+  }
+  removeTeacher(i, ti) {
+    const lane = this.state.lanes[i];
+    this.updateLane(i, { teachers: lane.teachers.filter((_, x) => x !== ti) });
+  }
+  addLane() {
+    const n = this.state.lanes.length + 1;
+    this.setState({ lanes: [...this.state.lanes, { id: this.uid(), teachers: [], roomMode: 'specific', room: '', sections: '/' + n }] });
+  }
+  removeLane(i) { this.setState({ lanes: this.state.lanes.filter((_, x) => x !== i) }); }
+  setRoomMode(i, mode) { this.updateLane(i, { roomMode: mode, room: '' }); }
+
+  // ppw
+  adjustPpw(d) { this.setState(s => ({ ppw: Math.max(1, (s.ppw || 1) + d) })); }
+
+  // blocks
+  parseBlocks(str) { return String(str || '').split('-').map(x => parseInt(x, 10)).filter(x => x > 0); }
+  setBlocks(arr) { this.setState({ block: arr.join('-') }); }
+  adjustBlock(idx, d) { const a = this.parseBlocks(this.state.block); a[idx] = Math.max(1, (a[idx] || 1) + d); this.setBlocks(a); }
+  removeBlock(idx) { const a = this.parseBlocks(this.state.block); a.splice(idx, 1); this.setBlocks(a); }
+  addBlock() { this.setBlocks([...this.parseBlocks(this.state.block), 1]); }
+
+  // slot
+  setSlotMode(mode) { if (mode === 'auto') this.setState({ slotMode: 'auto', slot: '' }); else this.setState({ slotMode: 'locked' }); }
+  toggleSlot(token) { this.setState(s => ({ slot: s.slot === token ? '' : token })); }
+
+  // sections
+  parseSec(str) { return String(str || '').split(',').map(x => x.replace(/[^0-9]/g, '')).filter(Boolean); }
+  serializeSec(arr) { return arr.slice().sort().map(n => '/' + n).join(', '); }
+  toggleSection(i, n) {
+    const cur = this.parseSec(this.state.lanes[i].sections);
+    const next = cur.includes(n) ? cur.filter(x => x !== n) : [...cur, n];
+    this.updateLane(i, { sections: this.serializeSec(next) });
+  }
+  toggleAllSections(i) {
+    const cur = this.parseSec(this.state.lanes[i].sections);
+    const all = this.gradeSections;
+    const isAll = all.every(n => cur.includes(n));
+    this.updateLane(i, { sections: isAll ? '' : this.serializeSec(all) });
+  }
+  adjustCount(i, d) {
+    const v = Math.max(1, (parseInt(this.state.lanes[i].sections, 10) || 1) + d);
+    this.updateLane(i, { sections: String(v) });
+  }
+
+  slotHuman(token) {
+    if (!token) return '—';
+    const [day, col] = token.split('_');
+    const dl = (this.days.find(d => d.k === day) || {}).l || day;
+    const idx = this.periodCols.indexOf(col);
+    return dl + ' · คาบ ' + (idx >= 0 ? idx + 1 : '?') + ' (' + (col || '').replace('-', '–') + ')';
+  }
+
+  renderVals() {
+    const s = this.state;
+    const type = s.type;
+    const isSub = type === 'subgroup';
+    const isSplit = type === 'split';
+    const isTeam = type === 'team';
+    const isMulti = type === 'multi';
+    const isStd = type === 'standard';
+    const accent = isSub ? '#7C3AED' : isSplit ? '#0891B2' : (isTeam || isMulti) ? '#2563EB' : '#16A34A';
+
+    const seg = (active) => 'font-family:Inter,sans-serif;font-size:13px;font-weight:600;border-radius:9px;padding:8px 14px;cursor:pointer;transition:all .12s;border:1px solid ' +
+      (active ? '#2563EB;background:#2563EB;color:#fff;box-shadow:0 1px 2px rgba(37,99,235,.3);' : '#E2E8F0;background:#fff;color:#475569;');
+    const seg2 = (active) => 'font-family:Inter,sans-serif;font-size:12px;font-weight:600;border-radius:8px;padding:6px 11px;cursor:pointer;transition:all .12s;border:1px solid ' +
+      (active ? '#0F172A;background:#0F172A;color:#fff;' : '#E2E8F0;background:#fff;color:#475569;');
+    const pillToggle = (active) => 'font-family:Inter,sans-serif;font-size:12px;font-weight:600;border-radius:8px;padding:6px 12px;cursor:pointer;transition:all .12s;border:1px solid ' +
+      (active ? '#2563EB;background:#EFF6FF;color:#2563EB;' : '#E2E8F0;background:#fff;color:#64748B;');
+    const chip = (active) => 'font-family:Inter,sans-serif;font-size:13px;font-weight:600;border-radius:8px;min-width:42px;padding:7px 12px;cursor:pointer;transition:all .12s;border:1px solid ' +
+      (active ? '#7C3AED;background:#7C3AED;color:#fff;' : '#E2E8F0;background:#fff;color:#475569;');
+
+    const hints = {
+      standard: 'ครู 1 คน สอนนักเรียน 1 ห้อง ในห้องเรียนเดียว — รูปแบบมาตรฐาน ใช้มากที่สุด',
+      team: 'ครูหลายคนสอนนักเรียนห้องเดียวกัน พร้อมกันในห้องเดียว',
+      multi: 'ครูหลายคนสอนนักเรียนหลายห้องรวมกัน มักล็อกคาบไว้',
+      subgroup: 'นักเรียนแยกเป็นกลุ่มย่อย เรียนพร้อมกันคนละห้อง — แต่ละกลุ่มคือ 1 กลุ่มด้านล่าง',
+      split: 'แบ่งวิชาให้ครูคนละช่วง ตามบล็อกคาบ — จำนวนครูต้องเท่าจำนวนบล็อก',
+    };
+
+    const teacherOptions = this.teacherOptions.map(t => ({ v: t.v, label: t.v + '  ·  ' + t.d }));
+    const roomOptions = this.roomOptions.map(r => ({ v: r.v, label: r.n ? (r.v + '  ·  ' + r.n) : r.v }));
+    const capabilityOptions = this.capabilityTags.map(t => ({ v: t.v, label: t.v + '  ·  ' + t.d }));
+
+    const inputBase = 'height:38px;border-radius:8px;padding:0 11px;font-size:13.5px;color:#0F172A;outline:none;background:#fff;';
+    const okBorder = 'border:1px solid #CBD5E1;';
+    const errBorder = 'border:1px solid #FCA5A5;background:#FEF2F2;';
+
+    // ---- block builder ----
+    const blocks = this.parseBlocks(s.block);
+    const blockChips = blocks.map((n, idx) => ({
+      title: 'บล็อก ' + (idx + 1),
+      count: n,
+      boxes: Array.from({ length: n }).map((_, k) => ({ k })),
+      removable: blocks.length > 1,
+      onMinus: () => this.adjustBlock(idx, -1),
+      onPlus: () => this.adjustBlock(idx, +1),
+      onRemove: () => this.removeBlock(idx),
+    }));
+    const blockSum = blocks.reduce((a, b) => a + b, 0);
+    const ppwNum = s.ppw || 0;
+    const blockMatches = blockSum === ppwNum;
+    const blockSumStyle = 'font-size:11px;font-weight:600;border-radius:20px;padding:2px 10px;' +
+      (blockMatches ? 'color:#16A34A;background:#F0FDF4;border:1px solid #BBF7D0;' : 'color:#B45309;background:#FFFBEB;border:1px solid #FDE68A;');
+    const blockSumText = blockMatches ? ('รวม ' + blockSum + ' คาบ ✓') : ('รวม ' + blockSum + ' / ควรเป็น ' + ppwNum + ' คาบ');
+
+    // ---- slot grid ----
+    const slotDays = this.days.map(d => ({ l: d.l }));
+    const slotCell = (sel) => 'height:30px;border-radius:6px;border:1px solid ' + (sel ? '#2563EB' : '#E2E8F0') +
+      ';background:' + (sel ? '#2563EB' : '#fff') + ';color:' + (sel ? '#fff' : '#CBD5E1') + ';font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .1s;';
+    const slotRows = this.periodCols.map((col, idx) => ({
+      label: 'คาบ ' + (idx + 1),
+      sub: col.replace('-', '–'),
+      cells: this.days.map(d => {
+        const token = d.k + '_' + col;
+        const sel = s.slot === token;
+        return { token, mark: sel ? '●' : '', style: slotCell(sel), onClick: () => this.toggleSlot(token) };
+      }),
+    }));
+
+    // ---- lanes ----
+    const lanes = s.lanes.map((lane, i) => {
+      const mode = lane.roomMode || 'specific';
+      const secArr = this.parseSec(lane.sections);
+      const needTeacher = !isSplit ? lane.teachers.length === 0 : lane.teachers.length !== 1;
+      const needRoom = mode !== 'homeroom' && !lane.room;
+      const needSection = isSplit ? !(parseInt(lane.sections, 10) > 0) : isSub ? secArr.length === 0 : false;
+      const hasError = needTeacher || needRoom || needSection;
+      const errs = [];
+      if (needTeacher) errs.push(isSplit ? 'ต้องมีครู 1 คนต่อบล็อก' : 'เลือกครูอย่างน้อย 1 คน');
+      if (needSection) errs.push(isSplit ? 'ระบุจำนวนคาบของบล็อก' : isSub ? 'เลือกกลุ่มที่เรียน' : 'เลือกห้องที่สอน');
+      if (needRoom) errs.push(mode === 'capability' ? 'ยังไม่เลือกประเภทห้อง' : 'ยังไม่เลือกห้อง');
+
+      const label = isSub ? ('กลุ่ม ' + (i + 1)) : isSplit ? ('บล็อก ' + (i + 1)) : 'รายละเอียด';
+      const sublabel = isSub ? 'parallel group' : isSplit ? (lane.sections ? lane.sections + ' คาบ' : 'ตั้งจำนวนคาบ') : '';
+
+      const allOn = this.gradeSections.every(n => secArr.includes(n));
+      const sectionChips = this.gradeSections.map(n => ({
+        label: '/' + n,
+        style: chip(secArr.includes(n)),
+        onToggle: () => this.toggleSection(i, n),
+      }));
+
+      return {
+        id: lane.id,
+        label, sublabel,
+        teachers: lane.teachers.map((name, ti) => ({ name, onRemove: () => this.removeTeacher(i, ti) })),
+        addTeacherValue: '',
+        onAddTeacher: (e) => { this.addTeacher(i, e.target.value); },
+        room: lane.room,
+        onRoom: (e) => this.updateLane(i, { room: e.target.value }),
+        roomIsHome: mode === 'homeroom',
+        roomIsSpec: mode === 'specific',
+        roomIsCap: mode === 'capability',
+        rmHomeStyle: seg2(mode === 'homeroom'),
+        rmSpecStyle: seg2(mode === 'specific'),
+        rmCapStyle: seg2(mode === 'capability'),
+        onRoomHome: () => this.setRoomMode(i, 'homeroom'),
+        onRoomSpec: () => this.setRoomMode(i, 'specific'),
+        onRoomCap: () => this.setRoomMode(i, 'capability'),
+        sections: lane.sections,
+        useChecks: !isSplit,
+        useCount: isSplit,
+        sectionChips,
+        showAllChip: !isSub,
+        allChipLabel: allOn ? 'ล้างทั้งหมด' : 'ทุกห้อง',
+        allChipStyle: 'font-family:Inter,sans-serif;font-size:12.5px;font-weight:600;border-radius:8px;padding:7px 12px;cursor:pointer;border:1px dashed ' +
+          (allOn ? '#16A34A;color:#16A34A;background:#F0FDF4;' : '#CBD5E1;color:#64748B;background:#fff;'),
+        onToggleAll: () => this.toggleAllSections(i),
+        onCountMinus: () => this.adjustCount(i, -1),
+        onCountPlus: () => this.adjustCount(i, +1),
+        teacherLabel: isSplit ? 'ครูประจำบล็อก (1 คน)' : (isTeam || isMulti) ? 'ครูผู้สอน (ทีม)' : 'ครูผู้สอน',
+        sectionLabel: isSplit ? 'จำนวนคาบของบล็อกนี้' : isSub ? 'กลุ่มนักเรียนที่เรียน' : 'ห้อง (นักเรียน) ที่สอน',
+        removable: (isSub || isSplit) && s.lanes.length > 1,
+        onRemoveLane: () => this.removeLane(i),
+        hasError, errorText: errs.join(' · '),
+        cardStyle: 'border:1px solid ' + (hasError ? '#FCA5A5' : '#E2E8F0') + ';border-left:4px solid ' + accent + ';border-radius:12px;padding:15px;background:' + (hasError ? '#FFFCFC' : '#fff') + ';',
+        badgeStyle: 'font-size:12px;font-weight:700;color:#fff;background:' + accent + ';border-radius:7px;padding:3px 10px;',
+        roomSelectStyle: inputBase + (needRoom ? errBorder : okBorder) + 'cursor:pointer;max-width:340px;width:100%;',
+      };
+    });
+
+    // ---- validation ----
+    const nameOk = !!String(s.subjectName).trim();
+    const laneErrs = lanes.filter(l => l.hasError).length;
+    const splitMismatch = isSplit && this.parseBlocks(s.block).length !== s.lanes.length;
+    const valid = nameOk && laneErrs === 0 && !splitMismatch;
+    let problems = (nameOk ? 0 : 1) + laneErrs + (splitMismatch ? 1 : 0);
+
+    // ---- csv ----
+    const teacherField = isSplit
+      ? s.lanes.map(l => l.teachers[0] || '?').join(', ')
+      : isSub
+        ? s.lanes.map(l => l.teachers.join(', ') || '?').join('|')
+        : (s.lanes[0]?.teachers.join(', ') || '?');
+    const roomSeg = (l) => (l && l.roomMode === 'homeroom') ? '' : ((l && l.room) || '?');
+    const roomField = isSub ? s.lanes.map(roomSeg).join('|') : roomSeg(s.lanes[0]);
+    const classField = isSub ? s.lanes.map(l => l.sections || '?').join('|') : (s.lanes[0]?.sections || '');
+    const typeFlag = { standard: '', team: 'type=TEAM', multi: 'type=MULTI_CLASS_TEAM', subgroup: 'type=SUB_GROUP', split: 'type=TEACHER_SPLIT' }[type];
+    const q = (x) => /[,|]/.test(x) ? '"' + x + '"' : x;
+    const csv = [
+      s.subjectCode || '', s.subjectName || '…', s.ppw || '', q(teacherField),
+      s.block || '', q(classField), typeFlag, q(roomField), s.slot || '',
+    ].join(',');
+
+    const saveBtn = 'height:40px;padding:0 20px;border-radius:9px;border:none;font-size:14px;font-weight:700;transition:all .12s;' +
+      (valid ? 'background:#2563EB;color:#fff;cursor:pointer;box-shadow:0 1px 3px rgba(37,99,235,.4);' : 'background:#E2E8F0;color:#94A3B8;cursor:not-allowed;');
+    const pill = valid
+      ? 'display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:#16A34A;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:20px;padding:6px 13px;'
+      : 'display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:#DC2626;background:#FEF2F2;border:1px solid #FECACA;border-radius:20px;padding:6px 13px;';
+
+    return {
+      subjectName: s.subjectName, subjectCode: s.subjectCode,
+      onName: (e) => this.setState({ subjectName: e.target.value }),
+      onCode: (e) => this.setState({ subjectCode: e.target.value }),
+      ppw: s.ppw,
+      onPpwMinus: () => this.adjustPpw(-1),
+      onPpwPlus: () => this.adjustPpw(+1),
+      showBlock: !isSub,
+      blockChips, addBlock: () => this.addBlock(),
+      blockSumStyle, blockSumText,
+      // slot
+      slotAuto: s.slotMode === 'auto',
+      slotLocked: s.slotMode === 'locked',
+      slotAutoStyle: pillToggle(s.slotMode === 'auto'),
+      slotLockStyle: pillToggle(s.slotMode === 'locked'),
+      onSlotAuto: () => this.setSlotMode('auto'),
+      onSlotLock: () => this.setSlotMode('locked'),
+      slotDays, slotRows,
+      slotHuman: this.slotHuman(s.slot),
+      typeHint: hints[type],
+      isSub,
+      segStandard: seg(isStd), segTeam: seg(isTeam), segMulti: seg(isMulti), segSub: seg(isSub), segSplit: seg(isSplit),
+      pickStandard: () => this.setType('standard'),
+      pickTeam: () => this.setType('team'),
+      pickMulti: () => this.setType('multi'),
+      pickSub: () => this.setType('subgroup'),
+      pickSplit: () => this.setType('split'),
+      teacherOptions, roomOptions, capabilityOptions,
+      lanes,
+      laneSectionTitle: isSub ? 'กลุ่มย่อย · Sub-groups' : isSplit ? 'ช่วงการสอน · Blocks' : 'รายละเอียดการสอน',
+      canAddLane: isSub || isSplit,
+      addLane: () => this.addLane(),
+      addLaneLabel: isSub ? 'เพิ่มกลุ่ม' : 'เพิ่มบล็อก',
+      // csv disclosure
+      showMore: s.showMore,
+      toggleMore: () => this.setState(st => ({ showMore: !st.showMore })),
+      moreCaretStyle: 'display:inline-block;transition:transform .15s;transform:rotate(' + (s.showMore ? '90' : '0') + 'deg);',
+      showCsv: s.showCsv,
+      toggleCsv: () => this.setState(st => ({ showCsv: !st.showCsv })),
+      csvCaretStyle: 'display:inline-block;transition:transform .15s;transform:rotate(' + (s.showCsv ? '90' : '0') + 'deg);',
+      csvPreview: csv,
+      saveDisabled: !valid,
+      saveBtnStyle: saveBtn,
+      onSave: () => { if (valid) alert('✓ บันทึกแล้ว — would append:\n\n' + csv); },
+      statusPillStyle: pill,
+      statusText: valid ? '✓ พร้อมบันทึก · valid' : ('● ' + problems + ' จุดที่ต้องแก้ก่อนบันทึก'),
+    };
+  }
+}
+</script>
+</body>
+</html>

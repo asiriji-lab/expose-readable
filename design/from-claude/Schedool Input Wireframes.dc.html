@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Gaegu:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  .hand{font-family:'Caveat',cursive;}
+  .ui{font-family:Helvetica,Arial,sans-serif;}
+</style>
+</helmet>
+<div style="min-width:100%;min-height:100vh;background:#ece9e1;background-image:radial-gradient(#d9d4c8 1px,transparent 1px);background-size:22px 22px;padding:40px 48px 120px;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif;color:#232020;">
+
+  <!-- ============ MASTHEAD ============ -->
+  <div style="max-width:1480px;margin:0 auto 10px;">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px;border-bottom:3px solid #232020;padding-bottom:14px;">
+      <div>
+        <div style="font-family:'Caveat',cursive;font-size:48px;font-weight:700;line-height:0.9;">Schedool — Input Workflow</div>
+        <div style="font-size:13px;color:#6b665c;margin-top:6px;max-width:680px;">Lo-fi wireframes for the admin timetable-building flow. Focus: the <b>input</b> step — the 7 interdependent sheets feeding the GA, where <b>curriculum</b> is 80% of the pain.</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;font-family:'Caveat',cursive;font-size:17px;">
+        <span style="background:#fffdf8;border:2px solid #232020;border-radius:20px;padding:3px 12px;">3 flow directions</span>
+        <span style="background:#fffdf8;border:2px solid #232020;border-radius:20px;padding:3px 12px;">3 input paradigms</span>
+        <span style="background:#fffdf8;border:2px solid #232020;border-radius:20px;padding:3px 12px;">3 curriculum models</span>
+      </div>
+    </div>
+    <!-- legend -->
+    <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;font-size:11px;color:#6b665c;align-items:center;">
+      <span style="display:flex;align-items:center;gap:6px;"><span style="width:14px;height:14px;border:2px solid #232020;background:#fffdf8;border-radius:3px;display:inline-block;"></span>screen / panel</span>
+      <span style="display:flex;align-items:center;gap:6px;"><span style="width:14px;height:14px;background:#c2562f;border-radius:3px;display:inline-block;"></span>complexity hotspot</span>
+      <span style="display:flex;align-items:center;gap:6px;"><span style="width:14px;height:14px;background:#3f7d54;border-radius:3px;display:inline-block;"></span>valid / automated</span>
+      <span style="display:flex;align-items:center;gap:6px;"><span style="width:14px;height:14px;background:#3a5e9e;border-radius:3px;display:inline-block;"></span>GA engine (backend)</span>
+      <span style="display:flex;align-items:center;gap:6px;font-family:'Caveat',cursive;font-size:16px;color:#c2562f;">✎ hand notes = rationale &amp; tradeoffs</span>
+    </div>
+  </div>
+
+  <!-- ============ SECTION 1 — DATA FLOW MAP ============ -->
+  <div style="max-width:1480px;margin:38px auto 0;">
+    <div style="font-family:'Caveat',cursive;font-size:30px;font-weight:700;">① The data flow — why input is the hard part</div>
+    <div style="font-size:12px;color:#6b665c;margin:2px 0 16px;">Everything downstream is automated. The admin's entire job is producing 7 clean, cross-consistent sheets. Read left → right.</div>
+
+    <div style="background:#fffdf8;border:2.5px solid #232020;border-radius:14px;box-shadow:5px 5px 0 rgba(35,32,32,.10);padding:22px;display:flex;gap:18px;align-items:stretch;flex-wrap:nowrap;overflow-x:auto;">
+
+      <!-- Foundation layer -->
+      <div style="flex:none;width:200px;">
+        <div style="font-family:'Caveat',cursive;font-size:19px;color:#3f7d54;font-weight:700;margin-bottom:8px;">Foundation (define once)</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="border:2px solid #232020;border-radius:8px;background:#fff;padding:8px 10px;font-size:12px;"><b>period</b><div style="font-size:10px;color:#6b665c;">time slots / day</div></div>
+          <div style="border:2px solid #232020;border-radius:8px;background:#fff;padding:8px 10px;font-size:12px;"><b>room</b><div style="font-size:10px;color:#6b665c;">+ capability tags</div></div>
+          <div style="border:2px solid #232020;border-radius:8px;background:#fff;padding:8px 10px;font-size:12px;"><b>teacher</b><div style="font-size:10px;color:#6b665c;">in-school / external</div></div>
+          <div style="border:2px solid #232020;border-radius:8px;background:#fff;padding:8px 10px;font-size:12px;"><b>student</b><div style="font-size:10px;color:#6b665c;">classes (grade/section)</div></div>
+        </div>
+      </div>
+
+      <div style="flex:none;align-self:center;font-family:'Caveat',cursive;font-size:15px;color:#6b665c;text-align:center;width:78px;">referenced&nbsp;by&nbsp;name/id<div style="font-size:30px;line-height:0.6;">→</div></div>
+
+      <!-- Assignment layer -->
+      <div style="flex:none;width:330px;">
+        <div style="font-family:'Caveat',cursive;font-size:19px;color:#c2562f;font-weight:700;margin-bottom:8px;">Assignments (the real work)</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="border:2.5px solid #c2562f;border-radius:8px;background:#fbe9e1;padding:10px 12px;position:relative;">
+            <div style="position:absolute;top:-11px;right:10px;background:#c2562f;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;">HOTSPOT</div>
+            <b style="font-size:13px;">curriculum</b>
+            <div style="font-size:10.5px;color:#7a4636;margin-top:3px;line-height:1.4;">merged-cell <b>anchor + continuation</b> rows · 5 teaching types (TEAM, MULTI_CLASS, SUB_GROUP, TEACHER_SPLIT, SEPARATE_SLOT) · pipe-syntax · per-row inheritance</div>
+          </div>
+          <div style="border:2px solid #232020;border-radius:8px;background:#fff;padding:8px 12px;font-size:12px;"><b>preplace</b><div style="font-size:10px;color:#6b665c;">fixed blocks · targeting syntax (students / teachers / homeroom_teacher)</div></div>
+          <div style="border:2px solid #232020;border-radius:8px;background:#fff;padding:8px 12px;font-size:12px;"><b>elective</b><div style="font-size:10px;color:#6b665c;">teacher+room locked to preplace slot names</div></div>
+        </div>
+        <div style="font-family:'Caveat',cursive;font-size:15px;color:#c2562f;margin-top:8px;line-height:1.05;">every field here points back at a foundation sheet → cross-sheet validation is constant</div>
+      </div>
+
+      <div style="flex:none;align-self:center;font-family:'Caveat',cursive;font-size:15px;color:#6b665c;text-align:center;width:70px;">submit<div style="font-size:30px;line-height:0.6;">→</div></div>
+
+      <!-- Pipeline -->
+      <div style="flex:none;width:200px;">
+        <div style="font-family:'Caveat',cursive;font-size:19px;color:#3a5e9e;font-weight:700;margin-bottom:8px;">Backend (automated)</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="border:2px solid #3a5e9e;border-radius:8px;background:#e8edf6;padding:8px 10px;font-size:11.5px;"><b>data_cleaning</b><div style="font-size:10px;color:#46506a;">rename · resolve · propagate rows</div></div>
+          <div style="text-align:center;color:#3a5e9e;font-size:18px;line-height:0.5;">↓</div>
+          <div style="border:2px solid #3a5e9e;border-radius:8px;background:#e8edf6;padding:8px 10px;font-size:11.5px;"><b>preschedule</b><div style="font-size:10px;color:#46506a;">lock fixed slots</div></div>
+          <div style="text-align:center;color:#3a5e9e;font-size:18px;line-height:0.5;">↓</div>
+          <div style="border:2px solid #3a5e9e;border-radius:8px;background:#e8edf6;padding:8px 10px;font-size:11.5px;"><b>island GA</b><div style="font-size:10px;color:#46506a;">evolve · migrate best</div></div>
+        </div>
+      </div>
+
+      <div style="flex:none;align-self:center;color:#6b665c;font-size:30px;">→</div>
+
+      <!-- Output -->
+      <div style="flex:none;width:150px;align-self:center;">
+        <div style="border:2.5px solid #232020;border-radius:10px;background:#fff;padding:10px;box-shadow:3px 3px 0 rgba(35,32,32,.12);">
+          <div style="font-size:11px;font-weight:700;margin-bottom:6px;">timetable</div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:2px;">
+            <div style="height:9px;background:#3f7d54;border-radius:2px;"></div><div style="height:9px;background:#e7e2d8;border-radius:2px;"></div><div style="height:9px;background:#c2562f;border-radius:2px;"></div><div style="height:9px;background:#3a5e9e;border-radius:2px;"></div><div style="height:9px;background:#e7e2d8;border-radius:2px;"></div>
+            <div style="height:9px;background:#e7e2d8;border-radius:2px;"></div><div style="height:9px;background:#3a5e9e;border-radius:2px;"></div><div style="height:9px;background:#e7e2d8;border-radius:2px;"></div><div style="height:9px;background:#3f7d54;border-radius:2px;"></div><div style="height:9px;background:#c2562f;border-radius:2px;"></div>
+            <div style="height:9px;background:#3a5e9e;border-radius:2px;"></div><div style="height:9px;background:#e7e2d8;border-radius:2px;"></div><div style="height:9px;background:#3f7d54;border-radius:2px;"></div><div style="height:9px;background:#e7e2d8;border-radius:2px;"></div><div style="height:9px;background:#e7e2d8;border-radius:2px;"></div>
+          </div>
+          <div style="font-family:'Caveat',cursive;font-size:14px;color:#3f7d54;margin-top:6px;line-height:1;">drag-edit &amp; publish to teacher / student / room views</div>
+        </div>
+      </div>
+    </div>
+
+    <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+    <div style="font-family:'Caveat',cursive;font-size:18px;color:#c2562f;margin-top:12px;">✎ Design implication: the UI should spend its budget on the assignment layer — get foundation in fast (it's mostly flat tables), then pour guidance into curriculum.</div>
+    </sc-if>
+  </div>
+
+  <!-- ============ SECTION 2 — 3 OVERALL FLOW DIRECTIONS ============ -->
+  <div style="max-width:1480px;margin:48px auto 0;">
+    <div style="font-family:'Caveat',cursive;font-size:30px;font-weight:700;">② Three directions for the overall flow</div>
+    <div style="font-size:12px;color:#6b665c;margin:2px 0 18px;">Same destination (clean 7 sheets → GA), different center of gravity for <i>where</i> and <i>how</i> the admin works. Compare top-to-bottom.</div>
+
+    <!-- DIRECTION A -->
+    <div style="background:#fffdf8;border:2.5px solid #232020;border-radius:14px;box-shadow:5px 5px 0 rgba(35,32,32,.10);padding:20px;margin-bottom:18px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <div>
+          <span style="background:#232020;color:#fff;font-weight:700;font-size:13px;padding:3px 12px;border-radius:20px;">A</span>
+          <span style="font-family:'Caveat',cursive;font-size:26px;font-weight:700;margin-left:8px;">Sheet-Orchestrated</span>
+          <div style="font-size:11.5px;color:#6b665c;max-width:560px;margin-top:3px;">Refine today's flow. Google Sheet stays the entry surface; the app orchestrates: spins up the templated sheet, mirrors live tab/validation status, blocks bad submits. Lowest build cost.</div>
+        </div>
+        <div style="font-family:'Caveat',cursive;font-size:14px;color:#3f7d54;max-width:230px;text-align:right;">✓ reuses AppsScript validation &amp; power-user muscle memory<br><span style="color:#c2562f;">✗ context-switch to Sheets; merged-cell pain stays</span></div>
+      </div>
+      <div style="display:flex;gap:0;align-items:stretch;overflow-x:auto;padding-bottom:4px;">
+        <!-- screen -->
+        <div style="flex:none;width:188px;background:#fff;border:2px solid #232020;border-radius:10px;box-shadow:3px 3px 0 rgba(35,32,32,.10);overflow:hidden;">
+          <div style="height:20px;background:#232020;display:flex;align-items:center;padding:0 8px;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:#c2562f;"></span><span style="width:6px;height:6px;border-radius:50%;background:#d9b54a;"></span><span style="color:#fff;font-size:8px;margin-left:4px;">Dashboard</span></div>
+          <div style="padding:9px;display:flex;flex-direction:column;gap:6px;">
+            <div style="height:7px;width:60%;background:#e7e2d8;border-radius:4px;"></div>
+            <div style="border:1.5px solid #ddd6c8;border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:4px;"><div style="height:6px;width:70%;background:#e7e2d8;border-radius:3px;"></div><div style="height:5px;width:40%;background:#eee7da;border-radius:3px;"></div></div>
+            <div style="border:1.5px solid #ddd6c8;border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:4px;"><div style="height:6px;width:65%;background:#e7e2d8;border-radius:3px;"></div><div style="height:5px;width:50%;background:#eee7da;border-radius:3px;"></div></div>
+            <div style="height:18px;background:#3f7d54;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:700;">+ New session</div>
+          </div>
+        </div>
+        <div style="flex:none;align-self:center;color:#6b665c;font-size:24px;padding:0 4px;">→</div>
+        <!-- screen 2 -->
+        <div style="flex:none;width:188px;background:#fff;border:2px solid #232020;border-radius:10px;box-shadow:3px 3px 0 rgba(35,32,32,.10);overflow:hidden;">
+          <div style="height:20px;background:#232020;display:flex;align-items:center;padding:0 8px;gap:4px;"><span style="color:#fff;font-size:8px;">New session</span></div>
+          <div style="padding:9px;display:flex;flex-direction:column;gap:6px;">
+            <div style="height:6px;width:40%;background:#e7e2d8;border-radius:3px;"></div>
+            <div style="height:16px;border:1.5px solid #ddd6c8;border-radius:5px;"></div>
+            <div style="display:flex;gap:5px;"><div style="flex:1;height:14px;border:1.5px solid #ddd6c8;border-radius:5px;"></div><div style="flex:1;height:14px;border:1.5px solid #ddd6c8;border-radius:5px;"></div></div>
+            <div style="display:flex;gap:5px;margin-top:2px;">
+              <div style="flex:1;border:1.5px solid #3f7d54;background:#eef5ef;border-radius:5px;padding:5px;font-size:7.5px;text-align:center;color:#2f5d3f;font-weight:700;">Start fresh</div>
+              <div style="flex:1;border:1.5px solid #3a5e9e;background:#eaeff7;border-radius:5px;padding:5px;font-size:7.5px;text-align:center;color:#33477a;font-weight:700;">Clone last term</div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:none;align-self:center;color:#6b665c;font-size:24px;padding:0 4px;">→</div>
+        <!-- screen 3 -->
+        <div style="flex:none;width:188px;background:#fff;border:2px solid #232020;border-radius:10px;box-shadow:3px 3px 0 rgba(35,32,32,.10);overflow:hidden;">
+          <div style="height:20px;background:#232020;display:flex;align-items:center;padding:0 8px;gap:4px;"><span style="color:#fff;font-size:8px;">Workspace · Sheet</span></div>
+          <div style="padding:9px;display:flex;flex-direction:column;gap:6px;">
+            <div style="border:1.5px dashed #c2562f;border-radius:6px;padding:7px;text-align:center;background:#fbe9e1;"><div style="font-size:8px;font-weight:700;color:#7a4636;">⚡ Create / connect Google Sheet</div></div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:3px;">
+              <div style="height:13px;background:#eef5ef;border:1px solid #b8d3bf;border-radius:3px;"></div><div style="height:13px;background:#eef5ef;border:1px solid #b8d3bf;border-radius:3px;"></div><div style="height:13px;background:#eef5ef;border:1px solid #b8d3bf;border-radius:3px;"></div><div style="height:13px;background:#fbe9e1;border:1px solid #e0a98f;border-radius:3px;"></div>
+            </div>
+            <div style="font-size:7px;color:#6b665c;">live tab status · ● = filled</div>
+            <div style="height:16px;background:#3a5e9e;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:700;">Open sheet ↗</div>
+          </div>
+        </div>
+        <div style="flex:none;align-self:center;color:#6b665c;font-size:24px;padding:0 4px;">→</div>
+        <!-- screen 4 -->
+        <div style="flex:none;width:188px;background:#fff;border:2px solid #232020;border-radius:10px;box-shadow:3px 3px 0 rgba(35,32,32,.10);overflow:hidden;">
+          <div style="height:20px;background:#232020;display:flex;align-items:center;padding:0 8px;gap:4px;"><span style="color:#fff;font-size:8px;">Validate</span></div>
+          <div style="padding:9px;display:flex;flex-direction:column;gap:5px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;"><div style="height:6px;width:45%;background:#e7e2d8;border-radius:3px;"></div><span style="font-size:7px;background:#fbe9e1;color:#c2562f;padding:1px 5px;border-radius:8px;font-weight:700;">2 errors</span></div>
+            <div style="border:1.5px solid #e0a98f;background:#fbe9e1;border-radius:5px;padding:4px 6px;font-size:7px;color:#7a4636;">● curriculum: teacher not found</div>
+            <div style="border:1.5px solid #e7d6a3;background:#fbf3da;border-radius:5px;padding:4px 6px;font-size:7px;color:#7a6a36;">▲ room tag unused</div>
+            <div style="height:6px;width:80%;background:#eee7da;border-radius:3px;"></div>
+            <div style="height:16px;background:#cfcabd;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#6b665c;font-size:8px;font-weight:700;">Run GA (blocked)</div>
+          </div>
+        </div>
+        <div style="flex:none;align-self:center;color:#6b665c;font-size:24px;padding:0 4px;">→</div>
+        <!-- screen 5 -->
+        <div style="flex:none;width:188px;background:#fff;border:2px solid #232020;border-radius:10px;box-shadow:3px 3px 0 rgba(35,32,32,.10);overflow:hidden;">
+          <div style="height:20px;background:#3a5e9e;display:flex;align-items:center;padding:0 8px;gap:4px;"><span style="color:#fff;font-size:8px;">Generating → Review</span></div>
+          <div style="padding:9px;display:flex;flex-direction:column;gap:6px;">
+            <div style="height:6px;width:55%;background:#e7e2d8;border-radius:3px;"></div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:2px;">
+              <div style="height:9px;background:#3f7d54;border-radius:2px;"></div><div style="height:9px;background:#e7e2d8;border-radius:2px;"></div><div style="height:9px;background:#c2562f;border-radius:2px;"></div><div style="height:9px;background:#3a5e9e;border-radius:2px;"></div><div style="height:9px;background:#e7e2d8;border-radius:2px;"></div>
+              <div style="height:9px;background:#e7e2d8;border-radius:2px;"></div><div style="height:9px;background:#3a5e9e;border-radius:2px;"></div><div style="height:9px;background:#3f7d54;border-radius:2px;"></div><div style="height:9px;background:#e7e2d8;border-radius:2px;"></div><div style="height:9px;background:#c2562f;border-radius:2px;"></div>
+            </div>
+            <div style="height:16px;background:#3f7d54;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:700;">Drag-edit timetable</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DIRECTION B -->
+    <div style="background:#fffdf8;border:2.5px solid #232020;border-radius:14px;box-shadow:5px 5px 0 rgba(35,32,32,.10);padding:20px;margin-bottom:18px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <div>
+          <span style="background:#232020;color:#fff;font-weight:700;font-size:13px;padding:3px 12px;border-radius:20px;">B</span>
+          <span style="font-family:'Caveat',cursive;font-size:26px;font-weight:700;margin-left:8px;">In-App Guided Workspace</span>
+          <div style="font-size:11.5px;color:#6b665c;max-width:600px;margin-top:3px;">Native UI replaces the Sheet. Persistent left rail = the 7 entities with completion + error counts; each opens a structured editor. Curriculum gets a purpose-built builder. No context switch, validation is truly live.</div>
+        </div>
+        <div style="font-family:'Caveat',cursive;font-size:14px;color:#3f7d54;max-width:230px;text-align:right;">✓ one surface · guided curriculum · instant cross-checks<br><span style="color:#c2562f;">✗ biggest build; must out-UX a spreadsheet</span></div>
+      </div>
+      <div style="display:flex;gap:14px;align-items:stretch;overflow-x:auto;padding-bottom:4px;">
+        <!-- big workspace screen -->
+        <div style="flex:none;width:430px;background:#fff;border:2px solid #232020;border-radius:10px;box-shadow:3px 3px 0 rgba(35,32,32,.10);overflow:hidden;">
+          <div style="height:22px;background:#232020;display:flex;align-items:center;padding:0 8px;"><span style="color:#fff;font-size:9px;">Workspace — Term 1 / 2568</span></div>
+          <div style="display:flex;height:178px;">
+            <!-- rail -->
+            <div style="width:122px;border-right:1.5px solid #e7e2d8;padding:8px 6px;display:flex;flex-direction:column;gap:4px;background:#faf8f2;">
+              <div style="font-size:7px;color:#6b665c;font-weight:700;letter-spacing:.5px;">ENTITIES</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:8.5px;background:#eef5ef;border-radius:4px;padding:3px 5px;"><span>period</span><span style="color:#3f7d54;">✓</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:8.5px;background:#eef5ef;border-radius:4px;padding:3px 5px;"><span>room</span><span style="color:#3f7d54;">✓</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:8.5px;background:#eef5ef;border-radius:4px;padding:3px 5px;"><span>teacher</span><span style="color:#3f7d54;">✓</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:8.5px;background:#eef5ef;border-radius:4px;padding:3px 5px;"><span>student</span><span style="color:#3f7d54;">✓</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:8.5px;background:#c2562f;color:#fff;border-radius:4px;padding:3px 5px;font-weight:700;"><span>curriculum</span><span>3!</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:8.5px;background:#fbf3da;border-radius:4px;padding:3px 5px;"><span>preplace</span><span style="color:#7a6a36;">○</span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:8.5px;border-radius:4px;padding:3px 5px;"><span>elective</span><span style="color:#6b665c;">–</span></div>
+            </div>
+            <!-- editor -->
+            <div style="flex:1;padding:9px;display:flex;flex-direction:column;gap:5px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-size:9px;font-weight:700;color:#c2562f;">curriculum</div><div style="height:13px;width:60px;background:#3f7d54;border-radius:4px;"></div></div>
+              <div style="border:1px solid #e7e2d8;border-radius:5px;overflow:hidden;">
+                <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr .6fr;background:#f3f0e8;font-size:6.5px;color:#6b665c;font-weight:700;"><div style="padding:3px 4px;">subject</div><div style="padding:3px 4px;">teacher</div><div style="padding:3px 4px;">class</div><div style="padding:3px 4px;">×wk</div></div>
+                <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr .6fr;font-size:7px;border-top:1px solid #efe9dd;"><div style="padding:3px 4px;">ภาษาไทย2</div><div style="padding:3px 4px;">จิรัสชยาณ์</div><div style="padding:3px 4px;">1/1</div><div style="padding:3px 4px;">3</div></div>
+                <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr .6fr;font-size:7px;border-top:1px solid #efe9dd;background:#fbe9e1;"><div style="padding:3px 4px;color:#c2562f;">วิทย์2 ⚠</div><div style="padding:3px 4px;color:#c2562f;">วิฑูรย์?</div><div style="padding:3px 4px;">/3,/4</div><div style="padding:3px 4px;">3</div></div>
+                <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr .6fr;font-size:7px;border-top:1px solid #efe9dd;"><div style="padding:3px 4px;color:#6b665c;">+ add subject</div><div></div><div></div><div></div></div>
+              </div>
+              <div style="font-size:7px;color:#c2562f;">▸ inline marker: "วิฑูรย์" not in teacher sheet</div>
+            </div>
+          </div>
+        </div>
+        <div style="flex:none;align-self:center;color:#6b665c;font-size:24px;">→</div>
+        <!-- curriculum builder modal -->
+        <div style="flex:none;width:215px;background:#fff;border:2px solid #c2562f;border-radius:10px;box-shadow:3px 3px 0 rgba(194,86,47,.18);overflow:hidden;">
+          <div style="height:20px;background:#c2562f;display:flex;align-items:center;padding:0 8px;"><span style="color:#fff;font-size:8px;font-weight:700;">Subject builder</span></div>
+          <div style="padding:9px;display:flex;flex-direction:column;gap:6px;">
+            <div style="font-size:7px;color:#6b665c;">teaching type</div>
+            <div style="display:flex;flex-wrap:wrap;gap:3px;">
+              <span style="font-size:6.5px;border:1px solid #c2562f;background:#fbe9e1;color:#c2562f;border-radius:8px;padding:2px 6px;font-weight:700;">SUB_GROUP</span>
+              <span style="font-size:6.5px;border:1px solid #ddd6c8;border-radius:8px;padding:2px 6px;color:#6b665c;">Team</span>
+              <span style="font-size:6.5px;border:1px solid #ddd6c8;border-radius:8px;padding:2px 6px;color:#6b665c;">Split</span>
+            </div>
+            <div style="font-size:7px;color:#6b665c;margin-top:2px;">sub-groups (run together)</div>
+            <div style="border:1px solid #e0a98f;border-radius:5px;padding:4px;display:flex;gap:3px;align-items:center;font-size:7px;"><span style="background:#fbe9e1;border-radius:3px;padding:1px 4px;">▦ /1</span><span style="color:#6b665c;">สมใจ · B101</span></div>
+            <div style="border:1px solid #e0a98f;border-radius:5px;padding:4px;display:flex;gap:3px;align-items:center;font-size:7px;"><span style="background:#fbe9e1;border-radius:3px;padding:1px 4px;">▦ /2</span><span style="color:#6b665c;">สุขุมา · B108</span></div>
+            <div style="border:1px dashed #ddd6c8;border-radius:5px;padding:3px;text-align:center;font-size:7px;color:#6b665c;">+ add sub-group lane</div>
+            <div style="font-family:'Caveat',cursive;font-size:12px;color:#3f7d54;line-height:1;">no pipe syntax — lanes compile to it</div>
+          </div>
+        </div>
+        <div style="flex:none;align-self:center;color:#6b665c;font-size:24px;">→</div>
+        <!-- run -->
+        <div style="flex:none;width:150px;background:#fff;border:2px solid #232020;border-radius:10px;box-shadow:3px 3px 0 rgba(35,32,32,.10);overflow:hidden;align-self:center;">
+          <div style="height:20px;background:#3a5e9e;display:flex;align-items:center;padding:0 8px;"><span style="color:#fff;font-size:8px;">Run &amp; review</span></div>
+          <div style="padding:9px;display:flex;flex-direction:column;gap:6px;">
+            <div style="border:1px solid #b8d3bf;background:#eef5ef;border-radius:5px;padding:4px;font-size:7px;color:#2f5d3f;font-weight:700;text-align:center;">all 7 valid ✓</div>
+            <div style="height:16px;background:#3f7d54;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:700;">Generate</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px;">
+              <div style="height:8px;background:#3f7d54;border-radius:2px;"></div><div style="height:8px;background:#e7e2d8;border-radius:2px;"></div><div style="height:8px;background:#3a5e9e;border-radius:2px;"></div><div style="height:8px;background:#c2562f;border-radius:2px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DIRECTION C -->
+    <div style="background:#fffdf8;border:2.5px solid #232020;border-radius:14px;box-shadow:5px 5px 0 rgba(35,32,32,.10);padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <div>
+          <span style="background:#232020;color:#fff;font-weight:700;font-size:13px;padding:3px 12px;border-radius:20px;">C</span>
+          <span style="font-family:'Caveat',cursive;font-size:26px;font-weight:700;margin-left:8px;">Guided Wizard (dependency-ordered)</span>
+          <div style="font-size:11.5px;color:#6b665c;max-width:600px;margin-top:3px;">Linear steps that follow the dependency graph — foundation first, so every later dropdown is pre-populated and can't reference something that doesn't exist yet. Complexity is revealed only when reached. Escape hatch to jump steps for power users.</div>
+        </div>
+        <div style="font-family:'Caveat',cursive;font-size:14px;color:#3f7d54;max-width:240px;text-align:right;">✓ impossible to make a dangling reference; gentlest for infrequent admins<br><span style="color:#c2562f;">✗ linear feels slow if you just want to fix one cell</span></div>
+      </div>
+      <!-- stepper -->
+      <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:12px;font-size:9px;">
+        <span style="background:#3f7d54;color:#fff;border-radius:14px;padding:3px 9px;font-weight:700;">1 Periods ✓</span><span style="color:#cfcabd;">—</span>
+        <span style="background:#3f7d54;color:#fff;border-radius:14px;padding:3px 9px;font-weight:700;">2 Rooms ✓</span><span style="color:#cfcabd;">—</span>
+        <span style="background:#3f7d54;color:#fff;border-radius:14px;padding:3px 9px;font-weight:700;">3 Teachers ✓</span><span style="color:#cfcabd;">—</span>
+        <span style="background:#3f7d54;color:#fff;border-radius:14px;padding:3px 9px;font-weight:700;">4 Classes ✓</span><span style="color:#cfcabd;">—</span>
+        <span style="background:#c2562f;color:#fff;border-radius:14px;padding:3px 9px;font-weight:700;">5 Curriculum</span><span style="color:#cfcabd;">—</span>
+        <span style="background:#f3f0e8;color:#6b665c;border-radius:14px;padding:3px 9px;">6 Constraints</span><span style="color:#cfcabd;">—</span>
+        <span style="background:#f3f0e8;color:#6b665c;border-radius:14px;padding:3px 9px;">7 Review</span><span style="color:#cfcabd;">—</span>
+        <span style="background:#f3f0e8;color:#6b665c;border-radius:14px;padding:3px 9px;">8 Run</span>
+      </div>
+      <div style="display:flex;gap:14px;align-items:stretch;overflow-x:auto;padding-bottom:4px;">
+        <!-- step 5 panel -->
+        <div style="flex:none;width:430px;background:#fff;border:2px solid #232020;border-radius:10px;box-shadow:3px 3px 0 rgba(35,32,32,.10);overflow:hidden;">
+          <div style="height:22px;background:#c2562f;display:flex;align-items:center;justify-content:space-between;padding:0 8px;"><span style="color:#fff;font-size:9px;font-weight:700;">Step 5 · Curriculum — Grade ม.1</span><span style="color:#fff;font-size:8px;">grade 1 of 6 ▾</span></div>
+          <div style="padding:10px;display:flex;flex-direction:column;gap:7px;">
+            <div style="font-size:8px;color:#6b665c;">Add subjects for this grade. Dropdowns are limited to teachers/rooms you already defined.</div>
+            <div style="border:1px solid #e7e2d8;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;gap:6px;align-items:center;"><div style="flex:1.4;height:14px;border:1.5px solid #ddd6c8;border-radius:4px;font-size:7px;color:#6b665c;display:flex;align-items:center;padding:0 5px;">ภาษาไทย2</div><div style="flex:1;height:14px;border:1.5px solid #3f7d54;border-radius:4px;font-size:7px;color:#2f5d3f;display:flex;align-items:center;padding:0 5px;">จิรัสชยาณ์ ▾</div><div style="width:30px;height:14px;border:1.5px solid #ddd6c8;border-radius:4px;"></div></div>
+              <div style="display:flex;gap:6px;align-items:center;"><div style="font-size:7px;color:#6b665c;">type</div><span style="font-size:6.5px;border:1px solid #ddd6c8;border-radius:8px;padding:2px 6px;">Standard</span><span style="font-size:6.5px;border:1px solid #ddd6c8;border-radius:8px;padding:2px 6px;">Team</span><span style="font-size:6.5px;border:1px solid #c2562f;background:#fbe9e1;color:#c2562f;border-radius:8px;padding:2px 6px;font-weight:700;">Sub-group</span><span style="font-size:6.5px;border:1px solid #ddd6c8;border-radius:8px;padding:2px 6px;">Split</span></div>
+            </div>
+            <div style="border:1px dashed #c2562f;background:#fbe9e1;border-radius:6px;padding:6px;font-size:7px;color:#7a4636;">↳ choosing a type reveals only the fields it needs (progressive disclosure)</div>
+            <div style="display:flex;justify-content:space-between;"><div style="font-size:7px;color:#6b665c;">▸ blank class = all sections of ม.1 (auto)</div><div style="height:15px;width:70px;background:#3f7d54;border-radius:4px;"></div></div>
+          </div>
+        </div>
+        <div style="flex:none;align-self:center;color:#6b665c;font-size:24px;">→</div>
+        <!-- review -->
+        <div style="flex:none;width:200px;background:#fff;border:2px solid #232020;border-radius:10px;box-shadow:3px 3px 0 rgba(35,32,32,.10);overflow:hidden;">
+          <div style="height:20px;background:#232020;display:flex;align-items:center;padding:0 8px;"><span style="color:#fff;font-size:8px;">Step 7 · Review</span></div>
+          <div style="padding:9px;display:flex;flex-direction:column;gap:5px;">
+            <div style="border:1px solid #b8d3bf;background:#eef5ef;border-radius:5px;padding:4px 6px;font-size:7.5px;color:#2f5d3f;">✓ 6 grades · 142 subjects</div>
+            <div style="border:1px solid #e7d6a3;background:#fbf3da;border-radius:5px;padding:4px 6px;font-size:7.5px;color:#7a6a36;">▲ 2 warnings (rooms unused)</div>
+            <div style="font-size:7px;color:#6b665c;">jump back to any step ↑</div>
+            <div style="display:flex;gap:3px;flex-wrap:wrap;">
+              <span style="font-size:6px;background:#eef5ef;border-radius:6px;padding:1px 5px;">1✓</span><span style="font-size:6px;background:#eef5ef;border-radius:6px;padding:1px 5px;">2✓</span><span style="font-size:6px;background:#eef5ef;border-radius:6px;padding:1px 5px;">3✓</span><span style="font-size:6px;background:#eef5ef;border-radius:6px;padding:1px 5px;">4✓</span><span style="font-size:6px;background:#eef5ef;border-radius:6px;padding:1px 5px;">5✓</span><span style="font-size:6px;background:#fbf3da;border-radius:6px;padding:1px 5px;">6▲</span>
+            </div>
+          </div>
+        </div>
+        <div style="flex:none;align-self:center;color:#6b665c;font-size:24px;">→</div>
+        <!-- run -->
+        <div style="flex:none;width:150px;background:#fff;border:2px solid #232020;border-radius:10px;box-shadow:3px 3px 0 rgba(35,32,32,.10);overflow:hidden;align-self:center;">
+          <div style="height:20px;background:#3a5e9e;display:flex;align-items:center;padding:0 8px;"><span style="color:#fff;font-size:8px;">Step 8 · Run</span></div>
+          <div style="padding:9px;display:flex;flex-direction:column;gap:6px;">
+            <div style="height:16px;background:#3f7d54;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:700;">Generate timetable</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px;">
+              <div style="height:8px;background:#3a5e9e;border-radius:2px;"></div><div style="height:8px;background:#3f7d54;border-radius:2px;"></div><div style="height:8px;background:#e7e2d8;border-radius:2px;"></div><div style="height:8px;background:#c2562f;border-radius:2px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+    <div style="font-family:'Caveat',cursive;font-size:18px;color:#3a5e9e;margin-top:14px;line-height:1.15;">✎ Recommendation: <b>C as the spine, B's builder as the engine, A as a fallback.</b> Wizard for first-timers / fresh terms, jump-to-step grid for editors, and "open in Google Sheet" as the always-available power escape. The three aren't mutually exclusive.</div>
+    </sc-if>
+  </div>
+
+  <!-- ============ SECTION 3 — INPUT PARADIGM COMPARISON ============ -->
+  <div style="max-width:1480px;margin:48px auto 0;">
+    <div style="font-family:'Caveat',cursive;font-size:30px;font-weight:700;">③ Where does data entry actually happen?</div>
+    <div style="font-size:12px;color:#6b665c;margin:2px 0 18px;">Three surfaces for the same cells. Most likely answer is a blend, but it helps to see them isolated.</div>
+    <div style="display:flex;gap:18px;align-items:stretch;flex-wrap:wrap;">
+      <!-- card 1 -->
+      <div style="flex:1;min-width:300px;background:#fffdf8;border:2.5px solid #232020;border-radius:14px;box-shadow:5px 5px 0 rgba(35,32,32,.10);padding:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-family:'Caveat',cursive;font-size:22px;font-weight:700;">Google Sheet embed</div><span style="font-size:9px;background:#f3f0e8;border-radius:10px;padding:2px 8px;color:#6b665c;">today</span></div>
+        <div style="border:1.5px solid #232020;border-radius:8px;overflow:hidden;margin:10px 0;">
+          <div style="height:16px;background:#3f7d54;display:flex;align-items:center;padding:0 6px;gap:4px;"><span style="color:#fff;font-size:7px;">▦ Sheets</span></div>
+          <div style="display:grid;grid-template-columns:18px repeat(4,1fr);">
+            <div style="background:#f3f0e8;border-bottom:1px solid #e0dccf;border-right:1px solid #e0dccf;height:13px;"></div><div style="background:#f3f0e8;border-bottom:1px solid #e0dccf;border-right:1px solid #e0dccf;"></div><div style="background:#f3f0e8;border-bottom:1px solid #e0dccf;border-right:1px solid #e0dccf;"></div><div style="background:#f3f0e8;border-bottom:1px solid #e0dccf;border-right:1px solid #e0dccf;"></div><div style="background:#f3f0e8;border-bottom:1px solid #e0dccf;"></div>
+            <div style="background:#f3f0e8;border-right:1px solid #e0dccf;font-size:6px;color:#999;text-align:center;border-bottom:1px solid #efe9dd;">1</div><div style="border-right:1px solid #efe9dd;border-bottom:1px solid #efe9dd;height:12px;"></div><div style="border-right:1px solid #efe9dd;border-bottom:1px solid #efe9dd;background:#fbe9e1;"></div><div style="border-right:1px solid #efe9dd;border-bottom:1px solid #efe9dd;"></div><div style="border-bottom:1px solid #efe9dd;"></div>
+            <div style="background:#f3f0e8;border-right:1px solid #e0dccf;font-size:6px;color:#999;text-align:center;">2</div><div style="border-right:1px solid #efe9dd;"></div><div style="border-right:1px solid #efe9dd;"></div><div style="border-right:1px solid #efe9dd;"></div><div></div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#3f7d54;font-weight:700;">+ AppsScript validation, slot-picker, merged cells exist natively, offline-ish, familiar</div>
+        <div style="font-size:11px;color:#c2562f;font-weight:700;margin-top:4px;">– leaves the app, no live cross-app state, merged-cell mental model is the whole problem</div>
+      </div>
+      <!-- card 2 -->
+      <div style="flex:1;min-width:300px;background:#fffdf8;border:2.5px solid #232020;border-radius:14px;box-shadow:5px 5px 0 rgba(35,32,32,.10);padding:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-family:'Caveat',cursive;font-size:22px;font-weight:700;">Native data grid</div><span style="font-size:9px;background:#eef5ef;color:#2f5d3f;border-radius:10px;padding:2px 8px;">power</span></div>
+        <div style="border:1.5px solid #232020;border-radius:8px;overflow:hidden;margin:10px 0;">
+          <div style="height:16px;background:#232020;display:flex;align-items:center;padding:0 6px;"><span style="color:#fff;font-size:7px;">curriculum · grid</span></div>
+          <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr .5fr;font-size:6.5px;">
+            <div style="background:#f3f0e8;padding:2px 4px;border-bottom:1px solid #e0dccf;font-weight:700;">subject</div><div style="background:#f3f0e8;padding:2px 4px;border-bottom:1px solid #e0dccf;font-weight:700;">teacher</div><div style="background:#f3f0e8;padding:2px 4px;border-bottom:1px solid #e0dccf;font-weight:700;">class</div><div style="background:#f3f0e8;padding:2px 4px;border-bottom:1px solid #e0dccf;font-weight:700;">×</div>
+            <div style="padding:2px 4px;border-bottom:1px solid #efe9dd;border-left:3px solid #3a5e9e;">วิทย์2</div><div style="padding:2px 4px;border-bottom:1px solid #efe9dd;">วิฑูรย์</div><div style="padding:2px 4px;border-bottom:1px solid #efe9dd;">/1,/2</div><div style="padding:2px 4px;border-bottom:1px solid #efe9dd;">3</div>
+            <div style="padding:2px 4px;border-bottom:1px solid #efe9dd;border-left:3px solid #3a5e9e;color:#bbb;">↳ cont.</div><div style="padding:2px 4px;border-bottom:1px solid #efe9dd;">รัชนิกร</div><div style="padding:2px 4px;border-bottom:1px solid #efe9dd;">/3,/4</div><div style="padding:2px 4px;border-bottom:1px solid #efe9dd;">3</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#3f7d54;font-weight:700;">+ fast bulk entry, keyboard paste, live in-app validation, anchor/cont still visible</div>
+        <div style="font-size:11px;color:#c2562f;font-weight:700;margin-top:4px;">– still exposes raw syntax; pipe/merge rules need teaching</div>
+      </div>
+      <!-- card 3 -->
+      <div style="flex:1;min-width:300px;background:#fffdf8;border:2.5px solid #232020;border-radius:14px;box-shadow:5px 5px 0 rgba(35,32,32,.10);padding:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;"><div style="font-family:'Caveat',cursive;font-size:22px;font-weight:700;">Form / card builder</div><span style="font-size:9px;background:#fbe9e1;color:#c2562f;border-radius:10px;padding:2px 8px;">guided</span></div>
+        <div style="border:1.5px solid #232020;border-radius:8px;overflow:hidden;margin:10px 0;padding:8px;display:flex;flex-direction:column;gap:5px;">
+          <div style="font-size:7px;color:#6b665c;">Subject card</div>
+          <div style="height:13px;border:1.5px solid #ddd6c8;border-radius:4px;"></div>
+          <div style="display:flex;gap:4px;"><span style="font-size:6.5px;border:1px solid #c2562f;background:#fbe9e1;color:#c2562f;border-radius:8px;padding:2px 6px;">Sub-group</span><span style="font-size:6.5px;border:1px solid #ddd6c8;border-radius:8px;padding:2px 6px;color:#6b665c;">Team</span></div>
+          <div style="border:1px solid #e0a98f;border-radius:4px;padding:3px;font-size:6.5px;color:#7a4636;">lane /1 · สมใจ · B101</div>
+          <div style="border:1px dashed #ddd6c8;border-radius:4px;padding:3px;font-size:6.5px;color:#6b665c;text-align:center;">+ lane</div>
+        </div>
+        <div style="font-size:11px;color:#3f7d54;font-weight:700;">+ no syntax ever shown, hardest concepts become visual, fewest user errors</div>
+        <div style="font-size:11px;color:#c2562f;font-weight:700;margin-top:4px;">– slowest for big bulk entry; most UI to build &amp; maintain</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SECTION 4 — CURRICULUM DEEP DIVE (tabbed) ============ -->
+  <div style="max-width:1480px;margin:48px auto 0;">
+    <div style="font-family:'Caveat',cursive;font-size:30px;font-weight:700;color:#c2562f;">④ Curriculum — the hard part, three ways</div>
+    <div style="font-size:12px;color:#6b665c;margin:2px 0 14px;">The merged-cell anchor/continuation model + 5 teaching types is where admins lose hours. Each model below tackles the <b>same</b> example: <i>วิทยาศาสตร์ as a 3-section sub-group</i>. Tap to compare.</div>
+
+    <!-- tab bar -->
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+      <button onClick="{{ pickGrid }}" style="{{ tabGridStyle }}">Model A · Spreadsheet grid</button>
+      <button onClick="{{ pickBuilder }}" style="{{ tabBuilderStyle }}">Model B · Lane builder</button>
+      <button onClick="{{ pickWizard }}" style="{{ tabWizardStyle }}">Model C · Type-first wizard</button>
+    </div>
+
+    <!-- MODEL A -->
+    <sc-if value="{{ isGrid }}" hint-placeholder-val="{{ true }}">
+    <div style="background:#fffdf8;border:2.5px solid #232020;border-radius:14px;box-shadow:5px 5px 0 rgba(35,32,32,.10);padding:22px;display:flex;gap:22px;flex-wrap:wrap;">
+      <div style="flex:2;min-width:420px;">
+        <div style="font-family:'Caveat',cursive;font-size:20px;font-weight:700;margin-bottom:4px;">Mirror the merged cell directly</div>
+        <div style="font-size:11px;color:#6b665c;margin-bottom:10px;">An anchor row spans its continuation rows with a real visual merge (left bracket). Inherited columns are greyed/ghosted so you see what's flowing down. Closest to the Google Sheet — least retraining.</div>
+        <div style="border:2px solid #232020;border-radius:8px;overflow:hidden;">
+          <div style="display:grid;grid-template-columns:24px 1.3fr 1fr .8fr 1.1fr .8fr 1fr;background:#232020;color:#fff;font-size:8px;font-weight:700;">
+            <div style="padding:5px 4px;"></div><div style="padding:5px 4px;">subject</div><div style="padding:5px 4px;">teacher</div><div style="padding:5px 4px;">×wk</div><div style="padding:5px 4px;">block</div><div style="padding:5px 4px;">class</div><div style="padding:5px 4px;">room</div>
+          </div>
+          <!-- anchor + continuation group, merged via left bracket -->
+          <div style="display:grid;grid-template-columns:24px 1fr;">
+            <div style="background:#fbe9e1;border-right:3px solid #c2562f;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;font-size:8px;color:#c2562f;font-weight:700;letter-spacing:1px;">ว31283 · SUB_GROUP</div>
+            <div>
+              <div style="display:grid;grid-template-columns:1.3fr 1fr .8fr 1.1fr .8fr 1fr;font-size:9px;background:#fff7f3;border-bottom:1px solid #f0e3da;">
+                <div style="padding:6px 4px;font-weight:700;">สัมมนาวิทย์ <span style="font-size:7px;color:#c2562f;background:#fbe9e1;border-radius:6px;padding:0 4px;">anchor</span></div><div style="padding:6px 4px;">สมใจ</div><div style="padding:6px 4px;">2</div><div style="padding:6px 4px;">2</div><div style="padding:6px 4px;">/1</div><div style="padding:6px 4px;">B101</div>
+              </div>
+              <div style="display:grid;grid-template-columns:1.3fr 1fr .8fr 1.1fr .8fr 1fr;font-size:9px;border-bottom:1px solid #f0e3da;">
+                <div style="padding:6px 4px;color:#c0bbb0;font-style:italic;">↳ inherits subject</div><div style="padding:6px 4px;">สุขุมาภรณ์</div><div style="padding:6px 4px;">2</div><div style="padding:6px 4px;color:#c0bbb0;">2 ·ghost</div><div style="padding:6px 4px;">/2</div><div style="padding:6px 4px;">B108</div>
+              </div>
+              <div style="display:grid;grid-template-columns:1.3fr 1fr .8fr 1.1fr .8fr 1fr;font-size:9px;">
+                <div style="padding:6px 4px;color:#c0bbb0;font-style:italic;">↳ inherits subject</div><div style="padding:6px 4px;">พิรพงศ์</div><div style="padding:6px 4px;">2</div><div style="padding:6px 4px;color:#c0bbb0;">2 ·ghost</div><div style="padding:6px 4px;">/3</div><div style="padding:6px 4px;">D203</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:24px 1fr;border-top:1px dashed #ddd6c8;">
+            <div style="background:#f3f0e8;display:flex;align-items:center;justify-content:center;font-size:11px;color:#9a9486;">+</div>
+            <div style="padding:6px 8px;font-size:9px;color:#6b665c;">add subject group / add continuation row to selected anchor</div>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:240px;border-left:2px dashed #ddd6c8;padding-left:18px;">
+        <div style="font-family:'Caveat',cursive;font-size:18px;font-weight:700;color:#3f7d54;">Why it works</div>
+        <ul style="font-size:11px;color:#444;line-height:1.6;padding-left:16px;margin:6px 0;">
+          <li>Vertical bracket = the merge. The mental model the admin already has from Sheets.</li>
+          <li>Ghosted cells make inheritance literal — no guessing what propagates.</li>
+          <li>Paste from the existing Sheet basically works.</li>
+        </ul>
+        <div style="font-family:'Caveat',cursive;font-size:18px;font-weight:700;color:#c2562f;margin-top:8px;">Risk</div>
+        <div style="font-size:11px;color:#444;line-height:1.5;">Pipe-count rules &amp; type validity still rely on the user understanding them. Power-friendly, novice-hostile.</div>
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+        <div style="font-family:'Caveat',cursive;font-size:16px;color:#3a5e9e;margin-top:10px;line-height:1.1;">✎ best as the "advanced" view inside Model B/C</div>
+        </sc-if>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- MODEL B -->
+    <sc-if value="{{ isBuilder }}" hint-placeholder-val="{{ false }}">
+    <div style="background:#fffdf8;border:2.5px solid #232020;border-radius:14px;box-shadow:5px 5px 0 rgba(35,32,32,.10);padding:22px;display:flex;gap:22px;flex-wrap:wrap;">
+      <div style="flex:2;min-width:420px;">
+        <div style="font-family:'Caveat',cursive;font-size:20px;font-weight:700;margin-bottom:4px;">Sub-groups as visual lanes</div>
+        <div style="font-size:11px;color:#6b665c;margin-bottom:10px;">One subject = one card. The pipe syntax never appears — each parallel sub-group is a <b>lane</b> you fill with teacher(s) + room + which sections attend. The card compiles to anchor/continuation + pipes on save.</div>
+        <div style="border:2px solid #c2562f;border-radius:10px;overflow:hidden;">
+          <div style="background:#c2562f;color:#fff;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;font-weight:700;">สัมมนาทางวิทยาศาสตร์ · ว31283</span><span style="font-size:9px;background:#fff;color:#c2562f;border-radius:8px;padding:1px 7px;font-weight:700;">SUB_GROUP</span></div>
+          <div style="padding:12px;display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;gap:8px;font-size:9px;color:#6b665c;align-items:center;">
+              <span>periods/wk <b style="color:#232020;">2</b></span><span>·</span><span>block <b style="color:#232020;">2</b></span><span>·</span><span>slot <b style="color:#232020;">MON_9-10</b></span>
+            </div>
+            <div style="font-size:8px;color:#6b665c;font-weight:700;letter-spacing:.5px;">PARALLEL LANES (run at the same time)</div>
+            <!-- lanes -->
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <div style="flex:1;min-width:120px;border:1.5px solid #e0a98f;border-radius:8px;background:#fff7f3;padding:8px;">
+                <div style="font-size:9px;font-weight:700;color:#c2562f;">Lane 1 · /1</div>
+                <div style="height:12px;border:1px solid #ddd6c8;border-radius:4px;margin-top:5px;font-size:7px;color:#6b665c;display:flex;align-items:center;padding:0 5px;">สมใจ ▾</div>
+                <div style="height:12px;border:1px solid #ddd6c8;border-radius:4px;margin-top:4px;font-size:7px;color:#6b665c;display:flex;align-items:center;padding:0 5px;">B101-102 ▾</div>
+              </div>
+              <div style="flex:1;min-width:120px;border:1.5px solid #e0a98f;border-radius:8px;background:#fff7f3;padding:8px;">
+                <div style="font-size:9px;font-weight:700;color:#c2562f;">Lane 2 · /2</div>
+                <div style="height:12px;border:1px solid #ddd6c8;border-radius:4px;margin-top:5px;font-size:7px;color:#6b665c;display:flex;align-items:center;padding:0 5px;">สุขุมาภรณ์ ▾</div>
+                <div style="height:12px;border:1px solid #ddd6c8;border-radius:4px;margin-top:4px;font-size:7px;color:#6b665c;display:flex;align-items:center;padding:0 5px;">B108-109 ▾</div>
+              </div>
+              <div style="flex:1;min-width:120px;border:1.5px solid #e0a98f;border-radius:8px;background:#fff7f3;padding:8px;">
+                <div style="font-size:9px;font-weight:700;color:#c2562f;">Lane 3 · /3</div>
+                <div style="height:12px;border:1px solid #ddd6c8;border-radius:4px;margin-top:5px;font-size:7px;color:#6b665c;display:flex;align-items:center;padding:0 5px;">พิรพงศ์ ▾</div>
+                <div style="height:12px;border:1px solid #ddd6c8;border-radius:4px;margin-top:4px;font-size:7px;color:#6b665c;display:flex;align-items:center;padding:0 5px;">D203 ▾</div>
+              </div>
+              <div style="flex:none;width:46px;border:1.5px dashed #c2562f;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#c2562f;">+</div>
+            </div>
+            <div style="border-top:1px dashed #e0dccf;padding-top:8px;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:8px;color:#3f7d54;font-family:'Caveat',cursive;font-size:14px;">auto: lanes balanced ✓ · pipe-count always matches</span>
+              <span style="font-size:8px;color:#6b665c;background:#f3f0e8;border-radius:6px;padding:2px 7px;">▸ view as grid syntax</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:240px;border-left:2px dashed #ddd6c8;padding-left:18px;">
+        <div style="font-family:'Caveat',cursive;font-size:18px;font-weight:700;color:#3f7d54;">Why it works</div>
+        <ul style="font-size:11px;color:#444;line-height:1.6;padding-left:16px;margin:6px 0;">
+          <li>The #1 footgun — mismatched pipe counts — becomes structurally impossible.</li>
+          <li>"Runs at the same time" is shown spatially, not as punctuation.</li>
+          <li>Teaching type picks the lane shape (Team = multi-teacher in one lane, Split = lanes by block).</li>
+        </ul>
+        <div style="font-family:'Caveat',cursive;font-size:18px;font-weight:700;color:#c2562f;margin-top:8px;">Risk</div>
+        <div style="font-size:11px;color:#444;line-height:1.5;">Bulk entry of 100s of simple Standard subjects is slower than a grid → keep a grid toggle.</div>
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+        <div style="font-family:'Caveat',cursive;font-size:16px;color:#3a5e9e;margin-top:10px;line-height:1.1;">✎ my pick for the curriculum engine</div>
+        </sc-if>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- MODEL C -->
+    <sc-if value="{{ isWizard }}" hint-placeholder-val="{{ false }}">
+    <div style="background:#fffdf8;border:2.5px solid #232020;border-radius:14px;box-shadow:5px 5px 0 rgba(35,32,32,.10);padding:22px;display:flex;gap:22px;flex-wrap:wrap;">
+      <div style="flex:2;min-width:420px;">
+        <div style="font-family:'Caveat',cursive;font-size:20px;font-weight:700;margin-bottom:4px;">Ask the type first, reveal only what's needed</div>
+        <div style="font-size:11px;color:#6b665c;margin-bottom:10px;">A tiny 3-question flow per subject. Because the type is known up front, the form shows exactly the fields that type requires and nothing else — the spec's branching becomes a guided path.</div>
+        <div style="display:flex;gap:10px;align-items:stretch;flex-wrap:wrap;">
+          <div style="flex:1;min-width:150px;border:2px solid #232020;border-radius:10px;overflow:hidden;">
+            <div style="background:#232020;color:#fff;font-size:8px;padding:5px 8px;">1 · How is it taught?</div>
+            <div style="padding:9px;display:flex;flex-direction:column;gap:5px;">
+              <div style="font-size:8px;border:1px solid #ddd6c8;border-radius:6px;padding:5px;">○ One teacher, one class <span style="color:#6b665c;">(Standard)</span></div>
+              <div style="font-size:8px;border:1px solid #ddd6c8;border-radius:6px;padding:5px;">○ Several teachers together <span style="color:#6b665c;">(Team)</span></div>
+              <div style="font-size:8px;border:2px solid #c2562f;background:#fbe9e1;color:#c2562f;border-radius:6px;padding:5px;font-weight:700;">● Class splits, parallel rooms (Sub-group)</div>
+              <div style="font-size:8px;border:1px solid #ddd6c8;border-radius:6px;padding:5px;">○ Split between teachers by block</div>
+            </div>
+          </div>
+          <div style="flex:none;align-self:center;color:#6b665c;font-size:22px;">→</div>
+          <div style="flex:1;min-width:150px;border:2px solid #c2562f;border-radius:10px;overflow:hidden;">
+            <div style="background:#c2562f;color:#fff;font-size:8px;padding:5px 8px;">2 · How many parallel groups?</div>
+            <div style="padding:9px;display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;gap:5px;align-items:center;font-size:8px;">groups <span style="border:1px solid #ddd6c8;border-radius:5px;padding:2px 8px;font-weight:700;">3</span> <span style="color:#6b665c;">→ makes 3 lanes</span></div>
+              <div style="display:flex;gap:4px;"><span style="width:18px;height:14px;background:#fbe9e1;border:1px solid #e0a98f;border-radius:3px;"></span><span style="width:18px;height:14px;background:#fbe9e1;border:1px solid #e0a98f;border-radius:3px;"></span><span style="width:18px;height:14px;background:#fbe9e1;border:1px solid #e0a98f;border-radius:3px;"></span></div>
+              <div style="font-size:7px;color:#6b665c;">repeat for more batches at other times?</div>
+              <div style="font-size:7px;border:1px solid #ddd6c8;border-radius:5px;padding:3px;text-align:center;">+ another batch</div>
+            </div>
+          </div>
+          <div style="flex:none;align-self:center;color:#6b665c;font-size:22px;">→</div>
+          <div style="flex:1;min-width:150px;border:2px solid #3f7d54;border-radius:10px;overflow:hidden;">
+            <div style="background:#3f7d54;color:#fff;font-size:8px;padding:5px 8px;">3 · Fill each lane</div>
+            <div style="padding:9px;display:flex;flex-direction:column;gap:5px;">
+              <div style="font-size:7.5px;border:1px solid #e0dccf;border-radius:5px;padding:4px;">/1 · สมใจ · B101 ✓</div>
+              <div style="font-size:7.5px;border:1px solid #e0dccf;border-radius:5px;padding:4px;">/2 · สุขุมา · B108 ✓</div>
+              <div style="font-size:7.5px;border:1px solid #c2562f;background:#fbe9e1;border-radius:5px;padding:4px;color:#c2562f;">/3 · pick teacher…</div>
+              <div style="font-size:7px;color:#3f7d54;font-family:'Caveat',cursive;font-size:13px;">preview compiles live ↓</div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:10px;border:1.5px dashed #232020;border-radius:8px;background:#faf8f2;padding:8px 10px;font-family:'Courier New',monospace;font-size:8.5px;color:#444;overflow-x:auto;">
+          ว31283,สัมมนา…,2,"สมใจ|สุขุมา|<span style="color:#c2562f;">…</span>",2,"/1|/2|/3","type=SUB_GROUP","B101|B108|D203",MON_9-10
+        </div>
+        <div style="font-size:8px;color:#6b665c;margin-top:3px;">↑ the generated CSV row — shown read-only so users learn the format without authoring it</div>
+      </div>
+      <div style="flex:1;min-width:240px;border-left:2px dashed #ddd6c8;padding-left:18px;">
+        <div style="font-family:'Caveat',cursive;font-size:18px;font-weight:700;color:#3f7d54;">Why it works</div>
+        <ul style="font-size:11px;color:#444;line-height:1.6;padding-left:16px;margin:6px 0;">
+          <li>Plain-language type choice — no need to know the enum names.</li>
+          <li>Branching spec collapses into "answer 3 things".</li>
+          <li>Live CSV preview teaches the format for power users later.</li>
+        </ul>
+        <div style="font-family:'Caveat',cursive;font-size:18px;font-weight:700;color:#c2562f;margin-top:8px;">Risk</div>
+        <div style="font-size:11px;color:#444;line-height:1.5;">Modal-per-subject is heavy for 142 subjects. Pair with the grid for fast cases; reserve wizard for the gnarly ~10%.</div>
+        <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+        <div style="font-family:'Caveat',cursive;font-size:16px;color:#3a5e9e;margin-top:10px;line-height:1.1;">✎ great onboarding / "add complex subject" entry point</div>
+        </sc-if>
+      </div>
+    </div>
+    </sc-if>
+  </div>
+
+  <!-- ============ SECTION 5 — VALIDATION ============ -->
+  <div style="max-width:1480px;margin:48px auto 0;">
+    <div style="font-family:'Caveat',cursive;font-size:30px;font-weight:700;">⑤ Validation — inline markers + summary panel</div>
+    <div style="font-size:12px;color:#6b665c;margin:2px 0 18px;">Dozens of hard-error &amp; warning rules, many cross-sheet. Catch them where they happen <i>and</i> in one clearable list. Submit is gated on zero hard errors; warnings pass with acknowledgement.</div>
+    <div style="background:#fffdf8;border:2.5px solid #232020;border-radius:14px;box-shadow:5px 5px 0 rgba(35,32,32,.10);padding:20px;display:flex;gap:18px;flex-wrap:wrap;">
+      <!-- inline -->
+      <div style="flex:1.4;min-width:360px;">
+        <div style="font-family:'Caveat',cursive;font-size:18px;font-weight:700;margin-bottom:8px;">Inline · at the cell</div>
+        <div style="border:2px solid #232020;border-radius:8px;overflow:hidden;">
+          <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr .6fr;background:#232020;color:#fff;font-size:8px;font-weight:700;"><div style="padding:5px;">subject</div><div style="padding:5px;">teacher</div><div style="padding:5px;">class</div><div style="padding:5px;">×wk</div></div>
+          <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr .6fr;font-size:9px;border-bottom:1px solid #efe9dd;"><div style="padding:6px;">ภาษาไทย2</div><div style="padding:6px;">จิรัสชยาณ์</div><div style="padding:6px;">1/1</div><div style="padding:6px;">3</div></div>
+          <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr .6fr;font-size:9px;border-bottom:1px solid #efe9dd;background:#fff7f3;"><div style="padding:6px;">วิทย์2</div><div style="padding:6px;border-bottom:2px wavy #c2562f;color:#c2562f;position:relative;">วิฑูรย์ <span style="font-size:7px;">⚠</span></div><div style="padding:6px;">/3,/4</div><div style="padding:6px;">3</div></div>
+          <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr .6fr;font-size:9px;"><div style="padding:6px;">ค21201</div><div style="padding:6px;">T005</div><div style="padding:6px;">2/1</div><div style="padding:6px;background:#fbf3da;color:#7a6a36;border-bottom:2px wavy #d9b54a;">0 ▲</div></div>
+        </div>
+        <div style="margin-top:8px;border:1.5px solid #e0a98f;background:#fff;border-radius:8px;padding:8px 10px;box-shadow:2px 2px 0 rgba(194,86,47,.15);max-width:280px;">
+          <div style="font-size:9px;font-weight:700;color:#c2562f;">Hard error · teacher not found</div>
+          <div style="font-size:8.5px;color:#6b665c;margin-top:2px;">"วิฑูรย์" isn't a teacher_name in the teacher sheet. Did you mean <u>วิฑูรย์ศักดิ์</u>?</div>
+          <div style="display:flex;gap:5px;margin-top:6px;"><span style="font-size:7.5px;background:#3f7d54;color:#fff;border-radius:5px;padding:2px 7px;">Fix → use suggestion</span><span style="font-size:7.5px;border:1px solid #ddd6c8;border-radius:5px;padding:2px 7px;color:#6b665c;">Add teacher</span></div>
+        </div>
+        <div style="font-family:'Caveat',cursive;font-size:15px;color:#c2562f;margin-top:8px;">✎ red wavy = hard error · amber wavy = warning · hover for fix</div>
+      </div>
+      <!-- summary -->
+      <div style="flex:1;min-width:280px;border-left:2px dashed #ddd6c8;padding-left:18px;">
+        <div style="font-family:'Caveat',cursive;font-size:18px;font-weight:700;margin-bottom:8px;">Summary panel · clear before submit</div>
+        <div style="border:2px solid #232020;border-radius:10px;overflow:hidden;">
+          <div style="background:#232020;color:#fff;padding:7px 10px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:9px;font-weight:700;">Issues</span><span style="font-size:8px;"><span style="color:#f0a58c;">●3 errors</span> &nbsp;<span style="color:#e7d6a3;">▲5 warnings</span></span></div>
+          <div style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+            <div style="font-size:7px;color:#6b665c;font-weight:700;letter-spacing:.5px;">HARD ERRORS — block submit</div>
+            <div style="border:1px solid #e0a98f;background:#fff7f3;border-radius:6px;padding:5px 7px;font-size:8px;display:flex;justify-content:space-between;"><span style="color:#7a4636;">curriculum · วิฑูรย์ not found</span><span style="color:#c2562f;">jump ↗</span></div>
+            <div style="border:1px solid #e0a98f;background:#fff7f3;border-radius:6px;padding:5px 7px;font-size:8px;display:flex;justify-content:space-between;"><span style="color:#7a4636;">student · 2 classes share C103</span><span style="color:#c2562f;">jump ↗</span></div>
+            <div style="border:1px solid #e0a98f;background:#fff7f3;border-radius:6px;padding:5px 7px;font-size:8px;display:flex;justify-content:space-between;"><span style="color:#7a4636;">elective · slot name unknown</span><span style="color:#c2562f;">jump ↗</span></div>
+            <div style="font-size:7px;color:#6b665c;font-weight:700;letter-spacing:.5px;margin-top:3px;">WARNINGS — allowed</div>
+            <div style="border:1px solid #e7d6a3;background:#fbf3da;border-radius:6px;padding:5px 7px;font-size:8px;display:flex;justify-content:space-between;"><span style="color:#7a6a36;">room · เคมี tag unused</span><span style="color:#a98a3a;">jump ↗</span></div>
+            <div style="border:1px solid #e7d6a3;background:#fbf3da;border-radius:6px;padding:5px 7px;font-size:8px;display:flex;justify-content:space-between;"><span style="color:#7a6a36;">teacher · T-teacher has slots</span><span style="color:#a98a3a;">jump ↗</span></div>
+          </div>
+          <div style="border-top:1px solid #e0dccf;padding:8px 10px;display:flex;gap:6px;align-items:center;">
+            <div style="flex:1;height:18px;background:#cfcabd;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#6b665c;font-size:8px;font-weight:700;">Run GA — fix 3 errors first</div>
+          </div>
+        </div>
+        <div style="font-family:'Caveat',cursive;font-size:15px;color:#3f7d54;margin-top:8px;">✎ grouped by severity · each row deep-links to the cell</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SECTION 6 — ENTRY POINTS ============ -->
+  <div style="max-width:1480px;margin:48px auto 0;">
+    <div style="font-family:'Caveat',cursive;font-size:30px;font-weight:700;">⑥ Entry points — fresh vs. iterate</div>
+    <div style="font-size:12px;color:#6b665c;margin:2px 0 18px;">Timetables get rebuilt every term and most of last term's data carries over. The "New session" screen should make cloning a first-class path, not a buried import.</div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:240px;background:#fffdf8;border:2.5px solid #3f7d54;border-radius:14px;box-shadow:5px 5px 0 rgba(63,125,84,.18);padding:18px;">
+        <div style="font-family:'Caveat',cursive;font-size:22px;font-weight:700;color:#3f7d54;">Start fresh</div>
+        <div style="font-size:11px;color:#6b665c;margin:4px 0 10px;">Blank, pre-seeded with the period grid &amp; room list (rarely change). Wizard from step 1.</div>
+        <div style="border:1.5px solid #b8d3bf;border-radius:8px;background:#eef5ef;padding:8px;display:flex;flex-direction:column;gap:5px;">
+          <div style="height:8px;width:50%;background:#cfe2d4;border-radius:3px;"></div><div style="height:8px;width:80%;background:#dcebe0;border-radius:3px;"></div><div style="height:8px;width:35%;background:#cfe2d4;border-radius:3px;"></div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:240px;background:#fffdf8;border:2.5px solid #3a5e9e;border-radius:14px;box-shadow:5px 5px 0 rgba(58,94,158,.18);padding:18px;">
+        <div style="font-family:'Caveat',cursive;font-size:22px;font-weight:700;color:#3a5e9e;">Clone last term</div>
+        <div style="font-size:11px;color:#6b665c;margin:4px 0 10px;">Duplicate Term&nbsp;2/2567 → edit deltas. Land on a diff-style review: what carried over, what to re-check.</div>
+        <div style="border:1.5px solid #aebfe0;border-radius:8px;background:#eaeff7;padding:8px;display:flex;flex-direction:column;gap:5px;">
+          <div style="display:flex;justify-content:space-between;font-size:8px;color:#33477a;"><span>period</span><span>copied ✓</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:8px;color:#33477a;"><span>teacher</span><span>copied ✓</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:8px;color:#c2562f;"><span>curriculum</span><span>review ⚠</span></div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:240px;background:#fffdf8;border:2.5px solid #232020;border-radius:14px;box-shadow:5px 5px 0 rgba(35,32,32,.12);padding:18px;">
+        <div style="font-family:'Caveat',cursive;font-size:22px;font-weight:700;">Import existing Sheet</div>
+        <div style="font-size:11px;color:#6b665c;margin:4px 0 10px;">Already built it in the Google template? Paste the link — app parses all 8 tabs, runs validation, drops you at the issues panel.</div>
+        <div style="border:1.5px solid #ddd6c8;border-radius:8px;background:#faf8f2;padding:8px;display:flex;gap:6px;align-items:center;">
+          <div style="flex:1;height:14px;border:1.5px solid #ddd6c8;border-radius:5px;background:#fff;font-size:7px;color:#9a9486;display:flex;align-items:center;padding:0 6px;">paste sheet URL…</div>
+          <div style="height:14px;width:38px;background:#232020;border-radius:5px;"></div>
+        </div>
+      </div>
+    </div>
+    <sc-if value="{{ showAnnotations }}" hint-placeholder-val="{{ true }}">
+    <div style="font-family:'Caveat',cursive;font-size:18px;color:#3a5e9e;margin-top:14px;">✎ All three converge on the same workspace — only the starting fill differs. Clone is the everyday path; design for it first.</div>
+    </sc-if>
+  </div>
+
+  <!-- footer -->
+  <div style="max-width:1480px;margin:46px auto 0;border-top:2px dashed #cfcabd;padding-top:14px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div style="font-family:'Caveat',cursive;font-size:18px;color:#6b665c;">wireframes — structure &amp; flow, not final visuals. next: pick a direction → mid-fi.</div>
+    <div style="font-size:11px;color:#9a9486;">Schedool · 7-sheet GA input · v2 spec</div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showAnnotations&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;defaultCurriculumModel&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;grid&quot;,&quot;options&quot;:[&quot;grid&quot;,&quot;builder&quot;,&quot;wizard&quot;],&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { model: 'grid' };
+
+  componentDidMount() {
+    const init = this.props.defaultCurriculumModel;
+    if (init && init !== this.state.model) this.setState({ model: init });
+  }
+
+  renderVals() {
+    const model = this.state.model;
+    const tabBase = 'font-family:Helvetica,Arial,sans-serif;font-size:12px;font-weight:700;border-radius:20px;padding:7px 16px;cursor:pointer;transition:all .12s;';
+    const on = tabBase + 'background:#232020;color:#fff;border:2px solid #232020;box-shadow:2px 2px 0 rgba(35,32,32,.2);';
+    const off = tabBase + 'background:#fffdf8;color:#6b665c;border:2px solid #cfcabd;';
+    return {
+      showAnnotations: this.props.showAnnotations ?? true,
+      isGrid: model === 'grid',
+      isBuilder: model === 'builder',
+      isWizard: model === 'wizard',
+      tabGridStyle: model === 'grid' ? on : off,
+      tabBuilderStyle: model === 'builder' ? on : off,
+      tabWizardStyle: model === 'wizard' ? on : off,
+      pickGrid: () => this.setState({ model: 'grid' }),
+      pickBuilder: () => this.setState({ model: 'builder' }),
+      pickWizard: () => this.setState({ model: 'wizard' }),
+    };
+  }
+}
+</script>
+</body>
+</html>
