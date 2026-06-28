@@ -1,0 +1,93 @@
+[
+  {
+    "chunk_id": "CCC_546_delivery",
+    "law_name_th": "ประมวลกฎหมายแพ่งและพาณิชย์",
+    "law_name_en": "Civil and Commercial Code",
+    "clause": "มาตรา 546 Section 546",
+    "effective_date": "original",
+    "text_th": "ผู้ให้เช่าจำต้องส่งมอบทรัพย์สินซึ่งให้เช่านั้นในสภาพอันซ่อมแซมดีแล้ว",
+    "text_en": "The landlord is bound to deliver the property hired in a good state of repair.",
+    "applies_to": "landlord",
+    "topic_tags": "pre_existing_damage,delivery_condition,landlord_obligation",
+    "legal_implication": "Pre-existing damage is landlord responsibility. Cannot be charged to tenant at move-out.",
+    "agent03_use": "UNLAWFUL verdict — landlord failed delivery duty under Section 546"
+  },
+  {
+    "chunk_id": "CCC_547_maintenance",
+    "law_name_th": "ประมวลกฎหมายแพ่งและพาณิชย์",
+    "law_name_en": "Civil and Commercial Code",
+    "clause": "มาตรา 547 Section 547",
+    "effective_date": "original",
+    "text_th": "ผู้เช่าต้องเสียค่าใช้จ่ายไปโดยความจำเป็นและสมควรเพื่อรักษาทรัพย์สินซึ่งเช่านั้นเท่าใด ผู้ให้เช่าจำต้องชดใช้ให้แก่ผู้เช่า เว้นแต่ค่าใช้จ่ายเพื่อบำรุงรักษาตามปกติและเพื่อซ่อมแซมเพียงเล็กน้อย",
+    "text_en": "Lessor reimburses lessee for necessary preservation expenses except ordinary maintenance and petty repairs.",
+    "applies_to": "both",
+    "topic_tags": "normal_wear,minor_repair,maintenance,tenant_obligation",
+    "legal_implication": "Tenant only responsible for minor repairs. All major repairs are landlord cost.",
+    "agent03_use": "DISPUTED boundary — distinguishes minor tenant repair from major landlord repair"
+  },
+  {
+    "chunk_id": "CCC_548_unfit",
+    "law_name_th": "ประมวลกฎหมายแพ่งและพาณิชย์",
+    "law_name_en": "Civil and Commercial Code",
+    "clause": "มาตรา 548 Section 548",
+    "effective_date": "original",
+    "text_th": "ถ้าผู้ให้เช่าส่งมอบทรัพย์สินซึ่งเช่านั้นโดยสภาพไม่เหมาะแก่การที่จะใช้เพื่อประโยชน์ที่เช่ามา ผู้เช่าจะบอกเลิกสัญญาเสียก็ได้",
+    "text_en": "If the leased property is delivered in unsuitable condition, the lessee may terminate the contract.",
+    "applies_to": "tenant",
+    "topic_tags": "pre_existing_damage,unfit_property,termination_right",
+    "legal_implication": "Retroactively supports pre-existing damage argument — property was never in proper condition.",
+    "agent03_use": "Supporting citation for UNLAWFUL verdicts involving pre-existing damage"
+  },
+  {
+    "chunk_id": "CCC_552_normal_use",
+    "law_name_th": "ประมวลกฎหมายแพ่งและพาณิชย์",
+    "law_name_en": "Civil and Commercial Code",
+    "clause": "มาตรา 552 Section 552",
+    "effective_date": "original",
+    "text_th": "อันผู้เช่าจะใช้ทรัพย์สินที่เช่าเพื่อการอย่างอื่นนอกจากที่ใช้กันตามประเพณีนิยมปกติ หรือการดังกำหนดไว้ในสัญญานั้น ท่านว่าหาอาจจะทำได้ไม่",
+    "text_en": "The lessee may not use the property for purposes other than customary normal use or as defined in the contract.",
+    "applies_to": "tenant",
+    "topic_tags": "tenant_liability,normal_use,contract_breach,damage_caused",
+    "legal_implication": "Landlord basis for claiming damage. Rebutted if use was normal and customary.",
+    "agent03_use": "LAWFUL verdict only if use clearly exceeded normal custom — burn marks, holes, broken fixtures"
+  },
+  {
+    "chunk_id": "CCC_561_presumption",
+    "law_name_th": "ประมวลกฎหมายแพ่งและพาณิชย์",
+    "law_name_en": "Civil and Commercial Code",
+    "clause": "มาตรา 561 Section 561",
+    "effective_date": "original",
+    "text_th": "ถ้ามิได้ทำคำพรรณนาสภาพทรัพย์สินที่เช่าไว้เป็นหลักฐาน ท่านให้สันนิษฐานไว้ก่อนว่าผู้เช่าได้รับทรัพย์สินนั้นไปโดยอยู่ในสภาพซ่อมแซมดี",
+    "text_en": "If no written condition description has been signed, the tenant is presumed to have received the property in good repair.",
+    "applies_to": "tenant",
+    "topic_tags": "move_in_condition,presumption,burden_of_proof,inspection_report",
+    "legal_implication": "Without signed move-in report, tenant bears burden to prove pre-existing damage. Move-in photos rebut this.",
+    "agent03_use": "Cited when no move-in inspection report exists — Agent 01 photos rebut presumption"
+  },
+  {
+    "chunk_id": "CCC_562_proper_use",
+    "law_name_th": "ประมวลกฎหมายแพ่งและพาณิชย์",
+    "law_name_en": "Civil and Commercial Code",
+    "clause": "มาตรา 562 Section 562",
+    "effective_date": "original",
+    "text_th": "ผู้เช่าต้องรับผิดสำหรับความเสียหายอันเกิดขึ้นแก่ทรัพย์สินที่เช่าอันเกิดจากความผิดของผู้เช่าเอง แต่ไม่ต้องรับผิดสำหรับความเสียหายอันเกิดแต่การใช้ตามควร",
+    "text_en": "Tenant liable for damage caused by their own fault. But not liable for damage resulting from proper use.",
+    "applies_to": "tenant",
+    "topic_tags": "tenant_liability,proper_use,wear_and_tear,fault",
+    "legal_implication": "Damage from proper residential use is explicitly excluded from tenant liability.",
+    "agent03_use": "Core citation for DISPUTED and UNLAWFUL verdicts involving normal wear"
+  },
+  {
+    "chunk_id": "CCC_563_limitation",
+    "law_name_th": "ประมวลกฎหมายแพ่งและพาณิชย์",
+    "law_name_en": "Civil and Commercial Code",
+    "clause": "มาตรา 563 Section 563",
+    "effective_date": "original",
+    "text_th": "สิทธิเรียกร้องของผู้ให้เช่าต่อผู้เช่าในส่วนที่เกี่ยวกับสัญญาเช่า ให้มีอายุความ 6 เดือน นับแต่วันส่งคืนทรัพย์สินที่เช่า",
+    "text_en": "No action by the lessor against the lessee can be entered later than six months after return of the property.",
+    "applies_to": "landlord",
+    "topic_tags": "limitation_period,6_months,time_bar,legal_action",
+    "legal_implication": "Landlord has only 6 months from move-out to file a legal claim. After that, time-barred.",
+    "agent03_use": "Check move-out date — if more than 6 months ago, landlord claim may be time-barred"
+  }
+]

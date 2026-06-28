@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RoomWitness</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <header>
+    <div class="header-inner">
+      <div>
+        <h1>RoomWitness</h1>
+        <p class="subtitle">Thai Rental Deposit Dispute Analyzer</p>
+      </div>
+      <div id="corpus-status" class="corpus-pill corpus-loading">checking…</div>
+    </div>
+  </header>
+
+  <main>
+    <form id="main-form" autocomplete="off">
+
+      <!-- ── Photos ─────────────────────────────── -->
+      <section class="card">
+        <h2>Room photos <span class="optional-tag">optional but recommended</span></h2>
+        <div class="photo-pair">
+
+          <div class="drop-zone" id="dz-movein">
+            <input type="file" id="move_in_image" name="move_in_image" accept="image/*" class="dz-input" />
+            <div class="dz-placeholder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <strong>Move-in photo</strong>
+              <span>Click or drag &amp; drop</span>
+            </div>
+            <img class="dz-preview hidden" id="prev-movein" alt="" />
+            <button type="button" class="dz-clear hidden" id="clear-movein">✕</button>
+          </div>
+
+          <div class="drop-zone" id="dz-moveout">
+            <input type="file" id="move_out_image" name="move_out_image" accept="image/*" class="dz-input" />
+            <div class="dz-placeholder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <strong>Move-out photo</strong>
+              <span>Click or drag &amp; drop</span>
+            </div>
+            <img class="dz-preview hidden" id="prev-moveout" alt="" />
+            <button type="button" class="dz-clear hidden" id="clear-moveout">✕</button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ── Claims ─────────────────────────────── -->
+      <section class="card">
+        <h2>Landlord claims</h2>
+        <div id="claims-list"></div>
+        <button type="button" id="add-claim-btn" class="btn-secondary">+ Add claim</button>
+      </section>
+
+      <!-- ── Extras (collapsed) ─────────────────── -->
+      <details class="card extras-card" id="extras-card">
+        <summary class="extras-summary">
+          <span>Additional evidence &amp; context</span>
+          <span class="extras-hint" id="extras-hint"></span>
+          <span class="toggle-chevron">›</span>
+        </summary>
+
+        <div class="extras-body">
+
+          <!-- Contract -->
+          <div class="extras-section">
+            <div class="extras-section-label">Rental contract</div>
+            <div class="contract-upload-row">
+              <div class="drop-zone drop-zone-doc" id="dz-contract">
+                <input type="file" id="contract_file" name="contract_file" accept=".pdf,image/*" class="dz-input" />
+                <div class="dz-placeholder">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="26" height="26"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <strong>Upload PDF or image</strong>
+                  <span>auto-extracts text</span>
+                </div>
+                <div class="dz-doc-name hidden" id="contract-name"></div>
+                <button type="button" class="dz-clear hidden" id="clear-contract">✕</button>
+              </div>
+              <div class="contract-text-wrap">
+                <div class="contract-extract-row">
+                  <label for="contract_clause">Relevant clause</label>
+                  <button type="button" id="extract-contract-btn" class="btn-extract hidden">Extract ↑</button>
+                </div>
+                <textarea id="contract_clause" name="contract_clause" rows="4"
+                          placeholder="Paste a clause, or upload above to auto-extract."></textarea>
+              </div>
+            </div>
+            <div class="contract-meta-grid">
+              <div class="field">
+                <label for="lease_start">Lease start</label>
+                <input type="date" id="lease_start" name="lease_start" />
+              </div>
+              <div class="field">
+                <label for="lease_end">Lease end</label>
+                <input type="date" id="lease_end" name="lease_end" />
+              </div>
+              <div class="field">
+                <label for="deposit_amount">Deposit paid (THB)</label>
+                <input type="number" id="deposit_amount" name="deposit_amount" min="0" step="0.01" placeholder="e.g. 10000" />
+              </div>
+              <div class="field">
+                <label for="monthly_rent">Monthly rent (THB)</label>
+                <input type="number" id="monthly_rent" name="monthly_rent" min="0" step="0.01" placeholder="e.g. 5000" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Conversation screenshots -->
+          <div class="extras-section">
+            <div class="extras-section-label">Conversation screenshots</div>
+            <div class="screenshot-dz" id="screenshot-dz">
+              <input type="file" id="screenshot-input" accept="image/*" multiple class="dz-input" />
+              <div class="screenshot-dz-placeholder" id="screenshot-placeholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="28" height="28"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                <strong>LINE / WhatsApp / SMS screenshots</strong>
+                <span>Multiple files OK</span>
+                <button type="button" class="btn-secondary" id="screenshot-browse-btn">Browse</button>
+              </div>
+              <div class="screenshot-grid" id="screenshot-grid"></div>
+            </div>
+          </div>
+
+          <!-- Promises -->
+          <div class="extras-section">
+            <div class="extras-section-label">Written promises / statements</div>
+            <div class="two-col">
+              <div class="field">
+                <label for="manual_landlord_promises">Landlord said / promised</label>
+                <textarea id="manual_landlord_promises" name="manual_landlord_promises" rows="4"
+                          placeholder="One per line.&#10;e.g. &quot;I will return deposit in full if room is clean&quot;"></textarea>
+              </div>
+              <div class="field">
+                <label for="manual_tenant_promises">Tenant said / promised</label>
+                <textarea id="manual_tenant_promises" name="manual_tenant_promises" rows="4"
+                          placeholder="One per line.&#10;e.g. &quot;Wall scuff was already there at move-in&quot;"></textarea>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </details>
+
+      <!-- ── Submit ──────────────────────────────── -->
+      <div class="submit-row">
+        <button type="submit" id="submit-btn">Analyze dispute</button>
+      </div>
+
+    </form>
+
+    <!-- Loading -->
+    <div id="loading" class="loading-block hidden">
+      <div class="spinner"></div>
+      <p id="loading-msg">Running analysis…</p>
+    </div>
+
+    <!-- Error -->
+    <div id="error-banner" class="error-banner hidden"></div>
+
+    <!-- ── Results ────────────────────────────────── -->
+    <div id="results" class="hidden">
+
+      <!-- Evidence callout (shown if evidence was processed) -->
+      <div id="evidence-callout" class="hidden evidence-callout"></div>
+
+      <!-- CV summary bar (shown if photos were uploaded) -->
+      <div id="cv-summary-bar" class="hidden cv-summary-bar"></div>
+
+      <!-- Per-claim result cards -->
+      <div id="claim-results"></div>
+
+    </div>
+
+  </main>
+
+  <script>
+  // ── Corpus health ────────────────────────────────────
+  fetch('/health').then(r=>r.json()).then(d=>{
+    const p = document.getElementById('corpus-status');
+    p.textContent = d.corpus_loaded ? '✓ Corpus ready' : '✗ Corpus missing';
+    p.className = 'corpus-pill ' + (d.corpus_loaded ? 'corpus-ok' : 'corpus-err');
+  }).catch(()=>{ document.getElementById('corpus-status').textContent='? offline'; });
+
+  // ── Drop-zone image (single) ─────────────────────────
+  function initImgDropZone(dzId, inputId, previewId, clearId) {
+    const dz=document.getElementById(dzId), input=document.getElementById(inputId),
+          preview=document.getElementById(previewId), clearBtn=document.getElementById(clearId);
+    function show(file){
+      if(!file||!file.type.startsWith('image/'))return;
+      const r=new FileReader();
+      r.onload=e=>{
+        preview.src=e.target.result; preview.classList.remove('hidden');
+        dz.querySelector('.dz-placeholder').classList.add('hidden');
+        clearBtn.classList.remove('hidden'); dz.classList.add('dz-has-file');
+      };
+      r.readAsDataURL(file);
+    }
+    function clear(){
+      input.value=''; preview.src=''; preview.classList.add('hidden');
+      dz.querySelector('.dz-placeholder').classList.remove('hidden');
+      clearBtn.classList.add('hidden'); dz.classList.remove('dz-has-file');
+    }
+    dz.addEventListener('click',e=>{ if(e.target===clearBtn)return; input.click(); });
+    input.addEventListener('change',()=>{ if(input.files[0])show(input.files[0]); });
+    dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dz-drag');});
+    dz.addEventListener('dragleave',()=>dz.classList.remove('dz-drag'));
+    dz.addEventListener('drop',e=>{
+      e.preventDefault(); dz.classList.remove('dz-drag');
+      const f=e.dataTransfer.files[0];
+      if(f){const dt=new DataTransfer();dt.items.add(f);input.files=dt.files;show(f);}
+    });
+    clearBtn.addEventListener('click',e=>{e.stopPropagation();clear();});
+  }
+  initImgDropZone('dz-movein','move_in_image','prev-movein','clear-movein');
+  initImgDropZone('dz-moveout','move_out_image','prev-moveout','clear-moveout');
+
+  // ── Contract drop-zone ───────────────────────────────
+  (function(){
+    const dz=document.getElementById('dz-contract'), input=document.getElementById('contract_file'),
+          nameEl=document.getElementById('contract-name'), clearBtn=document.getElementById('clear-contract'),
+          extractBtn=document.getElementById('extract-contract-btn');
+    function setFile(file){
+      nameEl.textContent='📄 '+file.name; nameEl.classList.remove('hidden');
+      dz.querySelector('.dz-placeholder').classList.add('hidden');
+      clearBtn.classList.remove('hidden'); extractBtn.classList.remove('hidden');
+      dz.classList.add('dz-has-file');
+      updateExtrasHint();
+    }
+    function clearZone(){
+      input.value=''; nameEl.textContent=''; nameEl.classList.add('hidden');
+      dz.querySelector('.dz-placeholder').classList.remove('hidden');
+      clearBtn.classList.add('hidden'); extractBtn.classList.add('hidden');
+      dz.classList.remove('dz-has-file'); updateExtrasHint();
+    }
+    dz.addEventListener('click',e=>{ if(e.target===clearBtn||e.target===extractBtn)return; input.click(); });
+    input.addEventListener('change',()=>{ if(input.files[0])setFile(input.files[0]); });
+    dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dz-drag');});
+    dz.addEventListener('dragleave',()=>dz.classList.remove('dz-drag'));
+    dz.addEventListener('drop',e=>{
+      e.preventDefault(); dz.classList.remove('dz-drag');
+      const f=e.dataTransfer.files[0];
+      if(f){const dt=new DataTransfer();dt.items.add(f);input.files=dt.files;setFile(f);}
+    });
+    clearBtn.addEventListener('click',e=>{e.stopPropagation();clearZone();});
+    extractBtn.addEventListener('click',async e=>{
+      e.stopPropagation();
+      if(!input.files[0])return;
+      extractBtn.textContent='Extracting…'; extractBtn.disabled=true;
+      try{
+        const fd=new FormData(); fd.append('contract_file',input.files[0]);
+        const resp=await fetch('/extract-contract',{method:'POST',body:fd});
+        const data=await resp.json();
+        if(data.error)throw new Error(data.error);
+        document.getElementById('contract_clause').value=data.text;
+        extractBtn.textContent='✓ Done';
+      }catch(err){ extractBtn.textContent='Failed'; alert('Extraction error: '+err.message); }
+      finally{ extractBtn.disabled=false; setTimeout(()=>{ extractBtn.textContent='Extract ↑'; },3000); }
+    });
+  })();
+
+  // ── Screenshot multi-upload ──────────────────────────
+  (function(){
+    const dz=document.getElementById('screenshot-dz'), input=document.getElementById('screenshot-input'),
+          grid=document.getElementById('screenshot-grid'), ph=document.getElementById('screenshot-placeholder'),
+          browseBtn=document.getElementById('screenshot-browse-btn');
+    let files=[];
+    browseBtn.addEventListener('click',e=>{e.stopPropagation();input.click();});
+    dz.addEventListener('click',e=>{ if(browseBtn.contains(e.target)||grid.contains(e.target))return; input.click(); });
+    dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dz-drag');});
+    dz.addEventListener('dragleave',()=>dz.classList.remove('dz-drag'));
+    dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('dz-drag');addFiles(Array.from(e.dataTransfer.files));});
+    input.addEventListener('change',()=>{addFiles(Array.from(input.files));input.value='';});
+    function addFiles(newFiles){
+      newFiles.filter(f=>f.type.startsWith('image/')).forEach(f=>{
+        const idx=files.length; files.push(f);
+        const r=new FileReader();
+        r.onload=e=>{
+          const t=document.createElement('div'); t.className='screenshot-thumb'; t.dataset.idx=idx;
+          t.innerHTML=`<img src="${e.target.result}" alt="${esc(f.name)}"/><div class="thumb-name">${esc(f.name)}</div><button type="button" class="thumb-remove" title="Remove">✕</button>`;
+          t.querySelector('.thumb-remove').addEventListener('click',ev=>{ev.stopPropagation();files[idx]=null;t.remove();updatePh();updateExtrasHint();});
+          grid.appendChild(t);
+        };
+        r.readAsDataURL(f);
+      });
+      updatePh(); updateExtrasHint();
+    }
+    function updatePh(){ ph.style.display=files.filter(Boolean).length?'none':'flex'; }
+    window._getScreenshots=()=>files.filter(Boolean);
+  })();
+
+  // ── Extras hint (badge showing what's filled) ────────
+  function updateExtrasHint(){
+    const parts=[];
+    if(document.getElementById('contract_file').files.length||document.getElementById('contract_clause').value.trim())
+      parts.push('contract');
+    if(window._getScreenshots().length) parts.push(window._getScreenshots().length+' screenshot'+(window._getScreenshots().length>1?'s':''));
+    if(document.getElementById('manual_landlord_promises').value.trim()||document.getElementById('manual_tenant_promises').value.trim())
+      parts.push('promises');
+    const hint=document.getElementById('extras-hint');
+    hint.textContent=parts.length?parts.join(' · '):'';
+  }
+  ['contract_clause','manual_landlord_promises','manual_tenant_promises'].forEach(id=>{
+    document.getElementById(id).addEventListener('input',updateExtrasHint);
+  });
+
+  // ── Claims ───────────────────────────────────────────
+  let claimCount=0;
+  function addClaimRow(item='',description='',amount=''){
+    claimCount++;
+    const list=document.getElementById('claims-list');
+    const row=document.createElement('div'); row.className='claim-row';
+    row.innerHTML=`
+      <div class="claim-num">${claimCount}</div>
+      <div class="claim-fields">
+        <div class="field"><label>Item</label><input type="text" class="claim-item" placeholder="e.g. bedroom wall" value="${esc(item)}" /></div>
+        <div class="field claim-desc-field"><label>Description</label><input type="text" class="claim-description" placeholder="Describe the damage" value="${esc(description)}" /></div>
+        <div class="field claim-amount-field"><label>Amount (THB)</label><input type="number" class="claim-amount" min="0" step="0.01" placeholder="0" value="${amount}" /></div>
+      </div>
+      <button type="button" class="btn-remove" title="Remove">✕</button>`;
+    row.querySelector('.btn-remove').addEventListener('click',()=>row.remove());
+    list.appendChild(row);
+  }
+  addClaimRow();
+  document.getElementById('add-claim-btn').addEventListener('click',()=>addClaimRow());
+
+  function getClaims(){
+    return Array.from(document.querySelectorAll('.claim-row')).map(r=>({
+      item:        r.querySelector('.claim-item').value.trim(),
+      description: r.querySelector('.claim-description').value.trim(),
+      amount_thb:  parseFloat(r.querySelector('.claim-amount').value)||0,
+    })).filter(c=>c.item||c.description);
+  }
+
+  // ── Main form submit ─────────────────────────────────
+  document.getElementById('main-form').addEventListener('submit', async e=>{
+    e.preventDefault();
+    document.getElementById('results').classList.add('hidden');
+    document.getElementById('error-banner').classList.add('hidden');
+    document.getElementById('loading').classList.remove('hidden');
+    document.getElementById('submit-btn').disabled=true;
+
+    const claims=getClaims();
+    if(!claims.length){
+      showError('Add at least one claim.');
+      return;
+    }
+
+    // Progressive loading messages
+    const msgs=['Running visual comparison…','Extracting conversation evidence…','Querying Thai legal corpus…','Almost done…'];
+    let mi=0;
+    const msgEl=document.getElementById('loading-msg');
+    const msgTimer=setInterval(()=>{ msgEl.textContent=msgs[Math.min(++mi,msgs.length-1)]; },3500);
+
+    try{
+      const fd=new FormData();
+      const moveIn=document.getElementById('move_in_image').files[0];
+      const moveOut=document.getElementById('move_out_image').files[0];
+      if(moveIn)  fd.append('move_in_image', moveIn);
+      if(moveOut) fd.append('move_out_image', moveOut);
+      window._getScreenshots().forEach(f=>fd.append('screenshots',f));
+      fd.append('claims', JSON.stringify(claims));
+      fd.append('contract_clause',          document.getElementById('contract_clause').value);
+      fd.append('manual_landlord_promises', document.getElementById('manual_landlord_promises').value);
+      fd.append('manual_tenant_promises',   document.getElementById('manual_tenant_promises').value);
+
+      const resp=await fetch('/full-analysis',{method:'POST',body:fd});
+      const data=await resp.json();
+      if(!resp.ok||data.error) throw new Error(data.error||resp.statusText);
+      renderResults(data);
+    }catch(err){
+      showError(err.message);
+    }finally{
+      clearInterval(msgTimer);
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('submit-btn').disabled=false;
+    }
+  });
+
+  function showError(msg){
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('submit-btn').disabled=false;
+    const b=document.getElementById('error-banner');
+    b.textContent='⚠ '+msg; b.classList.remove('hidden');
+  }
+
+  // ── Render results ───────────────────────────────────
+  function renderResults(data){
+    // Evidence callout
+    const evCallout=document.getElementById('evidence-callout');
+    const ev=data.evidence_summary;
+    if(ev&&(ev.landlord_promises.length||ev.tenant_promises.length||ev.deposit_mentions.length)){
+      const total=ev.landlord_promises.length+ev.tenant_promises.length;
+      evCallout.innerHTML=`
+        <div class="ev-callout-icon">💬</div>
+        <div>
+          <strong>${total} statement${total!==1?'s':''} extracted</strong> from conversation evidence
+          ${ev.platforms.length?'· '+ev.platforms.join(', '):''}
+          <div class="ev-callout-pills">
+            ${ev.landlord_promises.map(p=>`<span class="ev-pill ev-pill-landlord">${esc(p)}</span>`).join('')}
+            ${ev.tenant_promises.map(p=>`<span class="ev-pill ev-pill-tenant">${esc(p)}</span>`).join('')}
+            ${ev.deposit_mentions.map(p=>`<span class="ev-pill ev-pill-deposit">${esc(p)}</span>`).join('')}
+          </div>
+        </div>`;
+      evCallout.classList.remove('hidden');
+    } else {
+      evCallout.classList.add('hidden');
+    }
+
+    // CV summary bar
+    const cvBar=document.getElementById('cv-summary-bar');
+    const cvs=data.cv_summary;
+    if(cvs){
+      cvBar.innerHTML=`
+        <span class="cv-bar-label">📷 Photo analysis</span>
+        <span class="cv-bar-stat">${cvs.total_claims} claim${cvs.total_claims!==1?'s':''}</span>
+        <span class="cv-bar-chip cv-bar-chip-yes">${cvs.supported_claims} supported</span>
+        <span class="cv-bar-chip cv-bar-chip-no">${cvs.disputed_claims} disputed</span>
+        <span class="cv-bar-chip cv-bar-chip-partial">${cvs.partial_claims} partial</span>
+        ${cvs.total_disputed_amount>0
+          ? `<span class="cv-bar-amount">฿${cvs.total_disputed_amount.toLocaleString()} in dispute</span>`:''}`;
+      cvBar.classList.remove('hidden');
+    } else {
+      cvBar.classList.add('hidden');
+    }
+
+    // Per-claim cards
+    const container=document.getElementById('claim-results');
+    container.innerHTML='';
+    (data.claims||[]).forEach((c,i)=>{
+      const legal=c.legal||{}, cv=c.cv||{}, claim=c.claim||{};
+      const lClass=legalClass(legal.classification);
+      const cvVerdict=(cv.supports_landlord_claim||'').toUpperCase();
+      const cvCls=cvVerdict==='YES'?'cv-badge-yes':cvVerdict==='NO'?'cv-badge-no':'cv-badge-partial';
+      const confPct=Math.round((legal.confidence||0)*100);
+      const cvConf=Math.round((cv.confidence||0)*100);
+
+      const card=document.createElement('section');
+      card.className='card claim-result-card';
+      card.innerHTML=`
+        <div class="crc-header">
+          <div class="crc-title">
+            <span class="crc-num">${i+1}</span>
+            <span class="crc-item">${esc(claim.item||'Claim '+(i+1))}</span>
+            <span class="crc-amount">฿${(claim.amount_thb||0).toLocaleString()}</span>
+          </div>
+          <div class="crc-badges">
+            ${cvVerdict?`<span class="cv-badge ${cvCls}" title="Photo evidence">${cvVerdict}</span>`:''}
+            <span class="badge badge-${(legal.classification||'unknown').toLowerCase()}">${legal.classification||'—'}</span>
+          </div>
+        </div>
+
+        ${cv.move_in_condition||cv.move_out_condition?`
+        <div class="crc-conditions">
+          <div class="crc-cond"><span class="crc-cond-label">Move-in</span><p>${esc(cv.move_in_condition||'—')}</p></div>
+          <div class="crc-cond"><span class="crc-cond-label">Move-out</span><p>${esc(cv.move_out_condition||'—')}</p></div>
+        </div>`:''}
+
+        <div class="crc-tags">
+          ${cv.wear_and_tear?'<span class="tag tag-wear">Wear &amp; Tear</span>':''}
+          ${cv.likely_tenant_caused===false?'<span class="tag tag-nottenant">Not tenant-caused</span>':''}
+          ${cv.low_visibility?'<span class="tag tag-lowvis">Low visibility</span>':''}
+        </div>
+
+        <div class="crc-meta-row">
+          <span class="crc-conf-wrap">
+            <span class="conf-bar-track"><span class="conf-bar-fill" style="width:${confPct}%;background:${legalColor(legal.classification)}"></span></span>
+            <span class="conf-label">Legal ${confPct}%</span>
+          </span>
+          ${cvVerdict?`<span class="crc-conf-wrap"><span class="conf-bar-track"><span class="conf-bar-fill" style="width:${cvConf}%;background:#4a90d9"></span></span><span class="conf-label">Photo ${cvConf}%</span></span>`:''}
+        </div>
+
+        ${(legal.dimensions&&Object.keys(legal.dimensions).length)?`
+        <div class="crc-dims">
+          ${Object.entries({pre_existence:'Pre-existence',wear_and_tear:'Wear &amp; Tear',proportionality:'Proportionality',contractual_clarity:'Contract'}).map(([k,l])=>
+            legal.dimensions[k]?`<div class="crc-dim"><span class="crc-dim-label">${l}</span><span>${esc(legal.dimensions[k])}</span></div>`:''
+          ).join('')}
+        </div>`:''}
+
+        ${legal.legal_basis&&legal.legal_basis.length?`
+        <details class="crc-legal-details">
+          <summary>Legal basis (${legal.legal_basis.length} section${legal.legal_basis.length!==1?'s':''})</summary>
+          <div class="crc-legal-list">
+            ${legal.legal_basis.map(b=>`
+              <div class="crc-legal-row">
+                <span class="crc-legal-src">${esc(b.source||'')} ${esc(b.section||'')}</span>
+                <span class="crc-legal-excerpt">${esc(b.excerpt||'')}</span>
+                <span class="crc-legal-favor ${(b.favors||'').toLowerCase()==='tenant'?'favor-tenant':'favor-landlord'}">${esc(b.favors||'')}</span>
+              </div>`).join('')}
+          </div>
+        </details>`:''}
+
+        ${legal.summary_th?`<p class="crc-summary-th">${esc(legal.summary_th)}</p>`:''}
+      `;
+      container.appendChild(card);
+    });
+
+    document.getElementById('results').classList.remove('hidden');
+    document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  function legalClass(c){ return (c||'unknown').toLowerCase(); }
+  function legalColor(c){
+    if(!c)return'#aaa';
+    const m={'lawful':'#1a7a4a','disputed':'#b85c00','unlawful':'#c0392b'};
+    return m[c.toLowerCase()]||'#aaa';
+  }
+
+  function esc(s){
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  </script>
+</body>
+</html>

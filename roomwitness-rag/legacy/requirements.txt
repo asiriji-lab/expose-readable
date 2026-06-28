@@ -1,0 +1,9 @@
+flask
+groq
+chromadb
+sentence-transformers
+pdfplumber
+requests
+beautifulsoup4
+python-dotenv
+lxml

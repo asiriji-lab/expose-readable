@@ -1,0 +1,275 @@
+/* RoomWitness portal styles */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               Helvetica, Arial, sans-serif;
+  background: #f8f8f8;
+  color: #1a1a1a;
+  line-height: 1.6;
+}
+
+header {
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 1.25rem 2rem;
+}
+
+header h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+header .subtitle {
+  font-size: 0.875rem;
+  color: #666;
+  margin-top: 0.15rem;
+}
+
+main {
+  max-width: 780px;
+  margin: 2rem auto;
+  padding: 0 1rem 4rem;
+}
+
+/* Cards */
+.card {
+  background: #fff;
+  border: 1px solid #e4e4e4;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+
+.card h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: #333;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 0.5rem;
+}
+
+/* Form fields */
+.field {
+  margin-bottom: 1rem;
+}
+
+.field label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #444;
+  margin-bottom: 0.35rem;
+}
+
+.field input[type="text"],
+.field input[type="number"],
+.field textarea,
+.field select {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #d0d0d0;
+  border-radius: 5px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: #fafafa;
+  color: #1a1a1a;
+  transition: border-color 0.15s;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  outline: none;
+  border-color: #4a90d9;
+  background: #fff;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.field-row label {
+  margin-bottom: 0;
+}
+
+.field-row input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+/* Submit button */
+.submit-row {
+  text-align: right;
+  margin-bottom: 1.5rem;
+}
+
+button[type="submit"] {
+  background: #1a1a1a;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.7rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+button[type="submit"]:hover { background: #333; }
+button[type="submit"]:disabled { background: #999; cursor: not-allowed; }
+
+/* Loading spinner */
+#loading {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e0e0e0;
+  border-top-color: #1a1a1a;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  margin: 0 auto 0.75rem;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Error banner */
+.error-banner {
+  background: #fff0f0;
+  border: 1px solid #f5c0c0;
+  color: #c0392b;
+  border-radius: 6px;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+}
+
+/* Classification badge */
+.result-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 0.4rem 1.1rem;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.badge-lawful     { background: #e6f9f0; color: #1a7a4a; border: 2px solid #1a7a4a; }
+.badge-disputed   { background: #fff7e6; color: #b85c00; border: 2px solid #b85c00; }
+.badge-unlawful   { background: #fdecea; color: #c0392b; border: 2px solid #c0392b; }
+.badge-unknown    { background: #f0f0f0; color: #555;    border: 2px solid #aaa; }
+
+.result-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.95rem;
+  color: #555;
+}
+
+/* Dimension cards */
+.dimensions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.85rem;
+}
+
+.dim-card {
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+}
+
+.dim-card h3 {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #888;
+  margin-bottom: 0.4rem;
+}
+
+.dim-card p {
+  font-size: 0.88rem;
+  color: #333;
+}
+
+/* Legal basis table */
+.table-scroll { overflow-x: auto; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+th {
+  text-align: left;
+  padding: 0.55rem 0.75rem;
+  background: #f5f5f5;
+  border-bottom: 2px solid #e0e0e0;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: top;
+}
+
+tr:last-child td { border-bottom: none; }
+
+.favor-tenant   { color: #1a7a4a; font-weight: 600; }
+.favor-landlord { color: #c0392b; font-weight: 600; }
+
+/* Thai summary */
+.summary-th {
+  font-size: 1rem;
+  line-height: 1.8;
+  color: #222;
+}
+
+/* Small text for retrieved sections */
+.small-text {
+  font-size: 0.78rem;
+  color: #888;
+  word-break: break-all;
+}
+
+/* Utility */
+.hidden { display: none !important; }
+
+/* Mobile tweaks */
+@media (max-width: 600px) {
+  header { padding: 1rem; }
+  .card  { padding: 1rem; }
+  .result-header { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+  .dimensions-grid { grid-template-columns: 1fr; }
+  .submit-row { text-align: center; }
+  button[type="submit"] { width: 100%; }
+}

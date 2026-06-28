@@ -1,0 +1,21 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# ChromaDB vector store (regenerate with seed_corpus.py)
+chroma_db/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Fonts (download separately — too large for repo)
+agent04_doc_generator/fonts/*.ttf
+agent04_doc_generator/fonts/*.otf

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RoomWitness — Claim Analyzer</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>RoomWitness</h1>
+    <p class="subtitle">Rental Deposit Dispute Analyzer</p>
+  </header>
+
+  <main>
+    <form id="claim-form">
+
+      <section class="card">
+        <h2>Claim Details</h2>
+
+        <div class="field">
+          <label for="item">Claim Item</label>
+          <input type="text" id="item" name="item"
+                 placeholder="e.g. bedroom wall paint" required />
+        </div>
+
+        <div class="field">
+          <label for="description">Claim Description (Thai)</label>
+          <textarea id="description" name="description" rows="3"
+                    placeholder="ระบุรายละเอียดการเรียกร้องเป็นภาษาไทย" required></textarea>
+        </div>
+
+        <div class="field">
+          <label for="amount_thb">Amount (THB)</label>
+          <input type="number" id="amount_thb" name="amount_thb"
+                 min="0" step="0.01" placeholder="0.00" required />
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>CV / Photo Evidence</h2>
+
+        <div class="field">
+          <label for="move_in_condition">Move-in Condition</label>
+          <textarea id="move_in_condition" name="move_in_condition" rows="2"
+                    placeholder="สภาพห้องเมื่อเข้าพัก"></textarea>
+        </div>
+
+        <div class="field">
+          <label for="move_out_condition">Move-out Condition</label>
+          <textarea id="move_out_condition" name="move_out_condition" rows="2"
+                    placeholder="สภาพห้องเมื่อออก"></textarea>
+        </div>
+
+        <div class="field field-row">
+          <input type="checkbox" id="change_detected" name="change_detected" />
+          <label for="change_detected">Change detected between move-in and move-out</label>
+        </div>
+
+        <div class="field">
+          <label for="likely_tenant_caused">Likely Tenant Caused?</label>
+          <select id="likely_tenant_caused" name="likely_tenant_caused">
+            <option value="unclear">Unclear</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="cv_confidence">CV Confidence (0.0 – 1.0)</label>
+          <input type="number" id="cv_confidence" name="cv_confidence"
+                 min="0" max="1" step="0.01" value="0.5" />
+        </div>
+
+        <div class="field">
+          <label for="cv_notes">CV Notes</label>
+          <textarea id="cv_notes" name="cv_notes" rows="2"
+                    placeholder="หมายเหตุจากระบบวิเคราะห์ภาพ"></textarea>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Contract Clause</h2>
+        <div class="field">
+          <label for="contract_clause">Relevant Contract Clause (Thai)</label>
+          <textarea id="contract_clause" name="contract_clause" rows="3"
+                    placeholder="ข้อสัญญาที่เกี่ยวข้อง"></textarea>
+        </div>
+      </section>
+
+      <div class="submit-row">
+        <button type="submit" id="submit-btn">Analyze Claim</button>
+      </div>
+
+    </form>
+
+    <!-- Loading spinner -->
+    <div id="loading" class="hidden">
+      <div class="spinner"></div>
+      <p>Analyzing with Thai law…</p>
+    </div>
+
+    <!-- Error banner -->
+    <div id="error-banner" class="hidden error-banner"></div>
+
+    <!-- Results -->
+    <div id="results" class="hidden">
+
+      <section class="card result-header">
+        <div id="classification-badge" class="badge"></div>
+        <div class="result-meta">
+          <span id="confidence-text"></span>
+          <span id="dispute-amount-text"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Analysis Dimensions</h2>
+        <div class="dimensions-grid" id="dimensions-grid"></div>
+      </section>
+
+      <section class="card">
+        <h2>Legal Basis</h2>
+        <div class="table-scroll">
+          <table id="legal-table">
+            <thead>
+              <tr>
+                <th>Section</th>
+                <th>Source</th>
+                <th>Excerpt</th>
+                <th>Favors</th>
+              </tr>
+            </thead>
+            <tbody id="legal-table-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Summary for Tenant</h2>
+        <p id="summary-th" class="summary-th"></p>
+      </section>
+
+      <section class="card">
+        <h2>Retrieved Sections</h2>
+        <p id="retrieved-sections" class="small-text"></p>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    const form = document.getElementById('claim-form');
+    const loading = document.getElementById('loading');
+    const results = document.getElementById('results');
+    const errorBanner = document.getElementById('error-banner');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      // Reset state
+      results.classList.add('hidden');
+      errorBanner.classList.add('hidden');
+      loading.classList.remove('hidden');
+      document.getElementById('submit-btn').disabled = true;
+
+      try {
+        const formData = new FormData(form);
+        const resp = await fetch('/analyze', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: resp.statusText }));
+          throw new Error(err.error || 'Server error');
+        }
+
+        const data = await resp.json();
+        if (data.error && !data.classification) {
+          throw new Error(data.error);
+        }
+        renderResults(data);
+      } catch (err) {
+        errorBanner.textContent = 'Error: ' + err.message;
+        errorBanner.classList.remove('hidden');
+      } finally {
+        loading.classList.add('hidden');
+        document.getElementById('submit-btn').disabled = false;
+      }
+    });
+
+    function renderResults(d) {
+      // Badge
+      const badge = document.getElementById('classification-badge');
+      badge.textContent = d.classification || 'UNKNOWN';
+      badge.className = 'badge badge-' + (d.classification || 'unknown').toLowerCase();
+
+      // Meta
+      const conf = ((d.confidence || 0) * 100).toFixed(0);
+      document.getElementById('confidence-text').textContent =
+        'Confidence: ' + conf + '%';
+      document.getElementById('dispute-amount-text').textContent =
+        'Dispute Amount: ฿' + (d.dispute_amount || 0).toLocaleString();
+
+      // Dimensions
+      const dims = d.dimensions || {};
+      const dimLabels = {
+        pre_existence: 'Pre-existence',
+        wear_and_tear: 'Wear & Tear',
+        proportionality: 'Proportionality',
+        contractual_clarity: 'Contractual Clarity',
+      };
+      const grid = document.getElementById('dimensions-grid');
+      grid.innerHTML = '';
+      for (const [key, label] of Object.entries(dimLabels)) {
+        const card = document.createElement('div');
+        card.className = 'dim-card';
+        card.innerHTML =
+          '<h3>' + label + '</h3>' +
+          '<p>' + (dims[key] || '—') + '</p>';
+        grid.appendChild(card);
+      }
+
+      // Legal basis table
+      const tbody = document.getElementById('legal-table-body');
+      tbody.innerHTML = '';
+      const basis = d.legal_basis || [];
+      if (basis.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4">No legal basis retrieved.</td></tr>';
+      } else {
+        basis.forEach(item => {
+          const tr = document.createElement('tr');
+          const favorClass = (item.favors || '').toLowerCase() === 'tenant'
+            ? 'favor-tenant' : 'favor-landlord';
+          tr.innerHTML =
+            '<td>' + (item.section || '') + '</td>' +
+            '<td>' + (item.source || '') + '</td>' +
+            '<td>' + (item.excerpt || '') + '</td>' +
+            '<td class="' + favorClass + '">' + (item.favors || '') + '</td>';
+          tbody.appendChild(tr);
+        });
+      }
+
+      // Summary
+      document.getElementById('summary-th').textContent = d.summary_th || '';
+
+      // Retrieved sections
+      const secs = (d.retrieved_sections || []).join(', ');
+      document.getElementById('retrieved-sections').textContent =
+        secs || 'None';
+
+      results.classList.remove('hidden');
+      results.scrollIntoView({ behavior: 'smooth' });
+    }
+  </script>
+</body>
+</html>

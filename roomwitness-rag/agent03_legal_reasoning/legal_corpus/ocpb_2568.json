@@ -1,0 +1,93 @@
+[
+  {
+    "chunk_id": "OCPB_2568_scope",
+    "law_name_th": "ประกาศคณะกรรมการว่าด้วยสัญญา พ.ศ. 2568",
+    "law_name_en": "OCPB Notification B.E. 2568 (2025)",
+    "clause": "Scope — unit threshold",
+    "effective_date": "2025-09-04",
+    "text_th": "ใช้บังคับกับผู้ให้เช่าที่มีห้องพักตั้งแต่ 3 ห้องขึ้นไป รวมถึงการเช่าผ่านแพลตฟอร์มออนไลน์",
+    "text_en": "Applies to lessors operating 3 or more residential units. Covers leases via digital platforms.",
+    "applies_to": "landlord",
+    "topic_tags": "scope,applicability,unit_threshold",
+    "legal_implication": "Landlords with fewer than 3 units fall outside OCPB scope. Route those cases to civil court.",
+    "agent03_use": "ROUTING — check unit count before applying OCPB rules"
+  },
+  {
+    "chunk_id": "OCPB_2568_deposit_7days",
+    "law_name_th": "ประกาศคณะกรรมการว่าด้วยสัญญา พ.ศ. 2568",
+    "law_name_en": "OCPB Notification B.E. 2568 (2025)",
+    "clause": "Deposit return — 7 day rule",
+    "effective_date": "2025-09-04",
+    "text_th": "ต้องคืนเงินประกันทันทีเมื่อสัญญาสิ้นสุด หรือภายใน 7 วัน หากไม่พบความเสียหาย",
+    "text_en": "Security deposit must be returned immediately or within 7 days if no damage is found.",
+    "applies_to": "landlord",
+    "topic_tags": "deposit_return,timeline,7_days",
+    "legal_implication": "Landlord holding deposit beyond 7 days with no damage claim is in violation.",
+    "agent03_use": "UNLAWFUL verdict when deposit withheld more than 7 days with no damage evidence"
+  },
+  {
+    "chunk_id": "OCPB_2568_deposit_14days",
+    "law_name_th": "ประกาศคณะกรรมการว่าด้วยสัญญา พ.ศ. 2568",
+    "law_name_en": "OCPB Notification B.E. 2568 (2025)",
+    "clause": "Deposit return — 14 day rule",
+    "effective_date": "2025-09-04",
+    "text_th": "หากมีการอ้างความเสียหาย ต้องคืนเงินประกัน หักค่าซ่อมที่ตรวจสอบแล้ว ภายใน 14 วัน",
+    "text_en": "If damage is claimed, return deposit minus verified deductions within 14 days.",
+    "applies_to": "landlord",
+    "topic_tags": "deposit_return,timeline,14_days,damage_claim",
+    "legal_implication": "Full withholding beyond 14 days is illegal. Every deduction needs verified evidence.",
+    "agent03_use": "Flag when landlord has not returned any portion within 14 days of move-out"
+  },
+  {
+    "chunk_id": "OCPB_2568_wear_tear_prohibited",
+    "law_name_th": "ประกาศคณะกรรมการว่าด้วยสัญญา พ.ศ. 2568",
+    "law_name_en": "OCPB Notification B.E. 2568 (2025)",
+    "clause": "Prohibited — wear and tear liability",
+    "effective_date": "2025-09-04",
+    "text_th": "ข้อสัญญาที่ห้าม: กำหนดให้ผู้เช่ารับผิดชอบความเสื่อมสภาพตามปกติ ข้อสัญญาดังกล่าวเป็นโมฆะ",
+    "text_en": "Prohibited clause: tenant liability for normal wear and tear. Any such clause is void.",
+    "applies_to": "landlord",
+    "topic_tags": "wear_and_tear,prohibited_clause,void_contract,normal_use",
+    "legal_implication": "Even if lease assigns wear and tear costs to tenant, that clause is legally void.",
+    "agent03_use": "UNLAWFUL when landlord claims normal wear and tear as chargeable damage"
+  },
+  {
+    "chunk_id": "OCPB_2568_no_forfeiture",
+    "law_name_th": "ประกาศคณะกรรมการว่าด้วยสัญญา พ.ศ. 2568",
+    "law_name_en": "OCPB Notification B.E. 2568 (2025)",
+    "clause": "Prohibited — unjustified forfeiture",
+    "effective_date": "2025-09-04",
+    "text_th": "ห้ามริบเงินประกันหรือค่าเช่าโดยไม่มีเหตุผล ต้องมีหลักฐานความเสียหายที่ตรวจสอบแล้ว",
+    "text_en": "Prohibited: forfeiture of deposit without justification or tenant fault. Evidence required for every deduction.",
+    "applies_to": "landlord",
+    "topic_tags": "deposit_forfeiture,prohibited_clause,evidence_required",
+    "legal_implication": "No evidence = illegal forfeiture. Every deduction must be documented.",
+    "agent03_use": "UNLAWFUL when landlord cannot produce evidence matching claimed damage"
+  },
+  {
+    "chunk_id": "OCPB_2568_movein_inspection",
+    "law_name_th": "ประกาศคณะกรรมการว่าด้วยสัญญา พ.ศ. 2568",
+    "law_name_en": "OCPB Notification B.E. 2568 (2025)",
+    "clause": "Mandatory — move-in inspection report",
+    "effective_date": "2025-09-04",
+    "text_th": "ต้องมีรายงานสภาพทรัพย์สิน ณ วันเข้าอยู่ พร้อมลายเซ็นทั้งสองฝ่าย อาจรวมถึงรูปถ่าย",
+    "text_en": "A jointly signed condition report with photos must accompany the lease at move-in.",
+    "applies_to": "both",
+    "topic_tags": "move_in_inspection,condition_report,documentation,mandatory",
+    "legal_implication": "Absence of signed move-in report undermines all landlord damage claims.",
+    "agent03_use": "DISPUTED or UNLAWFUL when no signed move-in report exists"
+  },
+  {
+    "chunk_id": "OCPB_2568_penalties",
+    "law_name_th": "ประกาศคณะกรรมการว่าด้วยสัญญา พ.ศ. 2568",
+    "law_name_en": "OCPB Notification B.E. 2568 (2025)",
+    "clause": "Penalties for non-compliance",
+    "effective_date": "2025-09-04",
+    "text_th": "การฝ่าฝืนประกาศฯ มีโทษจำคุกไม่เกิน 1 ปี และหรือปรับไม่เกิน 200,000 บาท",
+    "text_en": "Non-compliance: up to 1 year imprisonment, fine up to THB 200,000, or both.",
+    "applies_to": "landlord",
+    "topic_tags": "penalty,imprisonment,fine,enforcement",
+    "legal_implication": "Cite in OCPB complaint to show landlord faces serious personal liability.",
+    "agent03_use": "Include in all OCPB complaint documents to strengthen tenant position"
+  }
+]
