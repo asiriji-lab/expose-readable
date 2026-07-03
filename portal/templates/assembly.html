@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assembly — Sonar Accounting Portal</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  .asm-banner { display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 18px; margin-bottom:14px; box-shadow:var(--shadow-xs); }
+  .asm-banner .stat { font-size:14px; color:var(--text2); }
+  .asm-banner .stat strong { color:var(--accent); font-size:16px; }
+  .asm-flag { padding:3px 9px; border-radius:20px; font-size:12px; font-weight:600; }
+  .asm-flag.ok { background:var(--green-bg); color:var(--green); }
+  .asm-flag.bad { background:var(--red-bg); color:var(--red); }
+  .asm-form-inline { display:inline-flex; align-items:center; gap:6px; margin-left:auto; }
+  .asm-section { margin-bottom:22px; }
+  .asm-section h2 { font-size:15px; margin:0 0 8px; color:var(--text); }
+  .asm-section h2 .count { color:var(--text2); font-weight:400; font-size:13px; }
+  table.asm-table { width:100%; border-collapse:collapse; background:var(--surface);
+    border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  table.asm-table th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.03em;
+    color:var(--text3); background:var(--surface2); padding:8px 10px; border-bottom:1px solid var(--border); }
+  table.asm-table td { padding:8px 10px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:middle; }
+  table.asm-table tr:last-child td { border-bottom:none; }
+  table.asm-table tr.row-done { background:var(--green-bg); }
+  .doc-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; }
+  .doc-badge.present { background:var(--green-bg); color:var(--green); }
+  .doc-badge.missing { background:var(--red-bg); color:var(--red); }
+  .doc-cell { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .doc-cell form { display:inline-flex; gap:4px; align-items:center; }
+  .doc-cell input[type=file] { max-width:110px; font-size:11px; }
+  .btn-xs { padding:3px 8px; font-size:11px; border-radius:6px; border:1px solid var(--border);
+    background:var(--surface); cursor:pointer; }
+  .btn-xs:hover { border-color:var(--accent); color:var(--accent); }
+  .done-btn { width:26px; height:26px; border-radius:6px; border:1px solid var(--border);
+    background:var(--surface); cursor:pointer; font-weight:700; }
+  .done-btn.checked { background:var(--green); color:white; border-color:var(--green); }
+  .month-form { display:flex; align-items:center; gap:8px; }
+  details.kbiz { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:10px 14px; margin-bottom:14px; }
+  details.kbiz summary { cursor:pointer; font-size:13px; font-weight:600; color:var(--text2); }
+  details.kbiz table { width:100%; margin-top:10px; border-collapse:collapse; font-size:12px; }
+  details.kbiz th, details.kbiz td { padding:4px 8px; border-bottom:1px solid var(--border); text-align:left; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Sonar Accounting</h1>
+  <div class="topbar-right">
+    <a href="/" class="settings-link">Dashboard</a>
+    <a href="/settings" class="settings-link">Settings</a>
+    <span class="company-badge">{{ sonar.company }}</span>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% for cat, msg in messages %}
+<div class="flash flash-{{ cat }}">{{ msg }}</div>
+{% endfor %}
+{% endwith %}
+
+<div class="container">
+
+  <div class="asm-banner">
+    <form class="month-form" method="GET" action="/assembly">
+      <label>Month</label>
+      <input type="month" name="month" value="{{ month }}">
+      <button type="submit" class="btn">Go</button>
+    </form>
+    <div class="stat">{{ done_count }} of {{ total }} complete</div>
+    <span class="asm-flag {{ 'ok' if wht_wb_exists else 'bad' }}">
+      WHT workbook: {{ wht_wb_name }} {{ 'found' if wht_wb_exists else 'MISSING — run generate_wht.py' }}
+    </span>
+    <span class="asm-flag {{ 'ok' if salary_xlsxfile else 'bad' }}">
+      Salary register: {{ salary_xlsxfile if salary_xlsxfile else 'not uploaded' }}
+    </span>
+
+    <div class="asm-form-inline">
+      <form method="POST" action="/assembly/generate-pv">
+        <input type="hidden" name="month" value="{{ month }}">
+        <button type="submit" class="btn btn-primary">Generate PVs</button>
+      </form>
+      <form method="POST" action="/assembly/upload-salary" enctype="multipart/form-data">
+        <input type="hidden" name="month" value="{{ month }}">
+        <input type="file" name="file" required style="font-size:12px;">
+        <button type="submit" class="btn-xs">Upload salary xlsx</button>
+      </form>
+      <form method="POST" action="/assembly/build">
+        <input type="hidden" name="month" value="{{ month }}">
+        <button type="submit" class="btn btn-green">Build bundle</button>
+      </form>
+      {% if zip_exists %}
+      <a href="/download/{{ zip_download }}" class="btn btn-primary">Download zip</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <details class="kbiz">
+    <summary>kbiz statement hint — {{ kbiz_hints|length }} row(s) this month (visual only, not auto-matched)</summary>
+    {% if kbiz_hints %}
+    <table>
+      <thead><tr><th>Date</th><th>Description</th><th>Withdrawal</th><th>Deposit</th></tr></thead>
+      <tbody>
+        {% for h in kbiz_hints %}
+        <tr><td>{{ h.date }}</td><td>{{ h.desc }}</td><td>{{ h.withdrawal }}</td><td>{{ h.deposit }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="font-size:12px;color:var(--text3);margin-top:8px;">No kbiz statement rows found for this month.</p>
+    {% endif %}
+  </details>
+
+  {% macro doc_badge(doc, label) %}
+    <span class="doc-badge {{ 'present' if doc.status in ('generated','uploaded','present') else 'missing' }}">{{ label }}</span>
+  {% endmacro %}
+
+  {% macro upload_form(month, exp_id, tag, label) %}
+    <form method="POST" action="/assembly/upload" enctype="multipart/form-data">
+      <input type="hidden" name="month" value="{{ month }}">
+      <input type="hidden" name="exp_id" value="{{ exp_id }}">
+      <input type="hidden" name="tag" value="{{ tag }}">
+      <input type="file" name="file" required>
+      <button type="submit" class="btn-xs">{{ label }}</button>
+    </form>
+  {% endmacro %}
+
+  {% macro expense_table(rows, show_wht) %}
+  <table class="asm-table">
+    <thead>
+      <tr>
+        <th style="width:26px"></th>
+        <th>ID</th>
+        <th>Date</th>
+        <th>Vendor / Payee</th>
+        <th>Net</th>
+        {% if show_wht %}<th>WHT</th>{% endif %}
+        <th>PV</th>
+        <th>Slip</th>
+        <th>Receipt</th>
+        {% if show_wht %}<th>WHT doc</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in rows %}
+      <tr class="{{ 'row-done' if e.done }}">
+        <td>
+          <form method="POST" action="/assembly/done">
+            <input type="hidden" name="month" value="{{ month }}">
+            <input type="hidden" name="exp_id" value="{{ e.id }}">
+            <button type="submit" class="done-btn {{ 'checked' if e.done }}">{{ '✓' if e.done else '' }}</button>
+          </form>
+        </td>
+        <td>{{ e.id }}</td>
+        <td>{{ e.date }}</td>
+        <td>{{ e.vendor }}</td>
+        <td class="money">{{ e.net }}</td>
+        {% if show_wht %}<td class="money">{{ e.wht }}</td>{% endif %}
+        <td>{{ doc_badge(e.docs.pv, 'PV') }}</td>
+        <td class="doc-cell">
+          {{ doc_badge(e.docs.slip, 'SLIP') }}
+          {{ upload_form(month, e.id, 'slip', 'Upload') }}
+        </td>
+        <td class="doc-cell">
+          {{ doc_badge(e.docs.receipt, 'RECEIPT') }}
+          {{ upload_form(month, e.id, 'receipt', 'Upload') }}
+        </td>
+        {% if show_wht %}
+        <td class="doc-cell">
+          {{ doc_badge(e.docs.wht, 'WHT') }}
+          {{ upload_form(month, e.id, 'wht', 'Upload') }}
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endmacro %}
+
+  <div class="asm-section">
+    <h2>with_wht <span class="count">({{ with_wht|length }})</span></h2>
+    {% if with_wht %}{{ expense_table(with_wht, true) }}{% else %}<p style="color:var(--text3);font-size:13px;">No expenses this month.</p>{% endif %}
+  </div>
+
+  <div class="asm-section">
+    <h2>no_wht <span class="count">({{ no_wht|length }})</span></h2>
+    {% if no_wht %}{{ expense_table(no_wht, false) }}{% else %}<p style="color:var(--text3);font-size:13px;">No expenses this month.</p>{% endif %}
+  </div>
+
+  <div class="bottom-spacer"></div>
+</div>
+</body>
+</html>

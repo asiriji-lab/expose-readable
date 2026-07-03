@@ -26,6 +26,10 @@ if os.name == "nt":
     del _gtk_path
 
 import json
+import re
+import glob
+import shutil
+import csv
 import pandas as pd
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime
@@ -36,8 +40,13 @@ from flask import (
     Flask, render_template, request, redirect, url_for,
     send_file, flash,
 )
+from werkzeug.utils import secure_filename
+from pypdf import PdfWriter, PdfReader
+from PIL import Image
 import zipfile
 import io
+
+from generate_may_pv import generate_payment_voucher as generate_payment_voucher_pv
 
 # ======================================================
 # APP SETUP
@@ -51,6 +60,10 @@ DATA_DIR = os.path.join(PROJECT_DIR, "data")
 DOC_TEMPLATE_DIR = os.path.join(PROJECT_DIR, "templates")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 PROFILE_PATH = os.path.join(BASE_DIR, "profile.json")
+ASSEMBLY_DIR = os.path.join(OUTPUT_DIR, "ASSEMBLY")
+EX_DATA_DIR = os.path.join(PROJECT_DIR, "ex_data")
+WHT_DIR = os.path.join(PROJECT_DIR, "output", "WHT")
+ASSEMBLY_TAGS = {"slip", "receipt", "wht", "other"}
 
 for d in ["EXP", "INC", "TAX_RECEIPTS", "html"]:
     os.makedirs(os.path.join(OUTPUT_DIR, d), exist_ok=True)
@@ -248,6 +261,199 @@ def load_income():
         df = df.rename(columns={"Withholding Tax": "Tax"})
     df = df[df["ID"].str.match(r"INC20\d{6}-\d{3}", na=False)]
     return df
+
+
+# ======================================================
+# ASSEMBLY WORKSPACE
+# ======================================================
+def is_valid_month(s):
+    try:
+        datetime.strptime(s, "%Y-%m")
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def month_expenses(year, month):
+    """Expense rows (pandas Series) whose Date falls in year/month."""
+    df = load_expenses()
+    rows = []
+    for _, r in df.iterrows():
+        date_str = str(r.get("Date", "")).strip()
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+            try:
+                dt = datetime.strptime(date_str, fmt)
+                if dt.year == year and dt.month == month:
+                    rows.append(r)
+                break
+            except ValueError:
+                pass
+    return rows
+
+
+def load_skip_vendors():
+    """Vendor names (lowercased) marked skip:true in payeeinfo.json — mirrors generate_wht.py."""
+    path = os.path.join(DATA_DIR, "payeeinfo.json")
+    if not os.path.exists(path):
+        return set()
+    with open(path, encoding="utf-8") as f:
+        payees = json.load(f)
+    return {k.strip().lower() for k, v in payees.items() if v.get("skip")}
+
+
+def buddhist_yymm(year, month):
+    return f"{(year + 543) % 100:02d}{month:02d}"
+
+
+def wht_workbook_path(year, month):
+    return os.path.join(WHT_DIR, f"WHT_{buddhist_yymm(year, month)}.xlsx")
+
+
+def pv_pdf_path(exp_id):
+    return os.path.join(OUTPUT_DIR, "EXP", f"PV{exp_id[3:]}.pdf")
+
+
+def assembly_month_dir(month):
+    return os.path.join(ASSEMBLY_DIR, month)
+
+
+def assembly_files_dir(month):
+    return os.path.join(assembly_month_dir(month), "files")
+
+
+def assembly_bundle_dir(month):
+    return os.path.join(assembly_month_dir(month), "bundle")
+
+
+def assembly_manifest_path(month):
+    return os.path.join(assembly_month_dir(month), "manifest.json")
+
+
+def find_canonical(files_dir, exp_id, tag):
+    matches = glob.glob(os.path.join(files_dir, f"{exp_id}_{tag}.*"))
+    return matches[0] if matches else None
+
+
+def derive_manifest(month):
+    """Recompute doc presence from disk + ledger (never trust stale manifest for presence).
+    Persists the recomputed snapshot, carrying forward done_overrides + salary_xlsxfile."""
+    year, mon = map(int, month.split("-"))
+    rows = month_expenses(year, mon)
+    skip_vendors = load_skip_vendors()
+
+    files_dir = assembly_files_dir(month)
+    os.makedirs(files_dir, exist_ok=True)
+    manifest_path = assembly_manifest_path(month)
+
+    old = {}
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, encoding="utf-8") as f:
+                old = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            old = {}
+    done_overrides = old.get("done_overrides", {})
+    salary_xlsxfile = old.get("salary_xlsxfile")
+    if salary_xlsxfile and not os.path.exists(os.path.join(files_dir, salary_xlsxfile)):
+        salary_xlsxfile = None
+
+    wht_wb_path = wht_workbook_path(year, mon)
+    wht_wb_exists = os.path.exists(wht_wb_path)
+
+    expenses = []
+    for r in rows:
+        exp_id = str(r["ID"]).strip()
+        vendor = str(r.get("Vendor / Payee", "")).strip()
+        wht_amt = parse_money(r.get("Tax", "0"))
+        needs_wht = wht_amt > 0 and vendor.lower() not in skip_vendors
+        section = "with_wht" if needs_wht else "no_wht"
+
+        pv_file = pv_pdf_path(exp_id)
+        pv_present = os.path.exists(pv_file)
+        slip_file = find_canonical(files_dir, exp_id, "slip")
+        receipt_file = find_canonical(files_dir, exp_id, "receipt")
+
+        docs = {
+            "pv": {"status": "generated" if pv_present else "missing",
+                   "file": os.path.basename(pv_file) if pv_present else None},
+            "slip": {"status": "uploaded" if slip_file else "missing",
+                      "file": os.path.basename(slip_file) if slip_file else None},
+            "receipt": {"status": "uploaded" if receipt_file else "missing",
+                         "file": os.path.basename(receipt_file) if receipt_file else None},
+        }
+        if needs_wht:
+            wht_file = find_canonical(files_dir, exp_id, "wht")
+            wht_present = wht_wb_exists or bool(wht_file)
+            docs["wht"] = {"status": "present" if wht_present else "missing",
+                            "file": os.path.basename(wht_file) if wht_file else None}
+
+        required_ok = (
+            pv_present and bool(slip_file) and bool(receipt_file)
+            and (not needs_wht or docs["wht"]["status"] == "present")
+        )
+        done = done_overrides.get(exp_id, required_ok)
+
+        expenses.append({
+            "id": exp_id,
+            "date": fmt_date(r.get("Date", "")),
+            "vendor": vendor,
+            "description": str(r.get("Description", "")).strip(),
+            "gross": f"{parse_money(r.get('Gross Amount', '0')):,.2f}",
+            "wht": f"{wht_amt:,.2f}",
+            "net": f"{parse_money(r.get('Amount Net (THB)', '0')):,.2f}",
+            "section": section,
+            "docs": docs,
+            "required_ok": required_ok,
+            "done": done,
+        })
+
+    manifest_out = {
+        "salary_xlsxfile": salary_xlsxfile,
+        "done_overrides": done_overrides,
+        "expenses": {e["id"]: {"section": e["section"], "done": e["done"], "docs": e["docs"]}
+                     for e in expenses},
+    }
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest_out, f, ensure_ascii=False, indent=2)
+
+    return {
+        "expenses": expenses,
+        "salary_xlsxfile": salary_xlsxfile,
+        "wht_wb_exists": wht_wb_exists,
+        "wht_wb_path": wht_wb_path,
+    }
+
+
+def load_kbiz_hints(year, month):
+    """Read-only visual hint rows from ex_data/resultFile_*.csv matching the month. No matching/tagging."""
+    hints = []
+    for csv_path in glob.glob(os.path.join(EX_DATA_DIR, "resultFile_*.csv")):
+        try:
+            with open(csv_path, encoding="utf-8-sig") as f:
+                rows = list(csv.reader(f))
+        except OSError:
+            continue
+        for row in rows:
+            if len(row) < 7:
+                continue
+            try:
+                dt = datetime.strptime(row[1].strip(), "%d-%m-%y")
+            except ValueError:
+                continue
+            if dt.year != year or dt.month != month:
+                continue
+            withdrawal = row[4].strip()
+            deposit = row[6].strip()
+            if not (withdrawal or deposit):
+                continue
+            hints.append({
+                "date": dt.strftime("%d/%m/%Y"),
+                "desc": row[3].strip(),
+                "withdrawal": withdrawal,
+                "deposit": deposit,
+            })
+    hints.sort(key=lambda h: h["date"])
+    return hints
 
 
 # ======================================================
@@ -699,6 +905,284 @@ def preview(filename):
     if os.path.exists(filepath):
         return send_file(filepath, mimetype="application/pdf")
     return "File not found", 404
+
+
+# ======================================================
+# ASSEMBLY ROUTES
+# ======================================================
+@app.route("/assembly")
+def assembly_view():
+    month = request.args.get("month", "").strip()
+    if not is_valid_month(month):
+        month = datetime.now().strftime("%Y-%m")
+    year, mon = map(int, month.split("-"))
+
+    manifest = derive_manifest(month)
+    expenses = manifest["expenses"]
+    total = len(expenses)
+    done_count = sum(1 for e in expenses if e["done"])
+    zip_path = os.path.join(assembly_month_dir(month), "bundle.zip")
+
+    return render_template(
+        "assembly.html",
+        sonar=profile_to_sonar(load_profile()),
+        month=month,
+        no_wht=[e for e in expenses if e["section"] == "no_wht"],
+        with_wht=[e for e in expenses if e["section"] == "with_wht"],
+        total=total,
+        done_count=done_count,
+        wht_wb_exists=manifest["wht_wb_exists"],
+        wht_wb_name=os.path.basename(manifest["wht_wb_path"]),
+        salary_xlsxfile=manifest["salary_xlsxfile"],
+        kbiz_hints=load_kbiz_hints(year, mon),
+        zip_exists=os.path.exists(zip_path),
+        zip_download=f"ASSEMBLY/{month}/bundle.zip",
+    )
+
+
+@app.route("/assembly/generate-pv", methods=["POST"])
+def assembly_generate_pv():
+    month = request.form.get("month", "").strip()
+    if not is_valid_month(month):
+        flash("Invalid month.", "error")
+        return redirect(url_for("index"))
+    year, mon = map(int, month.split("-"))
+
+    profile = load_profile()
+    sonar = profile_to_sonar(profile)
+    ok, errors = 0, []
+    for r in month_expenses(year, mon):
+        exp_id = str(r["ID"]).strip()
+        row_data = {
+            "id": exp_id,
+            "date": fmt_date(r.get("Date", "")),
+            "paid_to": str(r.get("Vendor / Payee", "")).strip(),
+            "department": str(r.get("Department / Project", "")).strip(),
+            "payment_method": str(r.get("Payment Method", "")).strip(),
+            "description": str(r.get("Description", "")).strip(),
+            "gross": f"{parse_money(r.get('Gross Amount', '0')):,.2f}",
+            "withholding": f"{parse_money(r.get('Tax', '0')):,.2f}",
+            "net": f"{parse_money(r.get('Amount Net (THB)', '0')):,.2f}",
+            "notes": "",
+            "include_signature": False,
+        }
+        try:
+            generate_payment_voucher_pv(row_data, sonar)
+            ok += 1
+        except Exception as e:
+            errors.append(f"{exp_id}: {e}")
+
+    derive_manifest(month)
+    msg = f"Generated {ok} PV(s)."
+    if errors:
+        msg += f" {len(errors)} failed: " + "; ".join(errors[:3])
+    flash(msg, "error" if errors else "success")
+    return redirect(url_for("assembly_view", month=month))
+
+
+@app.route("/assembly/upload", methods=["POST"])
+def assembly_upload():
+    month = request.form.get("month", "").strip()
+    exp_id = request.form.get("exp_id", "").strip()
+    tag = request.form.get("tag", "").strip()
+    file = request.files.get("file")
+
+    if not is_valid_month(month):
+        flash("Invalid month.", "error")
+        return redirect(url_for("index"))
+    year, mon = map(int, month.split("-"))
+    valid_ids = {str(r["ID"]).strip() for r in month_expenses(year, mon)}
+    if exp_id not in valid_ids:
+        flash(f"Unknown expense ID for {month}: {exp_id}", "error")
+        return redirect(url_for("assembly_view", month=month))
+    if tag not in ASSEMBLY_TAGS:
+        flash(f"Invalid tag: {tag}", "error")
+        return redirect(url_for("assembly_view", month=month))
+    if not file or not file.filename:
+        flash("No file selected.", "error")
+        return redirect(url_for("assembly_view", month=month))
+
+    ext = os.path.splitext(secure_filename(file.filename))[1].lower()
+    if not ext:
+        flash("File has no extension.", "error")
+        return redirect(url_for("assembly_view", month=month))
+
+    files_dir = assembly_files_dir(month)
+    os.makedirs(files_dir, exist_ok=True)
+    for stale in glob.glob(os.path.join(files_dir, f"{exp_id}_{tag}.*")):
+        os.remove(stale)
+    file.save(os.path.join(files_dir, f"{exp_id}_{tag}{ext}"))
+
+    derive_manifest(month)
+    flash(f"Uploaded {tag} for {exp_id}.", "success")
+    return redirect(url_for("assembly_view", month=month))
+
+
+@app.route("/assembly/upload-salary", methods=["POST"])
+def assembly_upload_salary():
+    month = request.form.get("month", "").strip()
+    if not is_valid_month(month):
+        flash("Invalid month.", "error")
+        return redirect(url_for("index"))
+    file = request.files.get("file")
+    if not file or not file.filename:
+        flash("No file selected.", "error")
+        return redirect(url_for("assembly_view", month=month))
+
+    ext = os.path.splitext(secure_filename(file.filename))[1].lower() or ".xlsx"
+    files_dir = assembly_files_dir(month)
+    os.makedirs(files_dir, exist_ok=True)
+    for stale in glob.glob(os.path.join(files_dir, "salary_register.*")):
+        os.remove(stale)
+    dest_name = f"salary_register{ext}"
+    file.save(os.path.join(files_dir, dest_name))
+
+    derive_manifest(month)
+    with open(assembly_manifest_path(month), encoding="utf-8") as f:
+        data = json.load(f)
+    data["salary_xlsxfile"] = dest_name
+    with open(assembly_manifest_path(month), "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    derive_manifest(month)
+
+    flash("Salary register uploaded.", "success")
+    return redirect(url_for("assembly_view", month=month))
+
+
+@app.route("/assembly/done", methods=["POST"])
+def assembly_done():
+    month = request.form.get("month", "").strip()
+    exp_id = request.form.get("exp_id", "").strip()
+    if not is_valid_month(month):
+        flash("Invalid month.", "error")
+        return redirect(url_for("index"))
+
+    current = derive_manifest(month)
+    row = next((e for e in current["expenses"] if e["id"] == exp_id), None)
+    if row is None:
+        flash(f"Unknown expense: {exp_id}", "error")
+        return redirect(url_for("assembly_view", month=month))
+
+    manifest_path = assembly_manifest_path(month)
+    with open(manifest_path, encoding="utf-8") as f:
+        data = json.load(f)
+    data.setdefault("done_overrides", {})[exp_id] = not row["done"]
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    derive_manifest(month)
+
+    return redirect(url_for("assembly_view", month=month))
+
+
+@app.route("/assembly/build", methods=["POST"])
+def assembly_build():
+    month = request.form.get("month", "").strip()
+    if not is_valid_month(month):
+        flash("Invalid month.", "error")
+        return redirect(url_for("index"))
+
+    manifest = derive_manifest(month)
+    files_dir = assembly_files_dir(month)
+    bundle_dir = assembly_bundle_dir(month)
+    shutil.rmtree(bundle_dir, ignore_errors=True)
+    no_wht_dir = os.path.join(bundle_dir, "no_wht")
+    with_wht_dir = os.path.join(bundle_dir, "with_wht")
+    os.makedirs(no_wht_dir, exist_ok=True)
+    os.makedirs(with_wht_dir, exist_ok=True)
+
+    IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".tif"}
+
+    def load_part_pages(path):
+        ext = os.path.splitext(path)[1].lower()
+        if ext == ".pdf":
+            reader = PdfReader(path)
+            if reader.is_encrypted:
+                reader.decrypt("")
+            return list(reader.pages)
+        if ext in IMAGE_EXTS:
+            buf = io.BytesIO()
+            Image.open(path).convert("RGB").save(buf, "PDF")
+            buf.seek(0)
+            return list(PdfReader(buf).pages)
+        raise ValueError(f"unsupported file type {ext}")
+
+    failed = []
+    section_files = {"no_wht": [], "with_wht": []}
+
+    for e in manifest["expenses"]:
+        exp_id = e["id"]
+        docs = e["docs"]
+        if not (docs["pv"]["status"] == "generated"
+                and docs["slip"]["status"] == "uploaded"
+                and docs["receipt"]["status"] == "uploaded"):
+            failed.append({"exp_id": exp_id, "reason": "missing required document(s)"})
+            continue
+
+        parts = [
+            ("pv", pv_pdf_path(exp_id)),
+            ("slip", os.path.join(files_dir, docs["slip"]["file"])),
+            ("receipt", os.path.join(files_dir, docs["receipt"]["file"])),
+        ]
+        writer = PdfWriter()
+        ok = True
+        for label, path in parts:
+            try:
+                for page in load_part_pages(path):
+                    writer.add_page(page)
+            except Exception as ex:
+                failed.append({"exp_id": exp_id, "reason": f"{label}: {ex}"})
+                ok = False
+                break
+        if not ok:
+            continue
+
+        section_dir = with_wht_dir if e["section"] == "with_wht" else no_wht_dir
+        out_path = os.path.join(section_dir, f"{exp_id}.pdf")
+        with open(out_path, "wb") as f:
+            writer.write(f)
+        section_files[e["section"]].append(out_path)
+
+    for section, _dir in (("no_wht", no_wht_dir), ("with_wht", with_wht_dir)):
+        paths = sorted(section_files[section])
+        if not paths:
+            continue
+        writer = PdfWriter()
+        for p in paths:
+            reader = PdfReader(p)
+            for page in reader.pages:
+                writer.add_page(page)
+        with open(os.path.join(bundle_dir, f"{section}.pdf"), "wb") as f:
+            writer.write(f)
+
+    wht_src = manifest["wht_wb_path"]
+    if manifest["wht_wb_exists"]:
+        shutil.copy2(wht_src, os.path.join(bundle_dir, os.path.basename(wht_src)))
+    else:
+        failed.append({"exp_id": "-", "reason": f"WHT workbook missing: {os.path.basename(wht_src)} (run generate_wht.py)"})
+
+    if manifest["salary_xlsxfile"]:
+        src = os.path.join(files_dir, manifest["salary_xlsxfile"])
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(bundle_dir, manifest["salary_xlsxfile"]))
+        else:
+            failed.append({"exp_id": "-", "reason": "salary register file missing on disk"})
+    else:
+        failed.append({"exp_id": "-", "reason": "salary register not uploaded for this month"})
+
+    zip_path = os.path.join(assembly_month_dir(month), "bundle.zip")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, _, files in os.walk(bundle_dir):
+            for fn in files:
+                full = os.path.join(root, fn)
+                zf.write(full, os.path.relpath(full, bundle_dir))
+
+    if failed:
+        preview_txt = "; ".join(f"{x['exp_id']}: {x['reason']}" for x in failed[:5])
+        flash(f"Build complete with {len(failed)} issue(s): {preview_txt}", "error")
+    else:
+        flash("Build complete. All parts merged successfully.", "success")
+
+    return redirect(url_for("assembly_view", month=month))
 
 
 # ======================================================
